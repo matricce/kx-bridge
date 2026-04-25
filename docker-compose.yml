@@ -3,6 +3,8 @@ services:
     image: kx-bridge:latest
     build: .
     env_file: .env
+    volumes:
+      - ./.env:/app/.env
     ports:
       - "7125:7125"
     restart: unless-stopped

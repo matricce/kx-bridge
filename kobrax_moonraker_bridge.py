@@ -863,6 +863,7 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
       <div class="modal-field">
         <label id="lbl-printer-ip">Drucker-IP</label>
         <input type="text" id="s-printer-ip" placeholder="192.168.x.x">
+        <small id="lbl-ip-hint" style="color:#f80;display:none"></small>
       </div>
       <div class="modal-field">
         <label id="lbl-mqtt-port">MQTT-Port</label>
@@ -1162,7 +1163,7 @@ var LANG_DE={
   confirm_cancel:'Druck wirklich abbrechen?',
   settings_title:'Einstellungen',settings_connection:'Verbindung',settings_poll:'Poll-Intervall',settings_version:'Version',
   settings_save:'Speichern & Neustart',settings_printer_ip:'Drucker-IP',settings_mqtt_port:'MQTT-Port',
-  settings_username:'MQTT-Benutzername',settings_password:'MQTT-Passwort',settings_device_id:'Device-ID',settings_mode_id:'Mode-ID',
+  settings_username:'MQTT-Benutzername',settings_password:'MQTT-Passwort',settings_device_id:'Device-ID',settings_mode_id:'Mode-ID',hint_ip_no_port:'Nur IP-Adresse, kein Port (z.B. 192.168.1.102)',
   update_check:'Auf Updates prüfen',update_checking:'Prüfe...',update_available:'verfügbar',update_none:'Bereits aktuell',
   update_apply:'Jetzt installieren',update_applying:'Lade herunter...',update_restarting:'Starte neu...',update_error:'Fehler',
   btn_connect:'⚡ Verbinden',btn_disconnect:'✕ Trennen'
@@ -1188,7 +1189,7 @@ var LANG_EN={
   confirm_cancel:'Really cancel the print?',
   settings_title:'Settings',settings_connection:'Connection',settings_poll:'Poll Interval',settings_version:'Version',
   settings_save:'Save & Restart',settings_printer_ip:'Printer IP',settings_mqtt_port:'MQTT Port',
-  settings_username:'MQTT Username',settings_password:'MQTT Password',settings_device_id:'Device ID',settings_mode_id:'Mode ID',
+  settings_username:'MQTT Username',settings_password:'MQTT Password',settings_device_id:'Device ID',settings_mode_id:'Mode ID',hint_ip_no_port:'IP address only, no port (e.g. 192.168.1.102)',
   update_check:'Check for Updates',update_checking:'Checking...',update_available:'available',update_none:'Already up to date',
   update_apply:'Install Now',update_applying:'Downloading...',update_restarting:'Restarting...',update_error:'Error',
   btn_connect:'⚡ Connect',btn_disconnect:'✕ Disconnect'
@@ -1478,6 +1479,13 @@ function openSettings(){
 function closeSettings(){
   document.getElementById('settings-modal').classList.remove('open');
 }
+document.addEventListener('DOMContentLoaded',function(){
+  document.getElementById('s-printer-ip').addEventListener('input',function(){
+    var hint=document.getElementById('lbl-ip-hint');
+    if(this.value.includes(':')){hint.textContent=T.hint_ip_no_port;hint.style.display='block';}
+    else{hint.style.display='none';}
+  });
+});
 function setPoll(ms){
   document.querySelectorAll('.poll-btn').forEach(function(b){b.classList.remove('active')});
   var id='poll-'+Math.round(ms/1000);
@@ -2068,7 +2076,7 @@ function toggleCam(){if(camOn)camStop();else camStart()}
                 lines.append(line)
         # Werte aktualisieren
         mapping = {
-            "PRINTER_IP":    str(data.get("printer_ip",  existing.get("PRINTER_IP",  ""))),
+            "PRINTER_IP":    str(data.get("printer_ip",  existing.get("PRINTER_IP",  ""))).split(":")[0],
             "MQTT_PORT":     str(data.get("mqtt_port",   existing.get("MQTT_PORT",   "9883"))),
             "MQTT_USERNAME": str(data.get("username",    existing.get("MQTT_USERNAME",""))),
             "MQTT_PASSWORD": str(data.get("password",    existing.get("MQTT_PASSWORD",""))),
@@ -2526,6 +2534,8 @@ def main():
     parser.add_argument("--port",        type=int, default=7125,
                         help="HTTP/WS-Port (Moonraker-Standard: 7125)")
     args = parser.parse_args()
+    if args.printer_ip and ":" in args.printer_ip:
+        args.printer_ip = args.printer_ip.split(":")[0]
 
     asyncio.run(run_bridge(args))
 

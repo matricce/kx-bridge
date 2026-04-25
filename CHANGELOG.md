@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.9.1-beta11] – 2026-04-25
+
+### Fixes
+- Drucker-IP wird automatisch bereinigt wenn der Nutzer versehentlich den Port miteingibt (z.B. `192.168.1.102:9883` → `192.168.1.102`)
+- Settings-Modal: Hinweis erscheint wenn ein `:` in der IP erkannt wird
+- `docker-compose.yml`: `.env` wird als Volume in den Container gemountet – Einstellungen bleiben nach `docker-compose restart` erhalten
+
+---
+
 ## [0.9.1-beta10] – 2026-04-25
 
 ### Neu
