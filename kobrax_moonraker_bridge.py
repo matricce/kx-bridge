@@ -80,6 +80,7 @@ class KobraXBridge:
             "filename":           "",
             "progress":           0.0,
             "print_duration":     0,
+            "remain_time":        0,
             "curr_layer":         0,
             "total_layers":       0,
             "printer_name":       "Anycubic Kobra X",
@@ -133,6 +134,8 @@ class KobraXBridge:
             self._state["progress"]   = float(d["progress"]) / 100.0
         if "print_time" in d:
             self._state["print_duration"] = int(d["print_time"]) * 60
+        if "remain_time" in d:
+            self._state["remain_time"] = int(d["remain_time"]) * 60
         if "curr_layer" in d:
             self._state["curr_layer"] = d["curr_layer"]
         if "total_layers" in d:
@@ -249,6 +252,7 @@ class KobraXBridge:
                 "filename":       s["filename"],
                 "print_duration": s["print_duration"],
                 "total_duration": s["print_duration"],
+                "remain_time":    s["remain_time"],
                 "info": {
                     "current_layer": s["curr_layer"],
                     "total_layer":   s["total_layers"],
@@ -593,6 +597,12 @@ header{background:var(--card);border-bottom:1px solid var(--border);
 .theme-btn{background:none;border:1px solid var(--border);color:var(--txt2);
   border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px;transition:.15s}
 .theme-btn:hover{border-color:var(--accent);color:var(--accent)}
+.conn-btn{border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;
+  font-weight:600;border:none;transition:.15s}
+.conn-btn.disconnected{background:var(--accent);color:#fff}
+.conn-btn.disconnected:hover{opacity:.85}
+.conn-btn.connected{background:transparent;border:1px solid var(--border);color:var(--txt2)}
+.conn-btn.connected:hover{border-color:#e05;color:#e05}
 
 /* ── LAYOUT ── */
 .layout{display:flex;flex:1;min-height:0}
@@ -837,6 +847,7 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
   <button class="theme-btn" onclick="toggleTheme()">☀ / ☾</button>
   <button class="theme-btn" onclick="toggleLang()" id="lang-btn">EN</button>
   <button class="theme-btn" onclick="openSettings()" id="settings-btn" title="Einstellungen">⚙</button>
+  <button class="conn-btn disconnected" id="conn-btn" onclick="toggleConnection()">⚡ Verbinden</button>
 </header>
 
 <!-- ═══ SETTINGS MODAL ═══ -->
@@ -944,6 +955,7 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
           <div class="progress-bar" style="margin:8px 0"><div class="progress-fill" id="d-pbar" style="width:0%"></div></div>
           <div class="meta-row" style="margin-top:6px">
             <span id="d-elapsed">–</span>
+            <span id="d-remain" style="color:var(--acc)">–</span>
             <span id="d-layers" class="layer-badge">–</span>
           </div>
           <div class="fname" id="d-fname" title="" style="margin-top:6px">–</div>
@@ -1030,7 +1042,7 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
             <button class="joy" onclick="move(2,-1,getStep())" title="Z−">▲</button>
             <button class="joy" onclick="move(2,1,getStep())" title="Z+">▼</button>
           </div>
-          <div style="text-align:center;margin-top:8px;font-size:12px;color:var(--txt2)">Schrittweite: <span id="step-display">1</span> mm</div>
+          <div style="text-align:center;margin-top:8px;font-size:12px;color:var(--txt2)"><span class="lbl-step">Schrittweite:</span> <span id="step-display">1</span> mm</div>
         </div>
 
         <!-- Print Speed -->
@@ -1112,7 +1124,7 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
 <script>
 // ── State ──
 var S={nozzle_temp:0,nozzle_target:0,bed_temp:0,bed_target:0,
-  print_state:'standby',filename:'',progress:0,print_duration:0,
+  print_state:'standby',filename:'',progress:0,print_duration:0,remain_time:0,
   curr_layer:0,total_layers:0,printer_name:'Kobra X',firmware_version:'–',
   camera_url:'',fan_speed:0,print_speed_mode:2,light_on:false,light_brightness:80,ams_slots:[]};
 var tempHistory={n:[],b:[]};
@@ -1133,7 +1145,7 @@ var LANG_DE={
   header_status_standby:'Bereit',header_status_printing:'Druckt',header_status_complete:'Fertig',header_status_error:'Fehler',
   kobra_free:'Bereit',kobra_busy:'Beschäftigt',kobra_printing:'Druckt',kobra_preheating:'Aufheizen',kobra_auto_leveling:'Nivellierung',kobra_checking:'Prüfung',kobra_updated:'Aktualisierung',kobra_init:'Initialisierung',kobra_pausing:'Pausiert...',kobra_paused:'Pausiert',kobra_resuming:'Fortsetzen...',kobra_resumed:'Fortgesetzt',kobra_stopping:'Stoppt...',kobra_stoped:'Gestoppt',kobra_finished:'Abgeschlossen',kobra_failed:'Fehler',kobra_canceled:'Abgebrochen',kobra_offline:'Offline',
   nav_dashboard:'Dashboard',nav_print:'Druck',nav_temps:'Temperaturen',nav_motion:'Achsen',nav_ams:'AMS',nav_extras:'Licht / Lüfter',nav_console:'Konsole',
-  card_progress:'Fortschritt',card_temps:'Temperaturen',card_light_fan:'Lüfter',card_speed:'Druckgeschwindigkeit',card_cam:'Kamera',
+  card_progress:'Fortschritt',card_temps:'Temperaturen',card_light_fan:'Lüfter',card_speed:'Druckgeschwindigkeit',card_cam:'Kamera',lbl_elapsed:'Verstrichen',lbl_remaining:'verbleibend',
   speed_silent:'🐢 Leise',speed_normal:'⚡ Normal',speed_sport:'🚀 Sport',
   lbl_light:'💡 Licht',lbl_feed:'Einziehen',lbl_unload:'Ausziehen',
   cam_placeholder:'📷 Kamera nicht gestartet',btn_cam_start:'▶ Kamera',btn_cam_stop:'◼ Kamera',
@@ -1152,13 +1164,14 @@ var LANG_DE={
   settings_save:'Speichern & Neustart',settings_printer_ip:'Drucker-IP',settings_mqtt_port:'MQTT-Port',
   settings_username:'MQTT-Benutzername',settings_password:'MQTT-Passwort',settings_device_id:'Device-ID',settings_mode_id:'Mode-ID',
   update_check:'Auf Updates prüfen',update_checking:'Prüfe...',update_available:'verfügbar',update_none:'Bereits aktuell',
-  update_apply:'Jetzt installieren',update_applying:'Lade herunter...',update_restarting:'Starte neu...',update_error:'Fehler'
+  update_apply:'Jetzt installieren',update_applying:'Lade herunter...',update_restarting:'Starte neu...',update_error:'Fehler',
+  btn_connect:'⚡ Verbinden',btn_disconnect:'✕ Trennen'
 };
 var LANG_EN={
   header_status_standby:'Ready',header_status_printing:'Printing',header_status_complete:'Complete',header_status_error:'Error',
   kobra_free:'Ready',kobra_busy:'Busy',kobra_printing:'Printing',kobra_preheating:'Preheating',kobra_auto_leveling:'Auto Leveling',kobra_checking:'Checking',kobra_updated:'Updating',kobra_init:'Initializing',kobra_pausing:'Pausing...',kobra_paused:'Paused',kobra_resuming:'Resuming...',kobra_resumed:'Resumed',kobra_stopping:'Stopping...',kobra_stoped:'Stopped',kobra_finished:'Finished',kobra_failed:'Error',kobra_canceled:'Cancelled',kobra_offline:'Offline',
   nav_dashboard:'Dashboard',nav_print:'Print',nav_temps:'Temperatures',nav_motion:'Motion',nav_ams:'AMS',nav_extras:'Light / Fan',nav_console:'Console',
-  card_progress:'Progress',card_temps:'Temperatures',card_light_fan:'Fan',card_speed:'Print Speed',card_cam:'Camera',
+  card_progress:'Progress',card_temps:'Temperatures',card_light_fan:'Fan',card_speed:'Print Speed',card_cam:'Camera',lbl_elapsed:'Elapsed',lbl_remaining:'remaining',
   speed_silent:'🐢 Silent',speed_normal:'⚡ Normal',speed_sport:'🚀 Sport',
   lbl_light:'💡 Light',lbl_feed:'Load',lbl_unload:'Unload',
   cam_placeholder:'📷 Camera not started',btn_cam_start:'▶ Camera',btn_cam_stop:'◼ Camera',
@@ -1177,7 +1190,8 @@ var LANG_EN={
   settings_save:'Save & Restart',settings_printer_ip:'Printer IP',settings_mqtt_port:'MQTT Port',
   settings_username:'MQTT Username',settings_password:'MQTT Password',settings_device_id:'Device ID',settings_mode_id:'Mode ID',
   update_check:'Check for Updates',update_checking:'Checking...',update_available:'available',update_none:'Already up to date',
-  update_apply:'Install Now',update_applying:'Downloading...',update_restarting:'Restarting...',update_error:'Error'
+  update_apply:'Install Now',update_applying:'Downloading...',update_restarting:'Restarting...',update_error:'Error',
+  btn_connect:'⚡ Connect',btn_disconnect:'✕ Disconnect'
 };
 var currentLang='de';
 var T=LANG_DE;
@@ -1223,6 +1237,7 @@ function applyLang(){
   document.querySelectorAll('.lbl-home-z').forEach(e=>e.textContent=T.btn_home_z);
   document.querySelectorAll('.lbl-home-all').forEach(e=>e.textContent=T.btn_home_all);
   document.querySelectorAll('.lbl-step').forEach(e=>e.textContent=T.label_step);
+  document.querySelectorAll('.temp-input').forEach(e=>e.setAttribute('placeholder',T.label_target_c.replace(':','')));
   // Console
   setText('ptitle-console',T.panel_console_title);
   // Settings modal
@@ -1246,6 +1261,8 @@ function applyLang(){
   // AMS feed/unload
   document.querySelectorAll('.lbl-feed').forEach(e=>e.textContent=T.lbl_feed);
   document.querySelectorAll('.lbl-unload').forEach(e=>e.textContent=T.lbl_unload);
+  // conn-btn text (nur wenn nicht im Übergangszustand)
+  updateConnBtn();
 }
 function setText(id,txt){var el=document.getElementById(id);if(el)el.textContent=txt;}
 (function(){
@@ -1313,6 +1330,8 @@ function applyState(){
 
   var elapsed=fmtTime(s.print_duration);
   var delapsed=document.getElementById('d-elapsed');if(delapsed)delapsed.textContent=elapsed;
+  var remain=s.remain_time>0?'≈ '+fmtTime(s.remain_time)+' '+T.lbl_remaining:'';
+  var dremain=document.getElementById('d-remain');if(dremain)dremain.textContent=remain;
 
   var fn=s.filename||'–';
   var dfname=document.getElementById('d-fname');if(dfname){dfname.textContent=fn;dfname.title=fn};
@@ -1371,6 +1390,33 @@ function applyState(){
   if(s.print_state==='printing'&&!camOn&&s.camera_url){
     camStart();
   }
+
+  updateConnBtn();
+}
+
+function updateConnBtn(){
+  var btn=document.getElementById('conn-btn');
+  if(!btn)return;
+  var offline=S.kobra_state==='offline';
+  if(offline){
+    btn.className='conn-btn disconnected';
+    btn.textContent=T.btn_connect||'⚡ Verbinden';
+  } else {
+    btn.className='conn-btn connected';
+    btn.textContent=T.btn_disconnect||'✕ Trennen';
+  }
+}
+
+function toggleConnection(){
+  var btn=document.getElementById('conn-btn');
+  var offline=S.kobra_state==='offline';
+  btn.disabled=true;
+  btn.textContent='…';
+  var url=offline?'/api/connect':'/api/disconnect';
+  post(url,{}).then(function(r){return r.json()}).then(function(r){
+    btn.disabled=false;
+    if(r.error)addLog('Error: '+r.error);
+  }).catch(function(){btn.disabled=false;});
 }
 
 // ── Temp history + chart ──
@@ -1685,6 +1731,28 @@ function toggleCam(){if(camOn)camStop();else camStart()}
         self._state["fan_speed"] = speed
         return web.json_response({"result": "ok"})
 
+    async def handle_api_connect(self, request):
+        loop = asyncio.get_event_loop()
+        try:
+            await loop.run_in_executor(None, self.client.connect)
+            self._state["print_state"] = "standby"
+            self._state["kobra_state"] = "free"
+            log.info("Manuell verbunden")
+            return web.json_response({"result": "connected"})
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def handle_api_disconnect(self, request):
+        loop = asyncio.get_event_loop()
+        try:
+            await loop.run_in_executor(None, self.client.disconnect)
+        except Exception:
+            pass
+        self._state["print_state"] = "error"
+        self._state["kobra_state"] = "offline"
+        log.info("Manuell getrennt")
+        return web.json_response({"result": "disconnected"})
+
     async def handle_api_speed(self, request):
         try:
             body = await request.json()
@@ -1894,6 +1962,7 @@ function toggleCam(){if(camOn)camStop();else camStart()}
             "bed_target":       s["bed_target"],
             "progress":         s["progress"],
             "print_duration":   s["print_duration"],
+            "remain_time":      s["remain_time"],
             "curr_layer":       s["curr_layer"],
             "total_layers":     s["total_layers"],
             "filename":         s["filename"],
@@ -2267,7 +2336,7 @@ function toggleCam(){if(camOn)camStop();else camStart()}
             return False
 
     def _poll_loop(self, stop_event: threading.Event):
-        _offline = False          # True = Drucker zuletzt nicht erreichbar
+        _offline = self._state["kobra_state"] == "offline"
         _probe_interval = 10.0   # Sekunden zwischen TCP-Probes im Offline-Modus
 
         while not stop_event.is_set():
@@ -2355,6 +2424,8 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     # New API endpoints
     r.add_post("/api/light",               bridge.handle_api_light)
     r.add_post("/api/fan",                 bridge.handle_api_fan)
+    r.add_post("/api/connect",             bridge.handle_api_connect)
+    r.add_post("/api/disconnect",          bridge.handle_api_disconnect)
     r.add_post("/api/speed",               bridge.handle_api_speed)
     r.add_post("/api/ams/feed",            bridge.handle_api_ams_feed)
     r.add_post("/api/axis",                bridge.handle_api_axis)
@@ -2384,7 +2455,6 @@ def build_app(bridge: KobraXBridge) -> web.Application:
 
 
 async def run_bridge(args):
-    log.info(f"Verbinde mit Drucker {args.printer_ip}:{args.mqtt_port} …")
     client = KobraXClient(
         host=args.printer_ip,
         port=args.mqtt_port,
@@ -2395,11 +2465,18 @@ async def run_bridge(args):
         client_id="kobrax_bridge",
     )
 
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, client.connect)
-    log.info("MQTT verbunden")
-
     bridge  = KobraXBridge(client, args=args)
+
+    # Verbindungsversuch beim Start – bei Fehler im Offline-Modus weiterlaufen
+    loop = asyncio.get_event_loop()
+    log.info(f"Verbinde mit Drucker {args.printer_ip}:{args.mqtt_port} …")
+    try:
+        await loop.run_in_executor(None, client.connect)
+        log.info("MQTT verbunden")
+    except Exception as e:
+        log.warning(f"Drucker nicht erreichbar ({e}) – starte im Offline-Modus")
+        bridge._state["print_state"] = "error"
+        bridge._state["kobra_state"] = "offline"
     app     = build_app(bridge)
 
     stop_event = threading.Event()
