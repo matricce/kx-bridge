@@ -1,6 +1,6 @@
 # KX-Bridge – Anycubic Kobra X Moonraker Bridge
 
-**Version:** 0.9.1-beta4  
+**Version:** 0.9.1-beta10
 **Status:** Public Beta – für Heimanwender geeignet, Feedback willkommen
 
 KX-Bridge ist eine Moonraker-kompatible HTTP/WebSocket-Bridge für den **Anycubic Kobra X** 3D-Drucker. Sie ermöglicht die Steuerung des Druckers über OrcaSlicer und andere Moonraker-kompatible Software, ohne dass Klipper oder ein Raspberry Pi benötigt wird.
