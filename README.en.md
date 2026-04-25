@@ -1,6 +1,6 @@
 # KX-Bridge – Anycubic Kobra X Moonraker Bridge
 
-**Version:** 0.9.1-beta5  
+**Version:** 0.9.1-beta4  
 **Status:** Public Beta – suitable for home users, feedback welcome
 
 KX-Bridge is a Moonraker-compatible HTTP/WebSocket bridge for the **Anycubic Kobra X** 3D printer. It allows you to control the printer through OrcaSlicer and other Moonraker-compatible software — no Klipper, no Raspberry Pi required.
@@ -24,7 +24,7 @@ KX-Bridge is a Moonraker-compatible HTTP/WebSocket bridge for the **Anycubic Kob
 
 ## Requirements
 
-- Anycubic Kobra X on your local network (LAN, no Wi-Fi client isolation)
+- Anycubic Kobra X on your local network, with **LAN mode enabled** (printer menu → enable LAN mode)
 - Printer MQTT credentials (→ see [Extracting credentials](#extracting-credentials))
 - Docker **or** Python 3.9+ **or** the pre-built Linux binary
 
@@ -33,24 +33,28 @@ KX-Bridge is a Moonraker-compatible HTTP/WebSocket bridge for the **Anycubic Kob
 ## Quick start – Docker (recommended)
 
 ```bash
-# 1. Create .env
-cp .env.example .env
-# Fill in your printer data (→ extract_credentials)
+# 1. Start the bridge
+./start.sh
+```
 
-# 2. Start the bridge
-docker compose up -d
+`start.sh` builds the Docker image automatically on first run and starts the bridge.
+
+```
+# 2. Open the web UI: http://BRIDGE-IP:7125
+#    → Settings (⚙) open automatically on first start
+#    → Enter your credentials (→ see Extracting credentials)
 
 # 3. In OrcaSlicer: add printer → "Moonraker" → http://BRIDGE-IP:7125
 ```
 
 Check logs:
 ```bash
-docker compose logs -f
+docker-compose logs -f
 ```
 
-Update:
+Stop:
 ```bash
-docker compose pull && docker compose up -d
+docker-compose down
 ```
 
 ---
@@ -59,11 +63,11 @@ docker compose pull && docker compose up -d
 
 ```bash
 chmod +x kx-bridge
-./kx-bridge --printer-ip 192.168.x.x --username userXXXX --password XXXXX \
-            --device-id XXXXX --mode-id 20030
+./kx-bridge
 ```
 
-Or place a `.env` file in the same directory — the bridge reads it automatically.
+Open the web UI: `http://localhost:7125`  
+→ Settings (⚙) open automatically and guide you through the initial setup.
 
 ---
 
@@ -71,10 +75,11 @@ Or place a `.env` file in the same directory — the bridge reads it automatical
 
 ```bash
 pip install aiohttp
-python kobrax_moonraker_bridge.py --printer-ip 192.168.x.x ...
-# Or fill in .env and start without arguments
 python kobrax_moonraker_bridge.py
 ```
+
+Open the web UI: `http://localhost:7125`  
+→ Settings (⚙) open automatically on first start.
 
 ---
 
@@ -82,21 +87,19 @@ python kobrax_moonraker_bridge.py
 
 The MQTT credentials are printer-specific and are generated on first connection with AnycubicSlicerNext. The `extract_credentials` tool reads them from the memory of the running slicer.
 
-**Requirement:** AnycubicSlicerNext must be running and connected to the printer.
+**Requirement:** AnycubicSlicerNext must be running and connected to the printer (printer status is shown).
 
 ### Windows
 
 ```
-extract_credentials.exe --write-env
+extract_credentials.exe
 ```
-
-Writes the found credentials directly to `.env`.
 
 ### Linux
 
 ```bash
 chmod +x extract_credentials
-./extract_credentials --write-env
+./extract_credentials
 ```
 
 ### Output
@@ -114,9 +117,12 @@ chmod +x extract_credentials
   Device-ID     xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  (hits: 3504)
   Printer IP    192.168.x.x  (hits: 3036)
 =======================================================
-
-Hint: pass --write-env to save credentials to '.env'.
 ```
+
+Enter the displayed values in the bridge settings:  
+Open web UI → **⚙ Settings** → fill in the fields → **Save & Restart**
+
+> If the result looks uncertain: `--verbose` shows all found candidates.
 
 All credentials are **processed locally only** — nothing is sent to external servers.
 
