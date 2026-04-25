@@ -1271,7 +1271,13 @@ function setText(id,txt){var el=document.getElementById(id);if(el)el.textContent
   document.getElementById('lang-btn').textContent=l==='de'?'EN':'DE';
   document.documentElement.setAttribute('lang',l);
   // defer until DOM ready
-  window.addEventListener('DOMContentLoaded',function(){applyLang();});
+  window.addEventListener('DOMContentLoaded',function(){
+    applyLang();
+    // Beim ersten Start (keine Zugangsdaten) Settings-Modal automatisch öffnen
+    fetch('/api/settings').then(function(r){return r.json()}).then(function(d){
+      if(!d.printer_ip||!d.device_id)openSettings();
+    }).catch(function(){});
+  });
 })();
 
 // ── Panel nav ──
