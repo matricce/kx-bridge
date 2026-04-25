@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1-beta12] – 2026-04-25
+
+### Fixes
+- Fehlermeldung bei falschen MQTT-Zugangsdaten ist jetzt verständlich: `Falsche MQTT-Zugangsdaten (falscher Benutzername, Passwort oder Device-ID)` statt kryptischem `CONNACK failed: 20020005`
+
+---
+
 ## [0.9.1-beta11] – 2026-04-25
 
 ### Fixes

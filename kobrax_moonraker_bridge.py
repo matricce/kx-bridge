@@ -2365,7 +2365,7 @@ function toggleCam(){if(camOn)camStop();else camStart()}
                         self._state["kobra_state"] = "free"
                         log.info("MQTT-Verbindung wiederhergestellt")
                     except Exception as e:
-                        log.warning(f"Verbindungsaufbau fehlgeschlagen: {e}")
+                        log.warning(f"Verbindungsaufbau fehlgeschlagen: {_mqtt_error_msg(e)}")
                         stop_event.wait(_probe_interval)
                         continue
                 else:
@@ -2407,6 +2407,13 @@ function toggleCam(){if(camOn)camStop();else camStart()}
 # ---------------------------------------------------------------------------
 # App factory + main
 # ---------------------------------------------------------------------------
+
+def _mqtt_error_msg(exc: Exception) -> str:
+    msg = str(exc)
+    if "20020005" in msg:
+        return "Falsche MQTT-Zugangsdaten (falscher Benutzername, Passwort oder Device-ID)"
+    return msg
+
 
 def build_app(bridge: KobraXBridge) -> web.Application:
     app = web.Application()
@@ -2488,7 +2495,7 @@ async def run_bridge(args):
         await loop.run_in_executor(None, client.connect)
         log.info("MQTT verbunden")
     except Exception as e:
-        log.warning(f"Drucker nicht erreichbar ({e}) – starte im Offline-Modus")
+        log.warning(f"Verbindung fehlgeschlagen: {_mqtt_error_msg(e)} – starte im Offline-Modus")
         bridge._state["print_state"] = "error"
         bridge._state["kobra_state"] = "offline"
     app     = build_app(bridge)
