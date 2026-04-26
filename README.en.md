@@ -1,3 +1,5 @@
+<p align="center"><img src="knlogo.png" alt="KX-Bridge Logo" width="180"/></p>
+
 # KX-Bridge – Anycubic Kobra X Klipper Bridge
 
 **Version:** 0.9.1-beta15
