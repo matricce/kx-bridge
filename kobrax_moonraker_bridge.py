@@ -458,17 +458,19 @@ class KobraXBridge:
         }, status=201)
 
     def _start_print(self, filename: str, url: str = "", md5: str = "", filesize: int = 0):
-        use_ams = len(self._ams_slots) > 0
+        loaded = [(i, s) for i, s in enumerate(self._ams_slots) if s.get("status") == 5]
+        use_ams = len(loaded) > 0
         ams_box_mapping = [
             {
                 "paint_index":  i,
                 "ams_index":    i,
                 "paint_color":  [255, 255, 255, 255],
                 "ams_color":    [255, 255, 255, 255],
-                "material_type": s.get("material_type", "PLA"),
+                "material_type": s.get("type", "PLA"),
             }
-            for i, s in enumerate(self._ams_slots)
+            for i, s in loaded
         ]
+        log.info(f"AMS-Slots: {len(loaded)}/{len(self._ams_slots)} belegt → {[i for i,_ in loaded]}")
         payload = {
             "taskid":       "-1",
             "url":          url,
@@ -516,16 +518,19 @@ class KobraXBridge:
 
         log.info(f"Druck starten: {filename}")
 
-        # AMS-Mapping aus gecachtem State
+        # AMS-Mapping aus gecachtem State — leere Slots (status != 5) überspringen
         ams_box_mapping = []
         for i, slot in enumerate(self._ams_slots):
+            if slot.get("status") != 5:
+                log.info(f"AMS-Slot {i} leer (status={slot.get('status')}) – übersprungen")
+                continue
             ams_box_mapping.append({
                 "slot_index": i,
-                "material_type": slot.get("material_type", "PLA"),
-                "color": slot.get("color", "FFFFFF"),
+                "material_type": slot.get("type", "PLA"),
+                "color": slot.get("color", [255, 255, 255]),
             })
 
-        use_ams = len(self._ams_slots) > 0
+        use_ams = len(ams_box_mapping) > 0
 
         payload = {
             "filename": filename,
@@ -1169,7 +1174,7 @@ var LANG_DE={
   label_set:'Setzen',label_off:'Aus',
   panel_temps_nozzle:'Nozzle',panel_temps_bed:'Heizbett',panel_temps_chart:'Verlauf (letzte 60 Messungen)',label_target_c:'Ziel:',
   panel_motion_xy:'XY-Achsen',panel_motion_z:'Z-Achse',label_step:'Schrittweite:',btn_home_z:'Home Z',btn_home_xy:'Home XY',btn_home_all:'Home All',btn_disable_motors:'Motoren aus',
-  panel_ams_title:'AMS / Filamentbox',ams_no_data:'Keine AMS-Daten empfangen',label_slot:'Slot',
+  panel_ams_title:'AMS / Filamentbox',ams_no_data:'Keine AMS-Daten empfangen',label_slot:'Slot',ams_empty:'Leer',
   panel_extras_light:'Licht',panel_extras_fan:'Lüfter',panel_extras_camera:'Kamera',btn_cam_start2:'▶ Start',btn_cam_stop2:'◼ Stop',
   panel_console_title:'Ereignis-Log',
   log_light_on:'Licht an',log_light_off:'Licht aus',log_fan:'Lüfter →',log_nozzle:'Nozzle →',log_bed:'Bett →',log_axis:'Achse',log_home:'Home',log_home_all:'Home All',log_cam_start:'Kamera gestartet:',log_cam_stop:'Kamera gestoppt',log_poll_error:'Poll-Fehler:',log_error:'Fehler:',
@@ -1195,7 +1200,7 @@ var LANG_EN={
   label_set:'Set',label_off:'Off',
   panel_temps_nozzle:'Nozzle',panel_temps_bed:'Heated Bed',panel_temps_chart:'History (last 60 readings)',label_target_c:'Target:',
   panel_motion_xy:'XY Axes',panel_motion_z:'Z Axis',label_step:'Step size:',btn_home_z:'Home Z',btn_home_xy:'Home XY',btn_home_all:'Home All',btn_disable_motors:'Motors Off',
-  panel_ams_title:'AMS / Filament Box',ams_no_data:'No AMS data received',label_slot:'Slot',
+  panel_ams_title:'AMS / Filament Box',ams_no_data:'No AMS data received',label_slot:'Slot',ams_empty:'Empty',
   panel_extras_light:'Light',panel_extras_fan:'Fan',panel_extras_camera:'Camera',btn_cam_start2:'▶ Start',btn_cam_stop2:'◼ Stop',
   panel_console_title:'Event Log',
   log_light_on:'Light on',log_light_off:'Light off',log_fan:'Fan →',log_nozzle:'Nozzle →',log_bed:'Bed →',log_axis:'Axis',log_home:'Home',log_home_all:'Home All',log_cam_start:'Camera started:',log_cam_stop:'Camera stopped',log_poll_error:'Poll error:',log_error:'Error:',
@@ -1388,13 +1393,14 @@ function applyState(){
   if(s.ams_slots&&s.ams_slots.length){
     var html='';
     s.ams_slots.forEach(function(slot,i){
-      var rgb=Array.isArray(slot.color)?slot.color:[128,128,128];
+      var empty=slot.status!==5;
+      var rgb=empty?[80,80,80]:(Array.isArray(slot.color)?slot.color:[128,128,128]);
       var col='rgb('+rgb[0]+','+rgb[1]+','+rgb[2]+')';
       var active=slot.status===1||slot.active;
-      var pct=slot.consumables_percent!=null?slot.consumables_percent+'%':'–';
-      html+='<div class="ams-slot'+(active?' active':'')+ '" style="--slot-color:'+col+'">'
+      var pct=empty?T.ams_empty:(slot.consumables_percent!=null?slot.consumables_percent+'%':'–');
+      html+='<div class="ams-slot'+(active?' active':'')+(empty?' empty':'')+ '" style="--slot-color:'+col+';opacity:'+(empty?0.4:1)+'">'
         +'<div class="slot-circle" style="background:'+col+'"></div>'
-        +'<div class="slot-material">'+(slot.type||slot.material_type||'–')+'</div>'
+        +'<div class="slot-material">'+(empty?'–':(slot.type||slot.material_type||'–'))+'</div>'
         +'<div class="slot-label">Slot '+(slot.index!=null?slot.index+1:i+1)+'</div>'
         +'<div class="slot-label" style="font-size:10px;color:var(--txt2)">'+pct+'</div>'
         +'</div>';

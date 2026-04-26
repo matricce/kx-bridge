@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.9.1-beta15] – 2026-04-26
+
+### Fixes
+- AMS: Leere Slots werden beim Druckstart übersprungen – kein `filament runout` mehr bei unbelegten Kanälen (Issue #5)
+- AMS: Material-Typ wird jetzt korrekt aus dem Drucker-Protokoll gelesen (Feld `type` statt `material_type`)
+- AMS UI: Leere Slots werden grau und transparent dargestellt mit „Leer"-Label
+
+---
+
 ## [0.9.1-beta14] – 2026-04-26
 
 ### Fixes
