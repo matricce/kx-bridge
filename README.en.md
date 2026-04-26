@@ -246,7 +246,7 @@ tail -f /tmp/bridge.log   # when using bridge.sh
 
 ## Security notes
 
-- The bridge binds to `0.0.0.0:7125` by default — use on your local network only
+- The bridge is accessible on your local network via `http://<your-host-ip>:7125` — do not expose to the internet
 - `.env` contains printer credentials — do not share publicly
 - The credentials are printer-specific and have no access to Anycubic cloud services
 
