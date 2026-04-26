@@ -198,6 +198,7 @@ class KobraXClient:
 
     def _read_loop(self):
         last_ping = time.time()
+        _empty_count = 0
         while self._running:
             if time.time() - last_ping > 30:
                 with self._lock:
@@ -212,7 +213,12 @@ class KobraXClient:
             try:
                 data = self._sock.recv(65536)
                 if not data:
-                    raise ConnectionResetError("EOF")
+                    # Windows SSL kann kurzzeitig b"" liefern ohne echten EOF
+                    _empty_count += 1
+                    if _empty_count >= 5:
+                        raise ConnectionResetError("EOF")
+                    continue
+                _empty_count = 0
                 self._buf += data
                 self._drain()
             except ssl.SSLWantReadError:

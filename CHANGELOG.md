@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.9.1-beta14] – 2026-04-26
+
+### Fixes
+- Z-Achse: ▲ fährt jetzt aufwärts (Z+), ▼ abwärts (Z−) – Pfeile waren vertauscht (Issue #4)
+- Home All: korrekter axis-Code 5 – homed alle Achsen XYZ (Issue #4)
+- Neuer Button „Home XY" (axis=4) in der UI
+- Neuer Button „Motors Off" (axis turnOff) in der UI
+
+---
+
+## [0.9.1-beta13] – 2026-04-26
+
+### Fixes (Windows)
+- Self-Update / Settings-Neustart: `os.execv` funktioniert jetzt korrekt in der PyInstaller-Binary (kein doppelter Pfad als Argument mehr)
+- Kamera: `ffmpeg nicht gefunden` crasht nicht mehr – saubere 503-Antwort wenn ffmpeg nicht installiert ist
+- Reconnect-Loop: Kurzeitige leere TCP-Reads unter Windows führen nicht mehr sofort zu Reconnects
+
+### Struktur
+- `bridge/`: Bridge-Dateien aus `05_scripts/` herausgelöst
+- `tools/`: `extract_credentials.py` als eigenständiges Tool mit eigenem README
+- `_archive/`: RE-Forschungsordner, Analyse-Tools und alte Release-Checksums archiviert
+- README komplett neu: klarer 3-Schritte-Schnellstart
+
+---
+
 ## [0.9.1-beta12] – 2026-04-25
 
 ### Fixes

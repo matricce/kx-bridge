@@ -34,12 +34,12 @@ else
           print(int(datetime.datetime.fromisoformat(s).replace(tzinfo=datetime.timezone.utc).timestamp()))" 2>/dev/null || echo 0)
 
     for f in Dockerfile \
-              05_scripts/kobrax_moonraker_bridge.py \
-              05_scripts/kobrax_client.py \
-              05_scripts/env_loader.py \
-              05_scripts/requirements.txt \
-              05_scripts/anycubic_slicer.crt \
-              05_scripts/anycubic_slicer.key; do
+              bridge/kobrax_moonraker_bridge.py \
+              bridge/kobrax_client.py \
+              bridge/env_loader.py \
+              bridge/requirements.txt \
+              bridge/anycubic_slicer.crt \
+              bridge/anycubic_slicer.key; do
         if [[ -f "$f" ]]; then
             FILE_TS=$(python3 -c "import os; print(int(os.path.getmtime('$f')))" 2>/dev/null || echo 0)
             if [[ $FILE_TS -gt $IMAGE_TS ]]; then

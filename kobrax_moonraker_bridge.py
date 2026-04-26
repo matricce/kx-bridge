@@ -29,6 +29,19 @@ _BASE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os
 sys.path.insert(0, _BASE)
 from kobrax_client import KobraXClient
 
+
+try:
+    import imageio_ffmpeg
+    def _find_ffmpeg() -> str:
+        return imageio_ffmpeg.get_ffmpeg_exe()
+except ImportError:
+    def _find_ffmpeg() -> str:
+        exe_name = "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"
+        local = os.path.join(_BASE, exe_name)
+        if os.path.isfile(local):
+            return local
+        return "ffmpeg"
+
 try:
     from aiohttp import web
     import aiohttp
@@ -1031,17 +1044,17 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
             <button class="step-btn" onclick="setStep(this,10)">10 mm</button>
           </div>
           <div class="home-btns">
-            <button class="btn btn-sm" style="background:var(--raised);color:var(--txt)" onclick="homeAxis('X')"><span class="lbl-home-x">Home X</span></button>
-            <button class="btn btn-sm" style="background:var(--raised);color:var(--txt)" onclick="homeAxis('Y')"><span class="lbl-home-y">Home Y</span></button>
-            <button class="btn btn-sm" style="background:var(--raised);color:var(--txt)" onclick="homeAxis('Z')"><span class="lbl-home-z">Home Z</span></button>
+            <button class="btn btn-sm" style="background:var(--raised);color:var(--txt)" onclick="homeZ()"><span class="lbl-home-z">Home Z</span></button>
+            <button class="btn btn-sm" style="background:var(--raised);color:var(--txt)" onclick="homeXY()"><span class="lbl-home-xy">Home XY</span></button>
             <button class="btn btn-sm btn-accent" onclick="homeAll()"><span class="lbl-home-all">Home All</span></button>
+            <button class="btn btn-sm" style="background:var(--raised);color:var(--txt)" onclick="disableMotors()"><span class="lbl-disable-motors">Motors Off</span></button>
           </div>
         </div>
         <div class="card">
           <div class="card-title"><span>↕</span> <span id="ptitle-motion-z">Z-Achse</span></div>
           <div class="joypad" style="grid-template-columns:52px;grid-template-rows:repeat(2,52px)">
-            <button class="joy" onclick="move(2,-1,getStep())" title="Z−">▲</button>
-            <button class="joy" onclick="move(2,1,getStep())" title="Z+">▼</button>
+            <button class="joy" onclick="move(2,1,getStep())" title="Z+">▲</button>
+            <button class="joy" onclick="move(2,-1,getStep())" title="Z−">▼</button>
           </div>
           <div style="text-align:center;margin-top:8px;font-size:12px;color:var(--txt2)"><span class="lbl-step">Schrittweite:</span> <span id="step-display">1</span> mm</div>
         </div>
@@ -1155,7 +1168,7 @@ var LANG_DE={
   panel_print_title:'Drucksteuerung',panel_print_btn_pause:'⏸ Pause',panel_print_btn_resume:'▶ Fortsetzen',panel_print_btn_cancel:'✕ Abbrechen',panel_print_temps_live:'Temperaturen (Live)',
   label_set:'Setzen',label_off:'Aus',
   panel_temps_nozzle:'Nozzle',panel_temps_bed:'Heizbett',panel_temps_chart:'Verlauf (letzte 60 Messungen)',label_target_c:'Ziel:',
-  panel_motion_xy:'XY-Achsen',panel_motion_z:'Z-Achse',label_step:'Schrittweite:',btn_home_x:'Home X',btn_home_y:'Home Y',btn_home_z:'Home Z',btn_home_all:'Home All',
+  panel_motion_xy:'XY-Achsen',panel_motion_z:'Z-Achse',label_step:'Schrittweite:',btn_home_z:'Home Z',btn_home_xy:'Home XY',btn_home_all:'Home All',btn_disable_motors:'Motoren aus',
   panel_ams_title:'AMS / Filamentbox',ams_no_data:'Keine AMS-Daten empfangen',label_slot:'Slot',
   panel_extras_light:'Licht',panel_extras_fan:'Lüfter',panel_extras_camera:'Kamera',btn_cam_start2:'▶ Start',btn_cam_stop2:'◼ Stop',
   panel_console_title:'Ereignis-Log',
@@ -1181,7 +1194,7 @@ var LANG_EN={
   panel_print_title:'Print Control',panel_print_btn_pause:'⏸ Pause',panel_print_btn_resume:'▶ Resume',panel_print_btn_cancel:'✕ Cancel',panel_print_temps_live:'Temperatures (Live)',
   label_set:'Set',label_off:'Off',
   panel_temps_nozzle:'Nozzle',panel_temps_bed:'Heated Bed',panel_temps_chart:'History (last 60 readings)',label_target_c:'Target:',
-  panel_motion_xy:'XY Axes',panel_motion_z:'Z Axis',label_step:'Step size:',btn_home_x:'Home X',btn_home_y:'Home Y',btn_home_z:'Home Z',btn_home_all:'Home All',
+  panel_motion_xy:'XY Axes',panel_motion_z:'Z Axis',label_step:'Step size:',btn_home_z:'Home Z',btn_home_xy:'Home XY',btn_home_all:'Home All',btn_disable_motors:'Motors Off',
   panel_ams_title:'AMS / Filament Box',ams_no_data:'No AMS data received',label_slot:'Slot',
   panel_extras_light:'Light',panel_extras_fan:'Fan',panel_extras_camera:'Camera',btn_cam_start2:'▶ Start',btn_cam_stop2:'◼ Stop',
   panel_console_title:'Event Log',
@@ -1233,10 +1246,10 @@ function applyLang(){
   // Axis labels
   setText('ptitle-motion-xy',T.panel_motion_xy);
   setText('ptitle-motion-z',T.panel_motion_z);
-  document.querySelectorAll('.lbl-home-x').forEach(e=>e.textContent=T.btn_home_x);
-  document.querySelectorAll('.lbl-home-y').forEach(e=>e.textContent=T.btn_home_y);
   document.querySelectorAll('.lbl-home-z').forEach(e=>e.textContent=T.btn_home_z);
+  document.querySelectorAll('.lbl-home-xy').forEach(e=>e.textContent=T.btn_home_xy);
   document.querySelectorAll('.lbl-home-all').forEach(e=>e.textContent=T.btn_home_all);
+  document.querySelectorAll('.lbl-disable-motors').forEach(e=>e.textContent=T.btn_disable_motors);
   document.querySelectorAll('.lbl-step').forEach(e=>e.textContent=T.label_step);
   document.querySelectorAll('.temp-input').forEach(e=>e.setAttribute('placeholder',T.label_target_c.replace(':','')));
   // Console
@@ -1591,15 +1604,24 @@ function move(axis,dir,dist){
     .catch(function(e){clog('Achse-Fehler: '+e,'msg-err')});
 }
 function homeAll(){
-  post('/api/axis',{axis:4,move_type:2,distance:0})
+  post('/api/axis',{axis:5,move_type:2,distance:0})
     .then(function(){clog('Home All','msg-ok')})
     .catch(function(e){clog('Home-Fehler: '+e,'msg-err')});
 }
-function homeAxis(ax){
-  var m={X:1,Y:2,Z:3};
-  post('/api/axis',{axis:m[ax],move_type:2,distance:0})
-    .then(function(){clog('Home '+ax,'msg-ok')})
+function homeXY(){
+  post('/api/axis',{axis:4,move_type:2,distance:0})
+    .then(function(){clog('Home XY','msg-ok')})
     .catch(function(e){clog('Home-Fehler: '+e,'msg-err')});
+}
+function homeZ(){
+  post('/api/axis',{axis:3,move_type:2,distance:0})
+    .then(function(){clog('Home Z','msg-ok')})
+    .catch(function(e){clog('Home-Fehler: '+e,'msg-err')});
+}
+function disableMotors(){
+  post('/api/axis',{action:'turnOff'})
+    .then(function(){clog('Motors Off','msg-ok')})
+    .catch(function(e){clog('Motors-Fehler: '+e,'msg-err')});
 }
 
 // ── Temperature ──
@@ -1808,15 +1830,21 @@ function toggleCam(){if(camOn)camStop();else camStart()}
             body = await request.json()
         except Exception:
             body = {}
-        axis      = int(body.get("axis", 4))
-        move_type = int(body.get("move_type", 2))
-        distance  = float(body.get("distance", 0))
+        action = body.get("action", "move")
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, lambda: self.client.publish(
-            "axis", "move",
-            {"axis": axis, "move_type": move_type, "distance": distance},
-            timeout=0
-        ))
+        if action == "turnOff":
+            await loop.run_in_executor(None, lambda: self.client.publish(
+                "axis", "turnOff", None, timeout=0
+            ))
+        else:
+            axis      = int(body.get("axis", 4))
+            move_type = int(body.get("move_type", 2))
+            distance  = float(body.get("distance", 0))
+            await loop.run_in_executor(None, lambda: self.client.publish(
+                "axis", "move",
+                {"axis": axis, "move_type": move_type, "distance": distance},
+                timeout=0
+            ))
         return web.json_response({"result": "ok"})
 
     async def handle_api_temperature(self, request):
@@ -1880,14 +1908,6 @@ function toggleCam(){if(camOn)camStop();else camStart()}
         if not url:
             return web.Response(status=503, text="Keine Kamera-URL bekannt")
 
-        boundary = "kobraxframe"
-        resp = web.StreamResponse(headers={
-            "Content-Type": f"multipart/x-mixed-replace;boundary={boundary}",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-        })
-        await resp.prepare(request)
-
         is_rtsp = url.lower().startswith("rtsp://")
         ffmpeg_input_args = [
             "-fflags", "nobuffer",
@@ -1896,22 +1916,38 @@ function toggleCam(){if(camOn)camStop();else camStart()}
         if is_rtsp:
             ffmpeg_input_args += ["-probesize", "32", "-analyzeduration", "0", "-rtsp_transport", "tcp"]
         else:
-            # HTTP-FLV/HLS: braucht mehr Probe-Puffer für Container-Erkennung
             ffmpeg_input_args += ["-probesize", "1000000", "-analyzeduration", "1000000"]
 
-        proc = await asyncio.create_subprocess_exec(
-            "ffmpeg", "-loglevel", "quiet",
-            *ffmpeg_input_args,
-            "-i", url,
-            "-vf", "fps=15,scale=640:-1",
-            "-f", "image2pipe",
-            "-vcodec", "mjpeg",
-            "-q:v", "3",
-            "-flush_packets", "1",
-            "pipe:1",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
+        # ffmpeg erst starten BEVOR der StreamResponse geöffnet wird
+        # (damit wir bei Fehler noch eine normale HTTP-Response senden können)
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                _find_ffmpeg(), "-loglevel", "quiet",
+                *ffmpeg_input_args,
+                "-i", url,
+                "-vf", "fps=15,scale=640:-1",
+                "-f", "image2pipe",
+                "-vcodec", "mjpeg",
+                "-q:v", "3",
+                "-flush_packets", "1",
+                "pipe:1",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+        except (FileNotFoundError, OSError) as e:
+            log.warning("Kamera: ffmpeg nicht gefunden – Kamerastream nicht verfügbar")
+            return web.Response(status=503, text="ffmpeg not found")
+        except Exception as e:
+            log.warning(f"Kamera: ffmpeg konnte nicht gestartet werden: {e}")
+            return web.Response(status=503, text=str(e))
+
+        boundary = "kobraxframe"
+        resp = web.StreamResponse(headers={
+            "Content-Type": f"multipart/x-mixed-replace;boundary={boundary}",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        })
+        await resp.prepare(request)
 
         buf = b""
         try:
@@ -2107,7 +2143,12 @@ function toggleCam(){if(camOn)camStop();else camStart()}
 
     def _restart_bridge(self):
         log.info("Bridge wird neu gestartet …")
-        os.execv(sys.executable, [sys.executable] + sys.argv)
+        exe = sys.executable
+        # PyInstaller frozen binary: sys.argv[0] == sys.executable → nicht doppelt übergeben
+        if getattr(sys, "frozen", False):
+            os.execv(exe, [exe])
+        else:
+            os.execv(exe, [exe] + sys.argv)
 
     # ─── Update ──────────────────────────────────────────────────────────────
 
@@ -2543,6 +2584,10 @@ def main():
     args = parser.parse_args()
     if args.printer_ip and ":" in args.printer_ip:
         args.printer_ip = args.printer_ip.split(":")[0]
+
+    # Windows braucht ProactorEventLoop für asyncio.create_subprocess_exec
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
     asyncio.run(run_bridge(args))
 
