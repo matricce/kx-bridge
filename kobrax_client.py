@@ -16,7 +16,9 @@ Verwendung:
   client.disconnect()
 """
 
+import hashlib
 import json
+import logging
 import os
 import socket
 import ssl
@@ -27,6 +29,8 @@ import uuid
 from datetime import datetime
 
 import env_loader
+
+log = logging.getLogger("kobrax.mqtt")
 
 _SCRIPT_DIR = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 CERT_FILE = os.path.join(_SCRIPT_DIR, "anycubic_slicer.crt")
@@ -119,6 +123,13 @@ class KobraXClient:
         # Optional callbacks: topic_suffix → callable(payload_dict)
         self.callbacks: dict[str, callable] = {}
 
+        # Dedup: last hash per topic suffix to suppress repeated identical messages
+        self._last_rx_hash: dict[str, str] = {}
+        # Fields that change every tick and should be stripped before dedup-hashing
+        _VOLATILE = {"timestamp", "msgid", "progress", "curr_layer",
+                     "curr_nozzle_temp", "curr_hotbed_temp",
+                     "target_nozzle_temp", "target_hotbed_temp"}
+
     # -- Topics --------------------------------------------------------------
 
     def _pub_topic(self, msg_type: str) -> str:
@@ -144,18 +155,19 @@ class KobraXClient:
 
         raw        = socket.create_connection((self.host, self.port), timeout=5)
         self._sock = ctx.wrap_socket(raw)
-        print(f"[kobrax] TLS: {self._sock.cipher()[0]}")
+        log.info("TLS connected  cipher=%s", self._sock.cipher()[0])
 
         self._sock.sendall(_build_connect(self.client_id, self.username, self.password))
         self._sock.settimeout(3)
         r = self._sock.recv(64)
         if len(r) < 4 or r[0] != 0x20 or r[3] != 0:
             raise RuntimeError(f"CONNACK failed: {r.hex()}")
-        print(f"[kobrax] CONNACK rc=0")
+        log.info("CONNACK rc=0")
 
         self._sock.settimeout(0.2)
         self._buf = b""
         self._subscribe(self._sub_topic())
+        log.debug("MQTT connected to %s:%s", self.host, self.port)
 
     def connect(self):
         self._do_connect()
@@ -172,7 +184,7 @@ class KobraXClient:
             pass
 
     def _reconnect(self):
-        print("[kobrax] Verbindung verloren – reconnect…")
+        log.warning("Verbindung verloren – reconnect…")
         try:
             self._sock.close()
         except Exception:
@@ -180,10 +192,10 @@ class KobraXClient:
         for delay in [2, 4, 8, 15, 30]:
             try:
                 self._do_connect()
-                print("[kobrax] Reconnect erfolgreich")
+                log.info("Reconnect erfolgreich")
                 return True
             except Exception as e:
-                print(f"[kobrax] Reconnect fehlgeschlagen ({e}), warte {delay}s…")
+                log.warning("Reconnect fehlgeschlagen (%s), warte %ss…", e, delay)
                 time.sleep(delay)
         return False
 
@@ -192,7 +204,7 @@ class KobraXClient:
             pid = self._pid
             self._pid += 1
             self._sock.sendall(_build_subscribe(topic, pid))
-        print(f"[kobrax] SUB {topic}")
+        log.info("SUB %s", topic)
 
     # -- Read loop -----------------------------------------------------------
 
@@ -227,7 +239,7 @@ class KobraXClient:
                 continue
             except Exception as e:
                 if self._running:
-                    print(f"[kobrax] reader error: {e}")
+                    log.warning("reader error: %s", e)
                     if not self._reconnect():
                         break
                     last_ping = time.time()
@@ -266,9 +278,40 @@ class KobraXClient:
 
         self._buf = buf[idx:]
 
+    def _dedup_hash(self, suffix: str, payload: dict) -> str:
+        """Hash payload ignoring volatile per-tick fields for dedup check."""
+        stable = {k: v for k, v in payload.items()
+                  if k not in {"timestamp", "msgid", "progress", "curr_layer",
+                               "curr_nozzle_temp", "curr_hotbed_temp",
+                               "target_nozzle_temp", "target_hotbed_temp"}}
+        return hashlib.md5(json.dumps(stable, sort_keys=True).encode(), usedforsecurity=False).hexdigest()
+
     def _dispatch(self, topic: str, payload: dict):
-        # Resolve by report topic suffix (e.g. "info/report")
         suffix = "/".join(topic.split("/")[-2:])
+
+        # Structured RX log with dedup suppression
+        h = self._dedup_hash(suffix, payload)
+        is_dup = self._last_rx_hash.get(suffix) == h
+        self._last_rx_hash[suffix] = h
+        if is_dup:
+            log.debug("RX [dup] %-25s  state=%-12s", suffix, payload.get("state", ""))
+        else:
+            data = payload.get("data") or {}
+            state = payload.get("state", "")
+            if "progress" in data:
+                log.info("RX %-25s  state=%-12s  progress=%s%%  layer=%s/%s",
+                         suffix, state, data["progress"],
+                         data.get("curr_layer", "?"), data.get("total_layers", "?"))
+            elif "curr_nozzle_temp" in data:
+                log.info("RX %-25s  nozzle=%s°C/%s°C  bed=%s°C/%s°C",
+                         suffix,
+                         data["curr_nozzle_temp"], data.get("target_nozzle_temp", 0),
+                         data.get("curr_hotbed_temp", "?"), data.get("target_hotbed_temp", 0))
+            else:
+                log.info("RX %-25s  state=%-12s  data=%s",
+                         suffix, state, json.dumps(payload.get("data"), ensure_ascii=False)[:120])
+
+        # Resolve by report topic suffix (e.g. "info/report")
         if suffix in self._pending_report:
             entry = self._pending_report[suffix]
             entry["result"] = payload
@@ -282,19 +325,18 @@ class KobraXClient:
             entry["event"].set()
 
         # User callbacks by topic suffix (last two path components)
-        suffix = "/".join(topic.split("/")[-2:])
         if suffix in self.callbacks:
             try:
                 self.callbacks[suffix](payload)
             except Exception as e:
-                print(f"[kobrax] callback error for {suffix}: {e}")
+                log.error("callback error for %s: %s", suffix, e)
 
         # Generic wildcard callback
         if "*" in self.callbacks:
             try:
                 self.callbacks["*"](topic, payload)
             except Exception as e:
-                print(f"[kobrax] wildcard callback error: {e}")
+                log.error("wildcard callback error: %s", e)
 
     # -- Publish + request/response ------------------------------------------
 
@@ -322,11 +364,14 @@ class KobraXClient:
             report_registered = True
 
         topic = self._pub_topic(msg_type)
+        log.info("TX %-25s  action=%-12s  data=%s",
+                 f"{msg_type}/request", action,
+                 json.dumps(data, ensure_ascii=False)[:120] if data else "null")
         try:
             with self._lock:
                 self._sock.sendall(_build_publish(topic, payload))
         except Exception as e:
-            print(f"[kobrax] send error: {e}, reconnecting…")
+            log.error("send error: %s, reconnecting…", e)
             self._pending_msgid.pop(msgid, None)
             if report_registered:
                 self._pending_report.pop(report_key, None)
@@ -367,11 +412,14 @@ class KobraXClient:
             "data":      data,
         }, separators=(",", ":"))
         topic = self._web_topic(msg_type)
+        log.info("TX(web) %-23s  action=%-12s  data=%s",
+                 f"{msg_type}/request", action,
+                 json.dumps(data, ensure_ascii=False)[:120] if data else "null")
         try:
             with self._lock:
                 self._sock.sendall(_build_publish(topic, payload))
         except Exception as e:
-            print(f"[kobrax] web send error: {e}")
+            log.error("web send error: %s", e)
 
     # -- High-level commands -------------------------------------------------
 

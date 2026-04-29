@@ -40,9 +40,11 @@ def get(key: str, default: str = "") -> str:
 
 
 # Häufig verwendete Shortcuts
-PRINTER_IP   = get("PRINTER_IP",   "")
-MQTT_PORT    = int(get("MQTT_PORT", "9883"))
-USERNAME     = get("MQTT_USERNAME", "")
-PASSWORD     = get("MQTT_PASSWORD", "")
-MODE_ID      = get("MODE_ID",      "")
-DEVICE_ID    = get("DEVICE_ID",    "")
+PRINTER_IP       = get("PRINTER_IP",       "")
+MQTT_PORT        = int(get("MQTT_PORT", "9883"))
+USERNAME         = get("MQTT_USERNAME",    "")
+PASSWORD         = get("MQTT_PASSWORD",    "")
+MODE_ID          = get("MODE_ID",          "")
+DEVICE_ID        = get("DEVICE_ID",        "")
+DEFAULT_AMS_SLOT = get("DEFAULT_AMS_SLOT", "auto")
+AUTO_LEVELING    = int(get("AUTO_LEVELING", "1"))

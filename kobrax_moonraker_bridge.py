@@ -11,7 +11,10 @@ OrcaSlicer-Konfiguration:
 """
 
 import argparse
-import env_loader
+try:
+    import config_loader as env_loader
+except ImportError:
+    import env_loader
 import asyncio
 import hashlib
 import json
@@ -49,9 +52,36 @@ except ImportError:
     print("Fehler: aiohttp nicht installiert. Bitte: pip install aiohttp")
     sys.exit(1)
 
-logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(message)s",
+logging.basicConfig(level=logging.INFO,
+                    format="[%(asctime)s] %(levelname)-5s %(name)s: %(message)s",
                     datefmt="%H:%M:%S")
 log = logging.getLogger("bridge")
+
+# Ring-Buffer für Browser-Log-Stream (letzte 200 Einträge)
+import collections as _collections
+_log_buffer: "_collections.deque[dict]" = _collections.deque(maxlen=500)
+_log_sse_queues: "list[asyncio.Queue]" = []
+
+class _BrowserLogHandler(logging.Handler):
+    """Sendet Log-Records in den Ring-Buffer und alle offenen SSE-Queues."""
+    _fmt = logging.Formatter(datefmt="%H:%M:%S")
+
+    def emit(self, record: logging.LogRecord):
+        entry = {
+            "ts":    self._fmt.formatTime(record, "%H:%M:%S"),
+            "lvl":   record.levelname,
+            "name":  record.name,
+            "msg":   record.getMessage(),
+        }
+        _log_buffer.append(entry)
+        for q in list(_log_sse_queues):
+            try:
+                q.put_nowait(entry)
+            except Exception:
+                pass
+
+_browser_handler = _BrowserLogHandler()
+logging.getLogger().addHandler(_browser_handler)
 
 KOBRA_TO_KLIPPER_STATE = {
     "free":          "standby",
@@ -77,6 +107,23 @@ MOONRAKER_VERSION = "v0.9.3-1"
 KLIPPER_VERSION   = "v0.12.0-1"
 
 
+def _parse_gcode_estimated_time(data: bytes) -> int:
+    """Liest '; estimated printing time (normal mode) = Xh Ym Zs' aus GCode-Header.
+    Gibt Sekunden zurück, 0 wenn nicht gefunden. Sucht nur in den ersten 8KB."""
+    import re
+    header = data[:8192].decode("utf-8", errors="ignore")
+    m = re.search(r";\s*estimated printing time \(normal mode\)\s*=\s*(.*)", header)
+    if not m:
+        return 0
+    parts = re.findall(r"(\d+)\s*([hms])", m.group(1))
+    secs = 0
+    for val, unit in parts:
+        if unit == "h":   secs += int(val) * 3600
+        elif unit == "m": secs += int(val) * 60
+        elif unit == "s": secs += int(val)
+    return secs
+
+
 class KobraXBridge:
     def __init__(self, client: KobraXClient, args=None):
         self.client = client
@@ -91,6 +138,7 @@ class KobraXBridge:
             "print_state":        "standby",
             "kobra_state":        "free",
             "filename":           "",
+            "slicer_time":        0,
             "progress":           0.0,
             "print_duration":     0,
             "remain_time":        0,
@@ -105,6 +153,7 @@ class KobraXBridge:
             "light_brightness":   80,
             "taskid":             "-1",
             "print_speed_mode":   2,
+            "connection_error":   "",
         }
         self._ams_slots: list[dict] = []
         self._ams_loaded_slot: int = -1
@@ -112,7 +161,7 @@ class KobraXBridge:
         self._serve_dir = tempfile.TemporaryDirectory(prefix="kobrax_serve_")
         self._serve_dir_path: str = self._serve_dir.name
 
-        self._thumbnail_b64: str = ""  # base64-PNG aus file/report
+        self._thumbnail_b64: str = ""
 
         # Register MQTT push callbacks
         client.callbacks["tempature/report"]      = self._on_temp
@@ -225,6 +274,74 @@ class KobraXBridge:
             self._ams_slots = slots
             log.info(f"AMS-Slots empfangen: {len(slots)}, loaded_slot={self._ams_loaded_slot}")
             self._push_status_update()
+
+    # OrcaSlicer filament preset IDs (MoonrakerPrinterAgent.cpp mapping)
+    _TRAY_INFO_IDX = {
+        "PLA":      "OGFL99", "PLA-CF":   "OGFL98", "PLA SILK": "OGFL96",
+        "PETG":     "OGFG99", "PETG-CF":  "OGFG98",
+        "ABS":      "OGFB99", "ASA":      "OGFB98",
+        "TPU":      "OGFT99", "PA":       "OGFP99", "PA-CF":    "OGFP98",
+        "PC":       "OGFC99", "HIPS":     "OGFH99", "PVA":      "OGFV99",
+    }
+
+    def _build_lane_data(self) -> dict:
+        """Baut BBL-AMS-JSON für OrcaSlicer DevFilaSystemParser::ParseV1_0."""
+        slots = self._ams_slots
+        total = len(slots)
+        if total == 0:
+            return {"ams": [], "ams_exist_bits": "0", "tray_exist_bits": "0"}
+
+        ams_count = (total + 3) // 4
+        ams_exist_bits = 0
+        tray_exist_bits = 0
+        ams_array = []
+
+        for ams_id in range(ams_count):
+            ams_exist_bits |= (1 << ams_id)
+            tray_array = []
+            max_slot = min(3, total - ams_id * 4 - 1)
+            for slot_id in range(max_slot + 1):
+                slot_index = ams_id * 4 + slot_id
+                slot = slots[slot_index] if slot_index < total else {}
+                occupied = slot.get("status") == 5
+
+                if occupied:
+                    tray_exist_bits |= (1 << slot_index)
+                    color_raw = slot.get("color", [255, 255, 255])
+                    if isinstance(color_raw, list) and len(color_raw) >= 3:
+                        color_hex = "{:02X}{:02X}{:02X}FF".format(
+                            int(color_raw[0]), int(color_raw[1]), int(color_raw[2])
+                        )
+                    elif isinstance(color_raw, str) and len(color_raw) >= 6:
+                        color_hex = color_raw[:6].upper() + "FF"
+                    else:
+                        color_hex = "FFFFFFFF"
+                    material = slot.get("type", "PLA").upper()
+                    tray_info_idx = self._TRAY_INFO_IDX.get(material, "OGFL99")
+                    tray_array.append({
+                        "id":           str(slot_id),
+                        "tag_uid":      "0000000000000000",
+                        "tray_info_idx": tray_info_idx,
+                        "tray_type":    material,
+                        "tray_color":   color_hex,
+                    })
+                else:
+                    tray_array.append({
+                        "id":                str(slot_id),
+                        "tag_uid":           "0000000000000000",
+                        "tray_info_idx":     "",
+                        "tray_type":         "",
+                        "tray_color":        "00000000",
+                        "tray_slot_placeholder": "1",
+                    })
+
+            ams_array.append({"id": str(ams_id), "info": "0002", "tray": tray_array})
+
+        return {
+            "ams":             ams_array,
+            "ams_exist_bits":  format(ams_exist_bits, "X"),
+            "tray_exist_bits": format(tray_exist_bits, "X"),
+        }
 
     # -------------------------------------------------------------------------
     # WebSocket push
@@ -408,6 +525,9 @@ class KobraXBridge:
         file_md5  = hashlib.md5(file_data).hexdigest()
         file_size = len(file_data)
 
+        # Slicer-Zeitschätzung aus GCode-Header auslesen
+        self._state["slicer_time"] = _parse_gcode_estimated_time(file_data)
+
         # Datei auf Disk ablegen (temp-Verzeichnis) damit Drucker sie per HTTP abrufen kann
         safe_name = os.path.basename(remote_filename)  # keine Pfad-Traversal
         serve_path = os.path.join(self._serve_dir_path, safe_name)
@@ -458,7 +578,19 @@ class KobraXBridge:
         }, status=201)
 
     def _start_print(self, filename: str, url: str = "", md5: str = "", filesize: int = 0):
-        loaded = [(i, s) for i, s in enumerate(self._ams_slots) if s.get("status") == 5]
+        default_slot = getattr(self._args, "default_ams_slot", "auto")
+        all_loaded = [(i, s) for i, s in enumerate(self._ams_slots) if s.get("status") == 5]
+        if default_slot != "auto":
+            try:
+                slot_idx = int(default_slot)
+                loaded = [(i, s) for i, s in all_loaded if i == slot_idx]
+                if not loaded:
+                    log.warning(f"Standard-Slot {slot_idx} ist leer – fallback auf Auto")
+                    loaded = all_loaded
+            except ValueError:
+                loaded = all_loaded
+        else:
+            loaded = all_loaded
         use_ams = len(loaded) > 0
         ams_box_mapping = [
             {
@@ -471,6 +603,7 @@ class KobraXBridge:
             for i, s in loaded
         ]
         log.info(f"AMS-Slots: {len(loaded)}/{len(self._ams_slots)} belegt → {[i for i,_ in loaded]}")
+        auto_leveling = getattr(self._args, "auto_leveling", 1)
         payload = {
             "taskid":       "-1",
             "url":          url,
@@ -485,7 +618,7 @@ class KobraXBridge:
                 "ams_box_mapping": ams_box_mapping,
             },
             "task_settings": {
-                "auto_leveling":            1,
+                "auto_leveling":            auto_leveling,
                 "vibration_compensation":   0,
                 "flow_calibration":         0,
                 "dry_mode":                 0,
@@ -519,16 +652,34 @@ class KobraXBridge:
         log.info(f"Druck starten: {filename}")
 
         # AMS-Mapping aus gecachtem State — leere Slots (status != 5) überspringen
+        default_slot = getattr(self._args, "default_ams_slot", "auto")
         ams_box_mapping = []
         for i, slot in enumerate(self._ams_slots):
             if slot.get("status") != 5:
                 log.info(f"AMS-Slot {i} leer (status={slot.get('status')}) – übersprungen")
                 continue
+            if default_slot != "auto":
+                try:
+                    if i != int(default_slot):
+                        continue
+                except ValueError:
+                    pass
             ams_box_mapping.append({
                 "slot_index": i,
                 "material_type": slot.get("type", "PLA"),
                 "color": slot.get("color", [255, 255, 255]),
             })
+        # Fallback auf alle belegten Slots wenn gewählter Slot leer war
+        if default_slot != "auto" and not ams_box_mapping:
+            log.warning(f"Standard-Slot {default_slot} leer – fallback auf alle belegten Slots")
+            for i, slot in enumerate(self._ams_slots):
+                if slot.get("status") != 5:
+                    continue
+                ams_box_mapping.append({
+                    "slot_index": i,
+                    "material_type": slot.get("type", "PLA"),
+                    "color": slot.get("color", [255, 255, 255]),
+                })
 
         use_ams = len(ams_box_mapping) > 0
 
@@ -758,7 +909,7 @@ canvas.tchart{width:100%;height:60px;display:block;border-radius:6px;background:
 
 /* ── CONSOLE ── */
 .console{background:#0a0a0e;border-radius:8px;padding:10px;font-family:var(--mono);
-  font-size:11px;color:#8888aa;height:160px;overflow-y:auto;line-height:1.6}
+  font-size:11px;color:#8888aa;overflow-y:auto;line-height:1.6}
 .console .ts{color:#444;margin-right:6px}
 .console .msg-info{color:#8888aa}
 .console .msg-ok{color:var(--ok)}
@@ -858,6 +1009,8 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
 </head>
 <body>
 
+<div id="conn-error-banner" style="display:none;background:#c0392b;color:#fff;padding:10px 18px;font-size:14px;text-align:center;position:sticky;top:0;z-index:999;"></div>
+
 <header>
   <div class="logo">⬡ KX-Bridge</div>
   <div class="hname" id="h-pname">Anycubic Kobra X</div>
@@ -906,6 +1059,24 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
     </div>
 
     <div>
+      <div class="modal-section" id="modal-sec-print">Druckeinstellungen</div>
+      <div class="modal-field">
+        <label id="lbl-default-slot">Standard-Slot (Einfarbdruck)</label>
+        <select id="s-default-slot">
+          <option value="auto" id="opt-slot-auto">Auto (alle belegten Slots)</option>
+          <option value="0" id="opt-slot-0">Slot 1</option>
+          <option value="1" id="opt-slot-1">Slot 2</option>
+          <option value="2" id="opt-slot-2">Slot 3</option>
+          <option value="3" id="opt-slot-3">Slot 4</option>
+        </select>
+      </div>
+      <div class="modal-field" style="flex-direction:row;align-items:center;gap:10px">
+        <input type="checkbox" id="s-auto-leveling" style="width:auto;margin:0">
+        <label id="lbl-auto-leveling" style="margin:0;cursor:pointer" for="s-auto-leveling">Auto-Leveling vor Druck</label>
+      </div>
+    </div>
+
+    <div>
       <div class="modal-section" id="modal-sec-poll">Poll-Intervall</div>
       <div class="poll-btns">
         <button class="poll-btn" onclick="setPoll(1000)" id="poll-1">1s</button>
@@ -924,6 +1095,7 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
       <button class="btn btn-sm btn-accent" id="btn-update-apply" style="display:none;margin-top:8px" onclick="applyUpdate()">
         <span id="lbl-update-apply">Jetzt installieren</span>
       </button>
+      <div id="update-changelog" style="display:none;margin-top:10px;background:var(--raised);border-radius:6px;padding:10px;font-size:11px;font-family:var(--mono);color:var(--txt2);white-space:pre-wrap;max-height:180px;overflow-y:auto;line-height:1.6"></div>
     </div>
 
     <button class="modal-save" onclick="saveSettings()" id="btn-save-settings">Speichern &amp; Neustart</button>
@@ -934,8 +1106,8 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
   <nav class="sidebar">
     <button class="nav-btn active" onclick="showPanel('dashboard')" id="nb-dashboard">
       <span class="nav-icon">⊞</span><span class="nav-text">Dashboard</span></button>
-    <button class="nav-btn" onclick="showPanel('console')" id="nb-console">
-      <span class="nav-icon">≡</span><span class="nav-text">Konsole</span></button>
+    <button class="nav-btn" onclick="showPanel('console');clearLogBadge()" id="nb-console">
+      <span class="nav-icon">≡</span><span class="nav-text">Konsole</span><span id="log-badge" style="display:none;margin-left:4px;background:var(--err);color:#fff;border-radius:10px;font-size:10px;padding:1px 5px;font-weight:700"></span></button>
   </nav>
 
   <main>
@@ -976,6 +1148,9 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
             <span id="d-elapsed">–</span>
             <span id="d-remain" style="color:var(--acc)">–</span>
             <span id="d-layers" class="layer-badge">–</span>
+          </div>
+          <div class="meta-row" style="margin-top:4px;font-size:0.82em;opacity:0.7" id="d-slicer-row">
+            <span id="d-slicer-label"></span><span id="d-slicer-time" style="margin-left:4px">–</span>
           </div>
           <div class="fname" id="d-fname" title="" style="margin-top:6px">–</div>
           <div class="ctrl-btns" id="d-ctrl-btns" style="margin-top:12px">
@@ -1128,8 +1303,21 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
     <!-- ═══ CONSOLE ═══ -->
     <div class="panel" id="panel-console">
       <div class="card">
-        <div class="card-title"><span>≡</span> <span id="ptitle-console">Ereignis-Log</span></div>
-        <div class="console" id="console-log"></div>
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span><span>≡</span> <span id="ptitle-console">Ereignis-Log</span></span>
+          <a id="btn-log-dl" href="/api/log/download" download="kx-bridge.log"
+             style="font-size:12px;padding:4px 10px;background:var(--raised);border-radius:6px;color:var(--txt2);text-decoration:none">⬇ Download</a>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
+          <input id="log-filter" type="text" placeholder="Filter…"
+            oninput="renderLog()"
+            style="flex:1;min-width:120px;padding:5px 10px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);font-size:12px;font-family:var(--mono)">
+          <button id="btn-autoscroll" onclick="toggleAutoScroll()"
+            style="font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:var(--accent);color:#fff;cursor:pointer;white-space:nowrap">⬇ Auto</button>
+          <button onclick="consoleLogs=[];renderLog()"
+            style="font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:var(--raised);color:var(--txt2);cursor:pointer">✕ Clear</button>
+        </div>
+        <div class="console" id="console-log" style="height:calc(100vh - 220px);min-height:200px" onscroll="onLogScroll()"></div>
       </div>
     </div>
   </main>
@@ -1137,7 +1325,7 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
 
 <nav class="bottom-nav">
   <button class="bnav-btn active" onclick="showPanel('dashboard')" id="bnb-dashboard"><span class="bnav-icon">⊞</span>Dashboard</button>
-  <button class="bnav-btn" onclick="showPanel('console')" id="bnb-console"><span class="bnav-icon">≡</span>Log</button>
+  <button class="bnav-btn" onclick="showPanel('console');clearLogBadge()" id="bnb-console"><span class="bnav-icon">≡</span>Log<span id="log-badge-bot" style="display:none;margin-left:3px;background:var(--err);color:#fff;border-radius:10px;font-size:10px;padding:1px 4px;font-weight:700"></span></button>
 </nav>
 
 <script>
@@ -1164,7 +1352,7 @@ var LANG_DE={
   header_status_standby:'Bereit',header_status_printing:'Druckt',header_status_complete:'Fertig',header_status_error:'Fehler',
   kobra_free:'Bereit',kobra_busy:'Beschäftigt',kobra_printing:'Druckt',kobra_preheating:'Aufheizen',kobra_auto_leveling:'Nivellierung',kobra_checking:'Prüfung',kobra_updated:'Aktualisierung',kobra_init:'Initialisierung',kobra_pausing:'Pausiert...',kobra_paused:'Pausiert',kobra_resuming:'Fortsetzen...',kobra_resumed:'Fortgesetzt',kobra_stopping:'Stoppt...',kobra_stoped:'Gestoppt',kobra_finished:'Abgeschlossen',kobra_failed:'Fehler',kobra_canceled:'Abgebrochen',kobra_offline:'Offline',
   nav_dashboard:'Dashboard',nav_print:'Druck',nav_temps:'Temperaturen',nav_motion:'Achsen',nav_ams:'AMS',nav_extras:'Licht / Lüfter',nav_console:'Konsole',
-  card_progress:'Fortschritt',card_temps:'Temperaturen',card_light_fan:'Lüfter',card_speed:'Druckgeschwindigkeit',card_cam:'Kamera',lbl_elapsed:'Verstrichen',lbl_remaining:'verbleibend',
+  card_progress:'Fortschritt',card_temps:'Temperaturen',card_light_fan:'Lüfter',card_speed:'Druckgeschwindigkeit',card_cam:'Kamera',lbl_elapsed:'Verstrichen',lbl_remaining:'verbleibend',lbl_slicer_time:'Slicer-Schätzung:',
   speed_silent:'🐢 Leise',speed_normal:'⚡ Normal',speed_sport:'🚀 Sport',
   lbl_light:'💡 Licht',lbl_feed:'Einziehen',lbl_unload:'Ausziehen',
   cam_placeholder:'📷 Kamera nicht gestartet',btn_cam_start:'▶ Kamera',btn_cam_stop:'◼ Kamera',
@@ -1179,18 +1367,20 @@ var LANG_DE={
   panel_console_title:'Ereignis-Log',
   log_light_on:'Licht an',log_light_off:'Licht aus',log_fan:'Lüfter →',log_nozzle:'Nozzle →',log_bed:'Bett →',log_axis:'Achse',log_home:'Home',log_home_all:'Home All',log_cam_start:'Kamera gestartet:',log_cam_stop:'Kamera gestoppt',log_poll_error:'Poll-Fehler:',log_error:'Fehler:',
   confirm_cancel:'Druck wirklich abbrechen?',
-  settings_title:'Einstellungen',settings_connection:'Verbindung',settings_poll:'Poll-Intervall',settings_version:'Version',
+  settings_title:'Einstellungen',settings_connection:'Verbindung',settings_print:'Druckeinstellungen',settings_poll:'Poll-Intervall',settings_version:'Version',
   settings_save:'Speichern & Neustart',settings_printer_ip:'Drucker-IP',settings_mqtt_port:'MQTT-Port',
   settings_username:'MQTT-Benutzername',settings_password:'MQTT-Passwort',settings_device_id:'Device-ID',settings_mode_id:'Mode-ID',hint_ip_no_port:'Nur IP-Adresse, kein Port (z.B. 192.168.1.102)',
+  settings_default_slot:'Standard-Slot (Einfarbdruck)',settings_slot_auto:'Auto (alle belegten Slots)',settings_auto_leveling:'Auto-Leveling vor Druck',
   update_check:'Auf Updates prüfen',update_checking:'Prüfe...',update_available:'verfügbar',update_none:'Bereits aktuell',
   update_apply:'Jetzt installieren',update_applying:'Lade herunter...',update_restarting:'Starte neu...',update_error:'Fehler',
-  btn_connect:'⚡ Verbinden',btn_disconnect:'✕ Trennen'
+  btn_connect:'⚡ Verbinden',btn_disconnect:'✕ Trennen',
+  lbl_conn_error:'Verbindungsfehler:'
 };
 var LANG_EN={
   header_status_standby:'Ready',header_status_printing:'Printing',header_status_complete:'Complete',header_status_error:'Error',
   kobra_free:'Ready',kobra_busy:'Busy',kobra_printing:'Printing',kobra_preheating:'Preheating',kobra_auto_leveling:'Auto Leveling',kobra_checking:'Checking',kobra_updated:'Updating',kobra_init:'Initializing',kobra_pausing:'Pausing...',kobra_paused:'Paused',kobra_resuming:'Resuming...',kobra_resumed:'Resumed',kobra_stopping:'Stopping...',kobra_stoped:'Stopped',kobra_finished:'Finished',kobra_failed:'Error',kobra_canceled:'Cancelled',kobra_offline:'Offline',
   nav_dashboard:'Dashboard',nav_print:'Print',nav_temps:'Temperatures',nav_motion:'Motion',nav_ams:'AMS',nav_extras:'Light / Fan',nav_console:'Console',
-  card_progress:'Progress',card_temps:'Temperatures',card_light_fan:'Fan',card_speed:'Print Speed',card_cam:'Camera',lbl_elapsed:'Elapsed',lbl_remaining:'remaining',
+  card_progress:'Progress',card_temps:'Temperatures',card_light_fan:'Fan',card_speed:'Print Speed',card_cam:'Camera',lbl_elapsed:'Elapsed',lbl_remaining:'remaining',lbl_slicer_time:'Slicer estimate:',
   speed_silent:'🐢 Silent',speed_normal:'⚡ Normal',speed_sport:'🚀 Sport',
   lbl_light:'💡 Light',lbl_feed:'Load',lbl_unload:'Unload',
   cam_placeholder:'📷 Camera not started',btn_cam_start:'▶ Camera',btn_cam_stop:'◼ Camera',
@@ -1205,12 +1395,14 @@ var LANG_EN={
   panel_console_title:'Event Log',
   log_light_on:'Light on',log_light_off:'Light off',log_fan:'Fan →',log_nozzle:'Nozzle →',log_bed:'Bed →',log_axis:'Axis',log_home:'Home',log_home_all:'Home All',log_cam_start:'Camera started:',log_cam_stop:'Camera stopped',log_poll_error:'Poll error:',log_error:'Error:',
   confirm_cancel:'Really cancel the print?',
-  settings_title:'Settings',settings_connection:'Connection',settings_poll:'Poll Interval',settings_version:'Version',
+  settings_title:'Settings',settings_connection:'Connection',settings_print:'Print Settings',settings_poll:'Poll Interval',settings_version:'Version',
   settings_save:'Save & Restart',settings_printer_ip:'Printer IP',settings_mqtt_port:'MQTT Port',
   settings_username:'MQTT Username',settings_password:'MQTT Password',settings_device_id:'Device ID',settings_mode_id:'Mode ID',hint_ip_no_port:'IP address only, no port (e.g. 192.168.1.102)',
+  settings_default_slot:'Default Slot (single color)',settings_slot_auto:'Auto (all loaded slots)',settings_auto_leveling:'Auto-Leveling before print',
   update_check:'Check for Updates',update_checking:'Checking...',update_available:'available',update_none:'Already up to date',
   update_apply:'Install Now',update_applying:'Downloading...',update_restarting:'Restarting...',update_error:'Error',
-  btn_connect:'⚡ Connect',btn_disconnect:'✕ Disconnect'
+  btn_connect:'⚡ Connect',btn_disconnect:'✕ Disconnect',
+  lbl_conn_error:'Connection error:'
 };
 var currentLang='de';
 var T=LANG_DE;
@@ -1262,6 +1454,7 @@ function applyLang(){
   // Settings modal
   setText('modal-title-settings',T.settings_title);
   setText('modal-sec-connection',T.settings_connection);
+  setText('modal-sec-print',T.settings_print);
   setText('modal-sec-poll',T.settings_poll);
   setText('modal-sec-version',T.settings_version);
   setText('btn-save-settings',T.settings_save);
@@ -1271,6 +1464,10 @@ function applyLang(){
   setText('lbl-password',T.settings_password);
   setText('lbl-device-id',T.settings_device_id);
   setText('lbl-mode-id',T.settings_mode_id);
+  setText('lbl-default-slot',T.settings_default_slot);
+  setText('opt-slot-auto',T.settings_slot_auto);
+  setText('lbl-auto-leveling',T.settings_auto_leveling);
+
   setText('lbl-update-check',T.update_check);
   setText('lbl-update-apply',T.update_apply);
   // Speed buttons
@@ -1311,15 +1508,71 @@ function showPanel(id){
 
 // ── Console log ──
 var consoleLogs=[];
+var logAutoScroll=true;
+var logBadgeCount=0;
+
 function clog(msg,cls){
   cls=cls||'msg-info';
   var ts=new Date().toLocaleTimeString('de',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  consoleLogs.push({ts,msg,cls});
-  if(consoleLogs.length>100)consoleLogs.shift();
-  var el=document.getElementById('console-log');
-  el.innerHTML=consoleLogs.map(l=>`<div><span class="ts">${l.ts}</span><span class="${l.cls}">${l.msg}</span></div>`).join('');
-  el.scrollTop=el.scrollHeight;
+  _appendLog({ts:ts,lvl:'',name:'ui',msg:msg},cls);
 }
+function _lvlCls(lvl){
+  if(lvl==='ERROR'||lvl==='CRITICAL')return'msg-err';
+  if(lvl==='WARNING')return'msg-warn';
+  if(lvl==='DEBUG')return'msg-info';
+  return'msg-ok';
+}
+function _appendLog(entry,forceCls){
+  var cls=forceCls||_lvlCls(entry.lvl);
+  var label=entry.name?'['+entry.name+'] ':'';
+  consoleLogs.push({ts:entry.ts,msg:label+entry.msg,cls:cls});
+  if(consoleLogs.length>500)consoleLogs.shift();
+  // Badge wenn Tab nicht aktiv und Fehler/Warnungen
+  if(currentPanel!=='console'&&(cls==='msg-err'||cls==='msg-warn')){
+    logBadgeCount++;
+    var bc=logBadgeCount>99?'99+':logBadgeCount;
+    ['log-badge','log-badge-bot'].forEach(function(id){var b=document.getElementById(id);if(b){b.style.display='inline';b.textContent=bc;}});
+  }
+  renderLog();
+}
+function renderLog(){
+  var el=document.getElementById('console-log');
+  if(!el)return;
+  var filter=(document.getElementById('log-filter')||{}).value||'';
+  var fl=filter.toLowerCase();
+  var rows=fl?consoleLogs.filter(l=>l.msg.toLowerCase().includes(fl)):consoleLogs;
+  el.innerHTML=rows.map(l=>`<div><span class="ts">${l.ts}</span><span class="${l.cls}">${escHtml(l.msg)}</span></div>`).join('');
+  if(logAutoScroll)el.scrollTop=el.scrollHeight;
+}
+function onLogScroll(){
+  var el=document.getElementById('console-log');
+  if(!el)return;
+  var atBottom=el.scrollHeight-el.scrollTop-el.clientHeight<30;
+  if(!atBottom&&logAutoScroll){setAutoScroll(false);}
+}
+function toggleAutoScroll(){
+  setAutoScroll(!logAutoScroll);
+  if(logAutoScroll){var el=document.getElementById('console-log');if(el)el.scrollTop=el.scrollHeight;}
+}
+function setAutoScroll(on){
+  logAutoScroll=on;
+  var btn=document.getElementById('btn-autoscroll');
+  if(btn){btn.style.background=on?'var(--accent)':'var(--raised)';btn.style.color=on?'#fff':'var(--txt2)';}
+}
+function clearLogBadge(){
+  logBadgeCount=0;
+  ['log-badge','log-badge-bot'].forEach(function(id){var b=document.getElementById(id);if(b)b.style.display='none';});
+}
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+// SSE server-log stream
+(function(){
+  function connect(){
+    var es=new EventSource('/api/log/stream');
+    es.onmessage=function(e){try{_appendLog(JSON.parse(e.data));}catch(_){}};
+    es.onerror=function(){es.close();setTimeout(connect,3000);};
+  }
+  window.addEventListener('DOMContentLoaded',connect);
+})();
 
 // ── Helpers ──
 function fmtTime(s){if(!s||s<0)return'–';var m=Math.floor(s/60),h=Math.floor(m/60);m%=60;return h>0?h+'h '+m+'m':m+'m'}
@@ -1329,11 +1582,15 @@ function clamp(v,lo,hi){return Math.min(hi,Math.max(lo,v))}
 // ── Apply state to DOM ──
 function applyState(){
   var s=S;
+  // connection error banner
+  var banner=document.getElementById('conn-error-banner');
+  if(banner){if(s.connection_error){banner.textContent='⚠ '+(T.lbl_conn_error||'Connection error:')+' '+s.connection_error;banner.style.display='block';}else{banner.style.display='none';}}
   // header
   var b=document.getElementById('h-badge');
   b.className='hbadge '+s.print_state;
   document.getElementById('h-state').textContent=T['kobra_'+s.kobra_state]||s.kobra_state||T.header_status_standby;
   document.getElementById('h-pname').textContent=s.printer_name;
+
 
   // temps
   var nt=document.getElementById('d-nt');if(nt)nt.textContent=s.nozzle_temp.toFixed(1);
@@ -1357,6 +1614,14 @@ function applyState(){
   var delapsed=document.getElementById('d-elapsed');if(delapsed)delapsed.textContent=elapsed;
   var remain=s.remain_time>0?'≈ '+fmtTime(s.remain_time)+' '+T.lbl_remaining:'';
   var dremain=document.getElementById('d-remain');if(dremain)dremain.textContent=remain;
+
+  var dslrow=document.getElementById('d-slicer-row');
+  var dsltime=document.getElementById('d-slicer-time');
+  var dsllbl=document.getElementById('d-slicer-label');
+  if(dslrow&&dsltime){
+    if(s.slicer_time>0){dslrow.style.display='';if(dsllbl)dsllbl.textContent=T.lbl_slicer_time;dsltime.textContent=fmtTime(s.slicer_time);}
+    else{dslrow.style.display='none';}
+  }
 
   var fn=s.filename||'–';
   var dfname=document.getElementById('d-fname');if(dfname){dfname.textContent=fn;dfname.title=fn};
@@ -1484,6 +1749,8 @@ function openSettings(){
     document.getElementById('s-password').value=d.password||'';
     document.getElementById('s-device-id').value=d.device_id||'';
     document.getElementById('s-mode-id').value=d.mode_id||'';
+    document.getElementById('s-default-slot').value=d.default_ams_slot||'auto';
+    document.getElementById('s-auto-leveling').checked=(d.auto_leveling===undefined?true:!!d.auto_leveling);
   });
   var v=localStorage.getItem('pollInterval')||'2000';
   document.querySelectorAll('.poll-btn').forEach(function(b){b.classList.remove('active')});
@@ -1492,6 +1759,7 @@ function openSettings(){
   document.getElementById('s-version-label').textContent='v'+('__VERSION__'||'?');
   document.getElementById('update-status').textContent='';
   document.getElementById('btn-update-apply').style.display='none';
+  var cl=document.getElementById('update-changelog');if(cl)cl.style.display='none';
   _updateTag='';_updateUrl='';
   document.getElementById('settings-modal').classList.add('open');
 }
@@ -1517,12 +1785,14 @@ function saveSettings(){
   var btn=document.getElementById('btn-save-settings');
   btn.disabled=true;btn.textContent='…';
   post('/api/settings',{
-    printer_ip: document.getElementById('s-printer-ip').value,
-    mqtt_port:  parseInt(document.getElementById('s-mqtt-port').value)||9883,
-    username:   document.getElementById('s-username').value,
-    password:   document.getElementById('s-password').value,
-    device_id:  document.getElementById('s-device-id').value,
-    mode_id:    document.getElementById('s-mode-id').value,
+    printer_ip:       document.getElementById('s-printer-ip').value,
+    mqtt_port:        parseInt(document.getElementById('s-mqtt-port').value)||9883,
+    username:         document.getElementById('s-username').value,
+    password:         document.getElementById('s-password').value,
+    device_id:        document.getElementById('s-device-id').value,
+    mode_id:          document.getElementById('s-mode-id').value,
+    default_ams_slot: document.getElementById('s-default-slot').value,
+    auto_leveling:    document.getElementById('s-auto-leveling').checked?1:0,
   }).then(function(){
     btn.textContent=T.update_restarting;
     setTimeout(function(){
@@ -1543,6 +1813,9 @@ function checkUpdate(){
   _updateTag='';_updateUrl='';
   fetch('/api/update/check').then(function(r){return r.json()}).then(function(d){
     if(d.error){sb.textContent=T.update_error+': '+d.error;return;}
+    var cl=document.getElementById('update-changelog');
+    if(d.changelog&&d.changelog.trim()){cl.textContent=d.changelog;cl.style.display='block';}
+    else{cl.style.display='none';}
     if(d.update_available){
       sb.textContent='v'+d.latest+' '+T.update_available;
       sb.style.color='var(--ok)';
@@ -1908,6 +2181,36 @@ function toggleCam(){if(camOn)camStop();else camStart()}
         ))
         return web.json_response({"result": "ok"})
 
+    async def handle_api_camera_snapshot(self, request):
+        """Einzelner JPEG-Frame aus dem Kamera-Stream – für Obico und andere Snapshot-Clients."""
+        url = self._state.get("camera_url", "")
+        if not url:
+            return web.Response(status=503, text="Keine Kamera-URL bekannt")
+        is_rtsp = url.lower().startswith("rtsp://")
+        input_args = ["-fflags", "nobuffer", "-flags", "low_delay"]
+        if is_rtsp:
+            input_args += ["-probesize", "32", "-analyzeduration", "0", "-rtsp_transport", "tcp"]
+        else:
+            input_args += ["-probesize", "1000000", "-analyzeduration", "1000000"]
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                _find_ffmpeg(), "-loglevel", "quiet",
+                *input_args, "-i", url,
+                "-frames:v", "1", "-f", "mjpeg", "-q:v", "3",
+                "pipe:1",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            jpeg, _ = await asyncio.wait_for(proc.communicate(), timeout=20)
+        except asyncio.TimeoutError:
+            return web.Response(status=504, text="Snapshot-Timeout")
+        except Exception as e:
+            return web.Response(status=503, text=str(e))
+        if not jpeg:
+            return web.Response(status=503, text="Kein Frame empfangen")
+        return web.Response(body=jpeg, content_type="image/jpeg",
+                            headers={"Cache-Control": "no-cache"})
+
     async def handle_camera_stream(self, request):
         """MJPEG proxy: FLV → MJPEG via ffmpeg, served as multipart/x-mixed-replace."""
         url = self._state.get("camera_url", "")
@@ -2022,6 +2325,7 @@ function toggleCam(){if(camOn)camStop();else camStart()}
             "curr_layer":       s["curr_layer"],
             "total_layers":     s["total_layers"],
             "filename":         s["filename"],
+            "slicer_time":      s["slicer_time"],
             "camera_url":       s["camera_url"],
             "fan_speed":        s["fan_speed"],
             "print_speed_mode": s["print_speed_mode"],
@@ -2030,46 +2334,39 @@ function toggleCam(){if(camOn)camStop();else camStart()}
             "ams_slots":        self._ams_slots,
             "ams_loaded_slot":  self._ams_loaded_slot,
             "thumbnail":        self._thumbnail_b64,
+            "connection_error": s["connection_error"],
         })
 
     async def handle_moonraker_database(self, request):
-        """OrcaSlicer 'Synchronize filament list from AMS' liest /server/database/item?namespace=lane_data"""
+        """OrcaSlicer Filament-Sync: /server/database/item?namespace=lane_data&key=lanes (AFC-Format)"""
         namespace = request.rel_url.query.get("namespace", "")
-        if namespace != "lane_data":
-            return web.json_response({"result": {"namespace": namespace, "value": {}}})
-        loop = asyncio.get_event_loop()
-        slots = await loop.run_in_executor(None, lambda: self._get_ams_slots_fresh())
-        lane_data = {}
-        for i, slot in enumerate(slots):
-            rgb = slot.get("color", [128, 128, 128])
-            if isinstance(rgb, list) and len(rgb) >= 3:
-                alpha = rgb[3] if len(rgb) == 4 else 255
-                color_hex = f"{rgb[0]:02X}{rgb[1]:02X}{rgb[2]:02X}{alpha:02X}"
-            else:
-                color_hex = "808080FF"
-            material = slot.get("type", "")
-            default_temps = {
-                "PLA":  {"nozzle": 220, "bed": 60},
-                "PETG": {"nozzle": 240, "bed": 70},
-                "ABS":  {"nozzle": 250, "bed": 100},
-                "TPU":  {"nozzle": 230, "bed": 40},
-            }
-            temps = default_temps.get(material.upper(), {"nozzle": 220, "bed": 60})
-            lane_data[f"lane{i}"] = {
-                "vendor_name": "Anycubic",
-                "name":        material,
-                "color":       color_hex,
-                "material":    material,
-                "bed_temp":    temps["bed"],
-                "nozzle_temp": temps["nozzle"],
-                "scan_time":   None,
-                "td":          None,
-                "lane":        str(i),
-                "spool_id":    None,
-                "filament_id": None,
-            }
-        log.info(f"AMS-Sync: {len(lane_data)} Slots an OrcaSlicer")
-        return web.json_response({"result": {"namespace": "lane_data", "value": lane_data}})
+        key       = request.rel_url.query.get("key", "")
+
+        if namespace == "lane_data":
+            await asyncio.get_event_loop().run_in_executor(None, self._get_ams_slots_fresh)
+            lanes = self._build_lane_data()
+            log.info(f"AMS-Sync: {len(lanes)} Lanes an OrcaSlicer")
+            return web.json_response({
+                "result": {
+                    "namespace": "lane_data",
+                    "key":       key or "lanes",
+                    "value":     lanes,
+                }
+            })
+
+        if namespace in ("AFC", "afc-install", "happy_hare"):
+            return web.json_response({
+                "result": {"namespace": namespace, "key": key, "value": None}
+            })
+
+        return web.json_response(
+            {"error": {"code": 404, "message": f"Namespace '{namespace}' not found"}},
+            status=404
+        )
+
+    async def handle_database_list(self, request):
+        """OrcaSlicer prüft welche Namespaces vorhanden sind um MMU-Typ zu erkennen."""
+        return web.json_response({"result": {"namespaces": ["lane_data"]}})
 
     def _get_ams_slots_fresh(self):
         """Frische Slot-Daten per getInfo holen, Fallback auf gecachte."""
@@ -2084,64 +2381,62 @@ function toggleCam(){if(camOn)camStop();else camStart()}
 
     # ─── Settings ────────────────────────────────────────────────────────────
 
-    def _find_env_path(self) -> pathlib.Path:
-        """Gibt den Pfad zur .env-Datei zurück (neben Script oder im Parent)."""
+    def _find_config_path(self) -> pathlib.Path:
+        """Gibt den Pfad zur config.ini zurück."""
+        if hasattr(env_loader, "find_config_path"):
+            return env_loader.find_config_path()
+        # Fallback für alten env_loader
         script_dir = pathlib.Path(_BASE)
         for base in (script_dir, script_dir.parent):
-            p = base / ".env"
+            p = base / "config" / "config.ini"
             if p.is_file():
                 return p
-        return script_dir.parent / ".env"
+        return script_dir / "config" / "config.ini"
 
     async def handle_api_settings_get(self, request):
         return web.json_response({
-            "printer_ip":  self._args.printer_ip,
-            "mqtt_port":   self._args.mqtt_port,
-            "username":    self._args.username,
-            "password":    self._args.password,
-            "mode_id":     self._args.mode_id,
-            "device_id":   self._args.device_id,
+            "printer_ip":       self._args.printer_ip,
+            "mqtt_port":        self._args.mqtt_port,
+            "username":         self._args.username,
+            "password":         self._args.password,
+            "mode_id":          self._args.mode_id,
+            "device_id":        self._args.device_id,
+            "default_ams_slot": getattr(self._args, "default_ams_slot", "auto"),
+            "auto_leveling":    getattr(self._args, "auto_leveling", 1),
         })
 
     async def handle_api_settings_post(self, request):
+        import configparser
         data = await request.json()
-        env_path = self._find_env_path()
-        # Bestehende .env einlesen um Kommentare/Extra-Keys zu erhalten
-        existing: "dict[str, str]" = {}
-        lines: "list[str]" = []
-        if env_path.is_file():
-            for line in env_path.read_text(encoding="utf-8").splitlines():
-                stripped = line.strip()
-                if stripped and not stripped.startswith("#") and "=" in stripped:
-                    k, _, v = stripped.partition("=")
-                    existing[k.strip()] = v.strip()
-                lines.append(line)
-        # Werte aktualisieren
-        mapping = {
-            "PRINTER_IP":    str(data.get("printer_ip",  existing.get("PRINTER_IP",  ""))).split(":")[0],
-            "MQTT_PORT":     str(data.get("mqtt_port",   existing.get("MQTT_PORT",   "9883"))),
-            "MQTT_USERNAME": str(data.get("username",    existing.get("MQTT_USERNAME",""))),
-            "MQTT_PASSWORD": str(data.get("password",    existing.get("MQTT_PASSWORD",""))),
-            "MODE_ID":       str(data.get("mode_id",     existing.get("MODE_ID",      ""))),
-            "DEVICE_ID":     str(data.get("device_id",   existing.get("DEVICE_ID",    ""))),
-        }
-        # Zeilen ersetzen oder neue Keys anhängen
-        written: "set[str]" = set()
-        new_lines: "list[str]" = []
-        for line in lines:
-            stripped = line.strip()
-            if stripped and not stripped.startswith("#") and "=" in stripped:
-                k = stripped.partition("=")[0].strip()
-                if k in mapping:
-                    new_lines.append(f"{k}={mapping[k]}")
-                    written.add(k)
-                    continue
-            new_lines.append(line)
-        for k, v in mapping.items():
-            if k not in written:
-                new_lines.append(f"{k}={v}")
-        env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-        log.info(f"Settings gespeichert in {env_path}")
+        config_path = self._find_config_path()
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Bestehende config.ini lesen (Kommentare gehen verloren, aber Werte bleiben)
+        cfg = configparser.ConfigParser()
+        if config_path.is_file():
+            cfg.read(config_path, encoding="utf-8")
+
+        # Sections sicherstellen
+        for section in ("connection", "print", "bridge"):
+            if not cfg.has_section(section):
+                cfg.add_section(section)
+
+        printer_ip = str(data.get("printer_ip", self._args.printer_ip or "")).split(":")[0]
+        cfg.set("connection", "printer_ip", printer_ip)
+        cfg.set("connection", "mqtt_port",  str(data.get("mqtt_port",  self._args.mqtt_port or 9883)))
+        cfg.set("connection", "username",   str(data.get("username",   self._args.username  or "")))
+        cfg.set("connection", "password",   str(data.get("password",   self._args.password  or "")))
+        cfg.set("connection", "mode_id",    str(data.get("mode_id",    self._args.mode_id   or "")))
+        cfg.set("connection", "device_id",  str(data.get("device_id",  self._args.device_id or "")))
+        cfg.set("print",      "default_ams_slot", str(data.get("default_ams_slot", getattr(self._args, "default_ams_slot", "auto"))))
+        cfg.set("print",      "auto_leveling",    str(data.get("auto_leveling",    getattr(self._args, "auto_leveling",    1))))
+        if not cfg.has_option("bridge", "poll_interval"):
+            cfg.set("bridge", "poll_interval", "3")
+
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write("# KX-Bridge Konfigurationsdatei\n\n")
+            cfg.write(f)
+        log.info(f"Settings gespeichert in {config_path}")
         # Response senden, dann Neustart
         response = web.json_response({"status": "restarting"})
         asyncio.get_event_loop().call_later(0.3, self._restart_bridge)
@@ -2158,8 +2453,9 @@ function toggleCam(){if(camOn)camStop();else camStart()}
 
     # ─── Update ──────────────────────────────────────────────────────────────
 
-    GITEA_RELEASE_API = "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases?limit=1&pre-release=true"
-    GITEA_RAW_BASE    = "https://gitea.it-drui.de/viewit/KX-Bridge-Release/raw/tag"
+    STABLE_RELEASE_API = "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases?limit=1&pre-release=true"
+    DEV_RELEASE_API    = "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases?limit=10&pre-release=true"
+    GITEA_RAW_BASE     = "https://gitea.it-drui.de/viewit/KX-Bridge-Release/raw/tag"
 
     def _read_version(self) -> str:
         for base in (pathlib.Path(_BASE), pathlib.Path(_BASE).parent):
@@ -2189,20 +2485,70 @@ function toggleCam(){if(camOn)camStop();else camStart()}
                 break
         return tuple(result) or (0,)
 
+    async def handle_api_log_stream(self, request):
+        """SSE-Endpoint: sendet Log-Einträge live an den Browser."""
+        resp = web.StreamResponse(headers={
+            "Content-Type":  "text/event-stream",
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        })
+        await resp.prepare(request)
+        # Zuerst Ring-Buffer senden
+        for entry in list(_log_buffer):
+            data = json.dumps(entry, ensure_ascii=False)
+            await resp.write(f"data: {data}\n\n".encode())
+        # Dann live streamen
+        q: asyncio.Queue = asyncio.Queue()
+        _log_sse_queues.append(q)
+        try:
+            while True:
+                entry = await asyncio.wait_for(q.get(), timeout=25)
+                data = json.dumps(entry, ensure_ascii=False)
+                await resp.write(f"data: {data}\n\n".encode())
+        except asyncio.TimeoutError:
+            await resp.write(b": keepalive\n\n")
+        except (ConnectionResetError, Exception):
+            pass
+        finally:
+            _log_sse_queues.remove(q) if q in _log_sse_queues else None
+        return resp
+
+    async def handle_api_log_download(self, request):
+        """Gibt alle gepufferten Log-Einträge als Plaintext zum Download."""
+        lines = [f"[{e['ts']}] {e['lvl']:<5} {e['name']}: {e['msg']}" for e in _log_buffer]
+        text = "\n".join(lines)
+        return web.Response(
+            body=text.encode("utf-8"),
+            content_type="text/plain",
+            headers={"Content-Disposition": 'attachment; filename="kx-bridge.log"'},
+        )
+
     async def handle_api_update_check(self, request):
         current = self._read_version()
+        is_dev = "-dev+" in current
+        api_url = self.DEV_RELEASE_API if is_dev else self.STABLE_RELEASE_API
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(self.GITEA_RELEASE_API, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                async with session.get(api_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                     if resp.status != 200:
                         return web.json_response({"error": f"Gitea HTTP {resp.status}"}, status=502)
                     releases = await resp.json(content_type=None)
             if not releases:
                 return web.json_response({"error": "Keine Releases gefunden"}, status=404)
-            data = releases[0]
+            # Dev: neuestes Release mit "-dev+" im Tag suchen
+            if is_dev:
+                dev_releases = [r for r in releases if "-dev+" in r.get("tag_name", "")]
+                if not dev_releases:
+                    return web.json_response({"error": "Keine Dev-Releases gefunden"}, status=404)
+                data = dev_releases[0]
+            else:
+                data = releases[0]
             tag = data.get("tag_name", "")
             latest = tag.lstrip("v")
-            update_available = self._parse_version(tag) > self._parse_version(current)
+            if is_dev:
+                update_available = tag != f"v{current}"
+            else:
+                update_available = self._parse_version(tag) > self._parse_version(current)
             download_url = f"{self.GITEA_RAW_BASE}/{tag}/kobrax_moonraker_bridge.py"
             return web.json_response({
                 "current":          current,
@@ -2210,6 +2556,7 @@ function toggleCam(){if(camOn)camStop();else camStart()}
                 "update_available": update_available,
                 "tag":              tag,
                 "download_url":     download_url,
+                "changelog":        data.get("body", ""),
             })
         except Exception as e:
             return web.json_response({"error": str(e)}, status=502)
@@ -2410,9 +2757,12 @@ function toggleCam(){if(camOn)camStop();else camStart()}
                         _offline = False
                         self._state["print_state"] = "standby"
                         self._state["kobra_state"] = "free"
+                        self._state["connection_error"] = ""
                         log.info("MQTT-Verbindung wiederhergestellt")
                     except Exception as e:
-                        log.warning(f"Verbindungsaufbau fehlgeschlagen: {_mqtt_error_msg(e)}")
+                        err = _mqtt_error_msg(e)
+                        self._state["connection_error"] = err
+                        log.warning(f"Verbindungsaufbau fehlgeschlagen: {err}")
                         stop_event.wait(_probe_interval)
                         continue
                 else:
@@ -2443,6 +2793,7 @@ function toggleCam(){if(camOn)camStop();else camStart()}
                     log.info("Drucker nicht erreichbar – wechsle in Offline-Modus")
                     self._state["print_state"] = "error"
                     self._state["kobra_state"] = "offline"
+                    self._state["connection_error"] = f"Printer unreachable ({self._args.printer_ip})"
                     try:
                         self.client.disconnect()
                     except Exception:
@@ -2458,7 +2809,7 @@ function toggleCam(){if(camOn)camStop();else camStart()}
 def _mqtt_error_msg(exc: Exception) -> str:
     msg = str(exc)
     if "20020005" in msg:
-        return "Falsche MQTT-Zugangsdaten (falscher Benutzername, Passwort oder Device-ID)"
+        return "Wrong MQTT credentials (username, password or device ID incorrect)"
     return msg
 
 
@@ -2488,6 +2839,7 @@ def build_app(bridge: KobraXBridge) -> web.Application:
 
     # Moonraker database (OrcaSlicer AMS-Sync)
     r.add_get("/server/database/item",       bridge.handle_moonraker_database)
+    r.add_get("/server/database/list",       bridge.handle_database_list)
 
     # New API endpoints
     r.add_post("/api/light",               bridge.handle_api_light)
@@ -2500,6 +2852,7 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_post("/api/temperature",         bridge.handle_api_temperature)
     r.add_get("/api/camera",               bridge.handle_api_camera)
     r.add_get("/api/camera/stream",        bridge.handle_camera_stream)
+    r.add_get("/api/camera/snapshot",      bridge.handle_api_camera_snapshot)
     r.add_post("/api/camera/start",        bridge.handle_api_camera_start)
     r.add_post("/api/camera/stop",         bridge.handle_api_camera_stop)
     r.add_get("/api/state",                bridge.handle_api_state)
@@ -2507,6 +2860,8 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_post("/api/settings",            bridge.handle_api_settings_post)
     r.add_get("/api/update/check",         bridge.handle_api_update_check)
     r.add_post("/api/update/apply",        bridge.handle_api_update_apply)
+    r.add_get("/api/log/stream",           bridge.handle_api_log_stream)
+    r.add_get("/api/log/download",         bridge.handle_api_log_download)
     r.add_get("/serve/{filename}",         bridge.handle_serve_file)
 
     # Root + favicon (OrcaSlicer öffnet / in eingebettetem Browser)
@@ -2542,9 +2897,11 @@ async def run_bridge(args):
         await loop.run_in_executor(None, client.connect)
         log.info("MQTT verbunden")
     except Exception as e:
-        log.warning(f"Verbindung fehlgeschlagen: {_mqtt_error_msg(e)} – starte im Offline-Modus")
+        err = _mqtt_error_msg(e)
+        log.warning(f"Verbindung fehlgeschlagen: {err} – starte im Offline-Modus")
         bridge._state["print_state"] = "error"
         bridge._state["kobra_state"] = "offline"
+        bridge._state["connection_error"] = err
     app     = build_app(bridge)
 
     stop_event = threading.Event()
@@ -2558,8 +2915,16 @@ async def run_bridge(args):
     site = web.TCPSite(runner, args.host, args.port)
     await site.start()
 
-    log.info(f"Bridge läuft auf http://{args.host}:{args.port}")
-    log.info(f"OrcaSlicer → Klipper → Host: {args.host}  Port: {args.port}")
+    import socket as _socket
+    try:
+        with _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM) as _s:
+            _s.connect(("8.8.8.8", 80))
+            _local_ip = _s.getsockname()[0]
+    except Exception:
+        _local_ip = args.host
+    log.info(f"Bridge läuft auf http://{_local_ip}:{args.port}")
+    log.info(f"OrcaSlicer → Klipper → Host: {_local_ip}  Port: {args.port}")
+
     log.info("Ctrl-C zum Beenden")
 
     try:
@@ -2582,8 +2947,11 @@ def main():
     parser.add_argument("--username",    default=env_loader.USERNAME)
     parser.add_argument("--password",    default=env_loader.PASSWORD)
     parser.add_argument("--mode-id",     default=env_loader.MODE_ID)
-    parser.add_argument("--device-id",   default=env_loader.DEVICE_ID)
-    parser.add_argument("--host",        default="0.0.0.0",
+    parser.add_argument("--device-id",       default=env_loader.DEVICE_ID)
+    parser.add_argument("--default-ams-slot",default=env_loader.DEFAULT_AMS_SLOT)
+    parser.add_argument("--auto-leveling",   type=int, default=env_loader.AUTO_LEVELING)
+
+    parser.add_argument("--host",            default="0.0.0.0",
                         help="Bind-Adresse für den Bridge-Server")
     parser.add_argument("--port",        type=int, default=7125,
                         help="HTTP/WS-Port (Moonraker-Standard: 7125)")

@@ -1,0 +1,143 @@
+"""
+config_loader.py – lädt Verbindungsparameter aus config/config.ini (primär)
+oder .env (Fallback / Migration).
+Umgebungsvariablen haben immer Vorrang.
+"""
+import os
+import sys
+import pathlib
+import configparser
+
+_BASE = pathlib.Path(sys.executable).parent if getattr(sys, "frozen", False) else pathlib.Path(__file__).parent
+
+CONFIG_SECTION_CONNECTION = "connection"
+CONFIG_SECTION_PRINT      = "print"
+CONFIG_SECTION_BRIDGE     = "bridge"
+
+
+def _find_config_file() -> pathlib.Path | None:
+    for base in (_BASE, _BASE.parent):
+        p = base / "config" / "config.ini"
+        if p.is_file():
+            return p
+    return None
+
+
+def _find_env_file() -> pathlib.Path | None:
+    for base in (_BASE, _BASE.parent):
+        p = base / ".env"
+        if p.is_file():
+            return p
+    return None
+
+
+def _load_env_file(path: pathlib.Path):
+    """Lädt .env-Datei als Fallback – setzt nur Keys die noch nicht in os.environ sind."""
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip()
+            if key and key not in os.environ:
+                os.environ[key] = val
+
+
+def _load_config_file(path: pathlib.Path):
+    """Lädt config.ini und setzt Keys in os.environ (nur wenn nicht bereits gesetzt)."""
+    cfg = configparser.ConfigParser()
+    cfg.read(path, encoding="utf-8")
+
+    mapping = {
+        "PRINTER_IP":       (CONFIG_SECTION_CONNECTION, "printer_ip"),
+        "MQTT_PORT":        (CONFIG_SECTION_CONNECTION, "mqtt_port"),
+        "MQTT_USERNAME":    (CONFIG_SECTION_CONNECTION, "username"),
+        "MQTT_PASSWORD":    (CONFIG_SECTION_CONNECTION, "password"),
+        "MODE_ID":          (CONFIG_SECTION_CONNECTION, "mode_id"),
+        "DEVICE_ID":        (CONFIG_SECTION_CONNECTION, "device_id"),
+        "DEFAULT_AMS_SLOT": (CONFIG_SECTION_PRINT,      "default_ams_slot"),
+        "AUTO_LEVELING":    (CONFIG_SECTION_PRINT,      "auto_leveling"),
+    }
+    for env_key, (section, option) in mapping.items():
+        if env_key not in os.environ:
+            try:
+                val = cfg.get(section, option)
+                if val:
+                    os.environ[env_key] = val
+            except (configparser.NoSectionError, configparser.NoOptionError):
+                pass
+
+
+def migrate_env_to_config(env_path: pathlib.Path, config_path: pathlib.Path):
+    """Einmalige Migration: .env → config.ini anlegen."""
+    env_vals: dict[str, str] = {}
+    with open(env_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            env_vals[k.strip()] = v.strip()
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    cfg = configparser.ConfigParser()
+    cfg[CONFIG_SECTION_CONNECTION] = {
+        "printer_ip": env_vals.get("PRINTER_IP", ""),
+        "mqtt_port":  env_vals.get("MQTT_PORT",  "9883"),
+        "username":   env_vals.get("MQTT_USERNAME", ""),
+        "password":   env_vals.get("MQTT_PASSWORD", ""),
+        "mode_id":    env_vals.get("MODE_ID",    ""),
+        "device_id":  env_vals.get("DEVICE_ID",  ""),
+    }
+    cfg[CONFIG_SECTION_PRINT] = {
+        "default_ams_slot": env_vals.get("DEFAULT_AMS_SLOT", "auto"),
+        "auto_leveling":    env_vals.get("AUTO_LEVELING",    "1"),
+    }
+    cfg[CONFIG_SECTION_BRIDGE] = {
+        "poll_interval": "3",
+    }
+    with open(config_path, "w", encoding="utf-8") as f:
+        f.write("# KX-Bridge Konfigurationsdatei\n")
+        f.write("# Automatisch migriert aus .env\n\n")
+        cfg.write(f)
+
+
+def find_config_path() -> pathlib.Path:
+    """Gibt den Pfad zur config.ini zurück (auch wenn sie noch nicht existiert)."""
+    for base in (_BASE, _BASE.parent):
+        config_dir = base / "config"
+        if config_dir.is_dir():
+            return config_dir / "config.ini"
+    return _BASE / "config" / "config.ini"
+
+
+# ─── Laden ───────────────────────────────────────────────────────────────────
+
+_config_path = _find_config_file()
+_env_path    = _find_env_file()
+
+if _config_path:
+    _load_config_file(_config_path)
+elif _env_path:
+    # Kein config.ini vorhanden → aus .env migrieren
+    _target = find_config_path()
+    migrate_env_to_config(_env_path, _target)
+    _load_config_file(_target)
+    _config_path = _target
+
+
+def get(key: str, default: str = "") -> str:
+    return os.environ.get(key, default)
+
+
+# Häufig verwendete Shortcuts
+PRINTER_IP       = get("PRINTER_IP",       "")
+MQTT_PORT        = int(get("MQTT_PORT",    "9883"))
+USERNAME         = get("MQTT_USERNAME",    "")
+PASSWORD         = get("MQTT_PASSWORD",    "")
+MODE_ID          = get("MODE_ID",          "")
+DEVICE_ID        = get("DEVICE_ID",        "")
+DEFAULT_AMS_SLOT = get("DEFAULT_AMS_SLOT", "auto")
+AUTO_LEVELING    = int(get("AUTO_LEVELING","1"))
