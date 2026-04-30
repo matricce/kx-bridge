@@ -1,0 +1,34 @@
+# KX-Bridge Konfigurationsdatei
+# Kopiere diese Datei nach config.ini und trage deine Werte ein:
+#   cp config.ini.example config.ini
+#
+# Credentials mit extract_credentials.exe (Windows) oder
+# extract_credentials (Linux) aus dem laufenden AnycubicSlicerNext auslesen.
+
+[connection]
+# IP-Adresse des Druckers im lokalen Netzwerk
+printer_ip   = 192.168.x.x
+
+# MQTT-Port (Anycubic Kobra X Standard: 9883)
+mqtt_port    = 9883
+
+# MQTT-Zugangsdaten (druckerspezifisch, beginnt mit "user")
+username     = userXXXXXXXXXX
+password     = XXXXXXXXXXXXXXX
+
+# Geräte-ID (32-stelliger Hex-String, druckerspezifisch)
+device_id    = xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Modell-ID (Kobra X Standard: 20030)
+mode_id      = 20030
+
+[print]
+# Standard-AMS-Slot für Einfarbdruck (auto = alle belegten Slots, 0-3 = fixer Slot)
+default_ams_slot = auto
+
+# Auto-Leveling vor jedem Druck (1 = an, 0 = aus)
+auto_leveling    = 1
+
+[bridge]
+# Poll-Intervall in Sekunden
+poll_interval    = 3
