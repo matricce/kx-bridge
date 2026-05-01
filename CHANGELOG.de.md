@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.5] – 2026-05-01
+
+### Neu
+- **Upload-Banner:** Nach „Nur hochladen" erscheint ein grüner Banner mit Dateiname — „▶ Druck starten" startet den Druck direkt, „✕ Abbrechen" schließt den Banner
+
+### Fixes
+- **Auto-Print:** `auto_print` wurde nach dem Multipart-Loop immer auf `False` zurückgesetzt — OrcaSlicer „Hochladen und drucken" startete den Druck nie automatisch
+- **Thumbnail:** Vorschaubild wird jetzt auch bei „Nur hochladen" angezeigt — Bridge fragt `fileDetails` direkt nach dem Upload an
+- **Log Auto-Scroll:** Scroll-Position bleibt erhalten wenn Auto-Scroll deaktiviert ist — kein ungewollter Sprung nach oben mehr
+
+---
+
 ## [0.9.4] – 2026-05-01
 
 ### Neu

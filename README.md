@@ -2,7 +2,7 @@
 
 # KX-Bridge – Anycubic Kobra X
 
-**Version:** 0.9.4
+**Version:** 0.9.5
 
 Control your **Anycubic Kobra X** with OrcaSlicer — no Klipper, no Raspberry Pi.  
 KX-Bridge is a Moonraker-compatible bridge that communicates directly with the printer.

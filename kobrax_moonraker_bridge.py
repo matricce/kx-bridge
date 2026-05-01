@@ -154,6 +154,7 @@ class KobraXBridge:
             "taskid":             "-1",
             "print_speed_mode":   2,
             "connection_error":   "",
+            "file_ready":         "",
         }
         self._ams_slots: list[dict] = []
         self._ams_loaded_slot: int = -1
@@ -503,6 +504,7 @@ class KobraXBridge:
         ct = request.headers.get("Content-Type", "")
         if "multipart" not in ct:
             return web.json_response({"error": "expected multipart"}, status=400)
+        auto_print = False
         reader = await request.multipart()
         file_data = None
         remote_filename = self._last_uploaded_file or "upload.gcode"
@@ -516,14 +518,17 @@ class KobraXBridge:
                 val = (await part.read()).decode("utf-8", errors="replace").strip()
                 if val:
                     remote_filename = val
+            elif part.name == "print":
+                val = (await part.read()).decode("utf-8", errors="replace").strip().lower()
+                auto_print = val == "true"
             else:
                 log.debug(f"Unbekanntes Multipart-Feld: {part.name}")
 
         if not file_data:
             return web.json_response({"error": "no file received"}, status=400)
 
-        file_md5  = hashlib.md5(file_data).hexdigest()
-        file_size = len(file_data)
+        file_md5   = hashlib.md5(file_data).hexdigest()
+        file_size  = len(file_data)
 
         # Slicer-Zeitschätzung aus GCode-Header auslesen
         self._state["slicer_time"] = _parse_gcode_estimated_time(file_data)
@@ -553,9 +558,24 @@ class KobraXBridge:
 
         # Druck starten mit vollständigem Payload (inkl. serve-URL + md5 + size)
         serve_url = f"http://{request.host}/serve/{remote_filename}"
-        log.info(f"Starte Druck automatisch: {remote_filename}")
-        loop = asyncio.get_event_loop()
-        loop.run_in_executor(None, lambda: self._start_print(remote_filename, serve_url, file_md5, file_size))
+
+        # print=true im Multipart-Formular (Moonraker) oder Query-String → Druck starten
+        # print=false oder fehlt → nur hochladen
+        if not auto_print:
+            auto_print = request.rel_url.query.get("print", "false").lower() == "true"
+
+        # Thumbnail immer anfordern (Drucker antwortet async mit file/report)
+        self._thumbnail_b64 = ""
+        self.client.publish("file", "fileDetails", {"root": "local", "filename": remote_filename}, timeout=0)
+
+        if auto_print:
+            log.info(f"Upload+Print (print=true): {remote_filename}")
+            self._state["file_ready"] = ""
+            loop = asyncio.get_event_loop()
+            loop.run_in_executor(None, lambda: self._start_print(remote_filename, serve_url, file_md5, file_size))
+        else:
+            log.info(f"Nur hochgeladen (print=false): {remote_filename}")
+            self._state["file_ready"] = remote_filename
 
         # OctoPrint-kompatibler Response (OrcaSlicer wertet refs aus)
         return web.json_response({
@@ -578,6 +598,7 @@ class KobraXBridge:
         }, status=201)
 
     def _start_print(self, filename: str, url: str = "", md5: str = "", filesize: int = 0):
+        self._state["file_ready"] = ""
         default_slot = getattr(self._args, "default_ams_slot", "auto")
         all_loaded = [(i, s) for i, s in enumerate(self._ams_slots) if s.get("status") == 5]
         if default_slot != "auto":
@@ -628,11 +649,6 @@ class KobraXBridge:
                 "model_objects_skip_parts": [],
             },
         }
-        # Thumbnail vorab anfordern (Drucker antwortet async auf file/report)
-        self._thumbnail_b64 = ""
-        self.client.publish("file", "fileDetails",
-                            {"root": "local", "filename": filename}, timeout=0)
-
         log.info(f"print/start → {filename}  url={url}  ams={len(self._ams_slots)} slots")
         result = self.client.publish("print", "start", payload, timeout=15.0)
         if result:
@@ -645,7 +661,9 @@ class KobraXBridge:
             body = await request.json()
         except Exception:
             body = {}
-        filename = body.get("filename") or self._last_uploaded_file
+        filename = (request.rel_url.query.get("filename")
+                    or body.get("filename")
+                    or self._last_uploaded_file)
         if not filename:
             return web.json_response({"error": "no filename"}, status=400)
 
@@ -716,6 +734,12 @@ class KobraXBridge:
         loop = asyncio.get_event_loop()
         taskid = self._state.get("taskid", "-1")
         await loop.run_in_executor(None, lambda: self.client.stop_print(taskid))
+        return web.json_response({"result": "ok"})
+
+    async def handle_api_file_ready_clear(self, request):
+        self._state["file_ready"] = ""
+        self._thumbnail_b64 = ""
+        self._push_status_update()
         return web.json_response({"result": "ok"})
 
     async def handle_octoprint_version(self, request):
@@ -1010,6 +1034,13 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
 <body>
 
 <div id="conn-error-banner" style="display:none;background:#c0392b;color:#fff;padding:10px 18px;font-size:14px;text-align:center;position:sticky;top:0;z-index:999;"></div>
+<div id="file-ready-banner" style="display:none;background:#1a6e3c;color:#fff;padding:10px 18px;font-size:14px;text-align:center;position:sticky;top:0;z-index:998;display:none;align-items:center;justify-content:center;gap:12px">
+  <span>📄 <span id="file-ready-name"></span></span>
+  <button id="file-ready-btn" onclick="startReadyFile()"
+    style="padding:5px 16px;background:#fff;color:#1a6e3c;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:13px"></button>
+  <button id="file-cancel-btn" onclick="cancelReadyFile()"
+    style="padding:5px 16px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.5);border-radius:6px;font-weight:700;cursor:pointer;font-size:13px"></button>
+</div>
 
 <header>
   <div class="logo">⬡ KX-Bridge</div>
@@ -1417,7 +1448,9 @@ var LANG_DE={
   slot_edit_title:'Slot bearbeiten',slot_edit_color:'Farbe',slot_edit_material:'Material',
   slot_edit_save:'💾 Speichern',slot_edit_custom:'z.B. PLA, PETG, ABS…',
   slot_edit_ok:'AMS Slot',
-  log_dir_all:'Alle'
+  log_dir_all:'Alle',
+  file_ready_btn:'▶ Druck starten',
+  file_cancel_btn:'✕ Abbrechen'
 };
 var LANG_EN={
   header_status_standby:'Ready',header_status_printing:'Printing',header_status_complete:'Complete',header_status_error:'Error',
@@ -1449,7 +1482,9 @@ var LANG_EN={
   slot_edit_title:'Edit Slot',slot_edit_color:'Color',slot_edit_material:'Material',
   slot_edit_save:'💾 Save',slot_edit_custom:'e.g. PLA, PETG, ABS…',
   slot_edit_ok:'AMS Slot',
-  log_dir_all:'All'
+  log_dir_all:'All',
+  file_ready_btn:'▶ Start Print',
+  file_cancel_btn:'✕ Cancel'
 };
 var currentLang='de';
 var T=LANG_DE;
@@ -1532,6 +1567,8 @@ function applyLang(){
   setText('btn-slot-edit-save',T.slot_edit_save);
   var mi=document.getElementById('slot-edit-mat');if(mi)mi.setAttribute('placeholder',T.slot_edit_custom);
   setText('logdir-all',T.log_dir_all);
+  setText('file-ready-btn',T.file_ready_btn);
+  setText('file-cancel-btn',T.file_cancel_btn);
 }
 function setText(id,txt){var el=document.getElementById(id);if(el)el.textContent=txt;}
 (function(){
@@ -1621,8 +1658,10 @@ function renderLog(){
     if(fl&&!m.toLowerCase().includes(fl))return false;
     return true;
   });
+  var savedScroll=logAutoScroll?null:el.scrollTop;
   el.innerHTML=rows.map(l=>`<div><span class="ts">${l.ts}</span><span class="${l.cls}">${escHtml(l.msg)}</span></div>`).join('');
   if(logAutoScroll)el.scrollTop=el.scrollHeight;
+  else if(savedScroll!==null)el.scrollTop=savedScroll;
 }
 function onLogScroll(){
   var el=document.getElementById('console-log');
@@ -1665,6 +1704,13 @@ function applyState(){
   // connection error banner
   var banner=document.getElementById('conn-error-banner');
   if(banner){if(s.connection_error){banner.textContent='⚠ '+(T.lbl_conn_error||'Connection error:')+' '+s.connection_error;banner.style.display='block';}else{banner.style.display='none';}}
+  var frb=document.getElementById('file-ready-banner');
+  if(frb){
+    if(s.file_ready&&s.print_state==='standby'){
+      document.getElementById('file-ready-name').textContent=s.file_ready;
+      frb.style.display='flex';
+    }else{frb.style.display='none';}
+  }
   // header
   var b=document.getElementById('h-badge');
   b.className='hbadge '+s.print_state;
@@ -1876,6 +1922,24 @@ function openSlotEdit(i){
 }
 function closeSlotEdit(){
   document.getElementById('slot-edit-modal').classList.remove('open');
+}
+function startReadyFile(){
+  var btn=document.getElementById('file-ready-btn');
+  if(btn){btn.disabled=true;btn.textContent='…';}
+  post('/printer/print/start',{filename:S.file_ready})
+    .then(function(r){return r.json();})
+    .then(function(r){
+      document.getElementById('file-ready-banner').style.display='none';
+      if(btn){btn.disabled=false;setText('file-ready-btn',T.file_ready_btn);}
+    })
+    .catch(function(e){
+      clog((T.log_error||'Error:')+' '+e,'msg-err');
+      if(btn){btn.disabled=false;setText('file-ready-btn',T.file_ready_btn);}
+    });
+}
+function cancelReadyFile(){
+  post('/api/file_ready/clear',{})
+    .then(function(){document.getElementById('file-ready-banner').style.display='none';});
 }
 function selectMatPreset(m){
   document.getElementById('slot-edit-mat').value=m;
@@ -2502,6 +2566,7 @@ function toggleCam(){if(camOn)camStop();else camStart()}
             "ams_loaded_slot":  self._ams_loaded_slot,
             "thumbnail":        self._thumbnail_b64,
             "connection_error": s["connection_error"],
+            "file_ready":       s["file_ready"],
             "version":          self._read_version(),
         })
 
@@ -3029,6 +3094,7 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_post("/api/settings",            bridge.handle_api_settings_post)
     r.add_get("/api/update/check",         bridge.handle_api_update_check)
     r.add_post("/api/update/apply",        bridge.handle_api_update_apply)
+    r.add_post("/api/file_ready/clear",    bridge.handle_api_file_ready_clear)
     r.add_get("/api/log/stream",           bridge.handle_api_log_stream)
     r.add_get("/api/log/download",         bridge.handle_api_log_download)
     r.add_get("/serve/{filename}",         bridge.handle_serve_file)

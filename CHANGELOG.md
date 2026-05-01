@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.5] – 2026-05-01
+
+### New
+- **Upload banner:** After "Upload only", a green banner appears with the filename — "▶ Start Print" starts the print directly, "✕ Cancel" dismisses the banner
+
+### Fixes
+- **Auto-print:** `auto_print` was always reset to `False` after the multipart loop — OrcaSlicer "Upload and print" never started the print automatically
+- **Thumbnail:** Preview image is now shown after "Upload only" — bridge requests `fileDetails` immediately after upload
+- **Log auto-scroll:** Scroll position is preserved when auto-scroll is disabled — no more unwanted jump to top
+
+---
+
 ## [0.9.4] – 2026-05-01
 
 ### New
