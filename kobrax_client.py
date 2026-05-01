@@ -309,7 +309,7 @@ class KobraXClient:
                          data.get("curr_hotbed_temp", "?"), data.get("target_hotbed_temp", 0))
             else:
                 log.info("RX %-25s  state=%-12s  data=%s",
-                         suffix, state, json.dumps(payload.get("data"), ensure_ascii=False)[:120])
+                         suffix, state, json.dumps(payload.get("data"), ensure_ascii=False))
 
         # Resolve by report topic suffix (e.g. "info/report")
         if suffix in self._pending_report:
@@ -366,7 +366,7 @@ class KobraXClient:
         topic = self._pub_topic(msg_type)
         log.info("TX %-25s  action=%-12s  data=%s",
                  f"{msg_type}/request", action,
-                 json.dumps(data, ensure_ascii=False)[:120] if data else "null")
+                 json.dumps(data, ensure_ascii=False) if data else "null")
         try:
             with self._lock:
                 self._sock.sendall(_build_publish(topic, payload))
@@ -414,7 +414,7 @@ class KobraXClient:
         topic = self._web_topic(msg_type)
         log.info("TX(web) %-23s  action=%-12s  data=%s",
                  f"{msg_type}/request", action,
-                 json.dumps(data, ensure_ascii=False)[:120] if data else "null")
+                 json.dumps(data, ensure_ascii=False) if data else "null")
         try:
             with self._lock:
                 self._sock.sendall(_build_publish(topic, payload))

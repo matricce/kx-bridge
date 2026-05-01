@@ -1102,6 +1102,34 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
   </div>
 </div>
 
+<!-- ═══ AMS SLOT EDIT DIALOG ═══ -->
+<div class="modal-overlay" id="slot-edit-modal" onclick="if(event.target===this)closeSlotEdit()">
+  <div class="modal-box" style="max-width:340px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <span class="modal-title" id="slot-edit-title"></span>
+      <button onclick="closeSlotEdit()" style="background:none;border:none;color:var(--txt2);font-size:20px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
+      <div id="slot-edit-preview" style="width:56px;height:56px;border-radius:50%;border:3px solid rgba(255,255,255,.2);flex-shrink:0"></div>
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--txt2);margin-bottom:4px" id="lbl-slot-color"></div>
+        <input type="color" id="slot-edit-color"
+          oninput="document.getElementById('slot-edit-preview').style.background=this.value"
+          style="width:100%;height:36px;border:1px solid var(--border);border-radius:6px;background:var(--raised);cursor:pointer;padding:2px">
+      </div>
+    </div>
+    <div style="margin-bottom:20px">
+      <div style="font-size:11px;color:var(--txt2);margin-bottom:6px" id="lbl-slot-material"></div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px" id="slot-mat-btns">
+      </div>
+      <input type="text" id="slot-edit-mat"
+        oninput="highlightMatBtn(this.value)"
+        style="margin-top:8px;width:100%;padding:6px 10px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);font-size:13px;box-sizing:border-box">
+    </div>
+    <button class="modal-save" id="btn-slot-edit-save" onclick="saveSlotEdit()"></button>
+  </div>
+</div>
+
 <div class="layout">
   <nav class="sidebar">
     <button class="nav-btn active" onclick="showPanel('dashboard')" id="nb-dashboard">
@@ -1128,7 +1156,7 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
             </div>
           </div>
           <div class="cam-wrap" id="cam-wrap">
-            <div class="cam-placeholder" id="cam-placeholder">📷 Kamera nicht gestartet</div>
+            <div class="cam-placeholder" id="cam-placeholder"><span id="cam-placeholder-txt">📷 Kamera nicht gestartet</span></div>
             <div class="cam-spinner" id="cam-spinner"></div>
             <img id="cam-img" style="display:none;width:100%;height:auto" alt="Kamera">
             <div class="cam-overlay" id="cam-overlay" style="display:none">
@@ -1308,7 +1336,7 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
           <a id="btn-log-dl" href="/api/log/download" download="kx-bridge.log"
              style="font-size:12px;padding:4px 10px;background:var(--raised);border-radius:6px;color:var(--txt2);text-decoration:none">⬇ Download</a>
         </div>
-        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
+        <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;align-items:center">
           <input id="log-filter" type="text" placeholder="Filter…"
             oninput="renderLog()"
             style="flex:1;min-width:120px;padding:5px 10px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);font-size:12px;font-family:var(--mono)">
@@ -1317,7 +1345,18 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
           <button onclick="consoleLogs=[];renderLog()"
             style="font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:var(--raised);color:var(--txt2);cursor:pointer">✕ Clear</button>
         </div>
-        <div class="console" id="console-log" style="height:calc(100vh - 220px);min-height:200px" onscroll="onLogScroll()"></div>
+        <div style="display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--txt2);align-self:center;margin-right:2px">Dir:</span>
+          <button class="log-dir-btn active" id="logdir-all"  onclick="setLogDir('all')"  style="font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--border);cursor:pointer"></button>
+          <button class="log-dir-btn"        id="logdir-rx"   onclick="setLogDir('rx')"   style="font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--border);cursor:pointer">RX</button>
+          <button class="log-dir-btn"        id="logdir-tx"   onclick="setLogDir('tx')"   style="font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--border);cursor:pointer">TX</button>
+          <span style="font-size:11px;color:var(--txt2);align-self:center;margin-left:6px;margin-right:2px">Topic:</span>
+          <button class="log-topic-btn" data-topic="multiColorBox" onclick="setLogTopic('multiColorBox')" style="font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--border);cursor:pointer">AMS</button>
+          <button class="log-topic-btn" data-topic="print"         onclick="setLogTopic('print')"         style="font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--border);cursor:pointer">print</button>
+          <button class="log-topic-btn" data-topic="info"          onclick="setLogTopic('info')"          style="font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--border);cursor:pointer">info</button>
+          <button class="log-topic-btn" data-topic="status"        onclick="setLogTopic('status')"        style="font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--border);cursor:pointer">status</button>
+        </div>
+        <div class="console" id="console-log" style="height:calc(100vh - 260px);min-height:160px" onscroll="onLogScroll()"></div>
       </div>
     </div>
   </main>
@@ -1374,7 +1413,11 @@ var LANG_DE={
   update_check:'Auf Updates prüfen',update_checking:'Prüfe...',update_available:'verfügbar',update_none:'Bereits aktuell',
   update_apply:'Jetzt installieren',update_applying:'Lade herunter...',update_restarting:'Starte neu...',update_error:'Fehler',
   btn_connect:'⚡ Verbinden',btn_disconnect:'✕ Trennen',
-  lbl_conn_error:'Verbindungsfehler:'
+  lbl_conn_error:'Verbindungsfehler:',
+  slot_edit_title:'Slot bearbeiten',slot_edit_color:'Farbe',slot_edit_material:'Material',
+  slot_edit_save:'💾 Speichern',slot_edit_custom:'z.B. PLA, PETG, ABS…',
+  slot_edit_ok:'AMS Slot',
+  log_dir_all:'Alle'
 };
 var LANG_EN={
   header_status_standby:'Ready',header_status_printing:'Printing',header_status_complete:'Complete',header_status_error:'Error',
@@ -1402,7 +1445,11 @@ var LANG_EN={
   update_check:'Check for Updates',update_checking:'Checking...',update_available:'available',update_none:'Already up to date',
   update_apply:'Install Now',update_applying:'Downloading...',update_restarting:'Restarting...',update_error:'Error',
   btn_connect:'⚡ Connect',btn_disconnect:'✕ Disconnect',
-  lbl_conn_error:'Connection error:'
+  lbl_conn_error:'Connection error:',
+  slot_edit_title:'Edit Slot',slot_edit_color:'Color',slot_edit_material:'Material',
+  slot_edit_save:'💾 Save',slot_edit_custom:'e.g. PLA, PETG, ABS…',
+  slot_edit_ok:'AMS Slot',
+  log_dir_all:'All'
 };
 var currentLang='de';
 var T=LANG_DE;
@@ -1479,6 +1526,12 @@ function applyLang(){
   document.querySelectorAll('.lbl-unload').forEach(e=>e.textContent=T.lbl_unload);
   // conn-btn text (nur wenn nicht im Übergangszustand)
   updateConnBtn();
+  // Slot-Edit-Dialog
+  setText('lbl-slot-color',T.slot_edit_color);
+  setText('lbl-slot-material',T.slot_edit_material);
+  setText('btn-slot-edit-save',T.slot_edit_save);
+  var mi=document.getElementById('slot-edit-mat');if(mi)mi.setAttribute('placeholder',T.slot_edit_custom);
+  setText('logdir-all',T.log_dir_all);
 }
 function setText(id,txt){var el=document.getElementById(id);if(el)el.textContent=txt;}
 (function(){
@@ -1510,6 +1563,8 @@ function showPanel(id){
 var consoleLogs=[];
 var logAutoScroll=true;
 var logBadgeCount=0;
+var logDirFilter='all';   // 'all'|'rx'|'tx'
+var logTopicFilter='';    // '' = no topic filter
 
 function clog(msg,cls){
   cls=cls||'msg-info';
@@ -1535,12 +1590,37 @@ function _appendLog(entry,forceCls){
   }
   renderLog();
 }
+function setLogDir(dir){
+  logDirFilter=dir;
+  document.querySelectorAll('.log-dir-btn').forEach(function(b){
+    b.style.background=b.id==='logdir-'+dir?'var(--accent)':'var(--raised)';
+    b.style.color=b.id==='logdir-'+dir?'#fff':'var(--txt2)';
+  });
+  renderLog();
+}
+function setLogTopic(topic){
+  var inp=document.getElementById('log-filter');
+  var active=inp.value===topic;
+  inp.value=active?'':topic;
+  document.querySelectorAll('.log-topic-btn').forEach(function(b){
+    var on=!active&&b.getAttribute('data-topic')===topic;
+    b.style.background=on?'var(--accent)':'var(--raised)';
+    b.style.color=on?'#fff':'var(--txt2)';
+  });
+  renderLog();
+}
 function renderLog(){
   var el=document.getElementById('console-log');
   if(!el)return;
   var filter=(document.getElementById('log-filter')||{}).value||'';
   var fl=filter.toLowerCase();
-  var rows=fl?consoleLogs.filter(l=>l.msg.toLowerCase().includes(fl)):consoleLogs;
+  var rows=consoleLogs.filter(function(l){
+    var m=l.msg;
+    if(logDirFilter==='rx'&&!/ RX[ (]/.test(m))return false;
+    if(logDirFilter==='tx'&&!/ TX[ (]/.test(m))return false;
+    if(fl&&!m.toLowerCase().includes(fl))return false;
+    return true;
+  });
   el.innerHTML=rows.map(l=>`<div><span class="ts">${l.ts}</span><span class="${l.cls}">${escHtml(l.msg)}</span></div>`).join('');
   if(logAutoScroll)el.scrollTop=el.scrollHeight;
 }
@@ -1657,6 +1737,7 @@ function applyState(){
 
   // AMS
   if(s.ams_slots&&s.ams_slots.length){
+    window._amsSlots=s.ams_slots;
     var html='';
     s.ams_slots.forEach(function(slot,i){
       var empty=slot.status!==5;
@@ -1664,11 +1745,13 @@ function applyState(){
       var col='rgb('+rgb[0]+','+rgb[1]+','+rgb[2]+')';
       var active=slot.status===1||slot.active;
       var pct=empty?T.ams_empty:(slot.consumables_percent!=null?slot.consumables_percent+'%':'–');
-      html+='<div class="ams-slot'+(active?' active':'')+(empty?' empty':'')+ '" style="--slot-color:'+col+';opacity:'+(empty?0.4:1)+'">'
+      var idx=slot.index!=null?slot.index:i;
+      html+='<div class="ams-slot'+(active?' active':'')+(empty?' empty':'')+ '" style="--slot-color:'+col+';opacity:'+(empty?0.4:1)+';cursor:pointer" onclick="openSlotEdit('+i+')">'
         +'<div class="slot-circle" style="background:'+col+'"></div>'
         +'<div class="slot-material">'+(empty?'–':(slot.type||slot.material_type||'–'))+'</div>'
-        +'<div class="slot-label">Slot '+(slot.index!=null?slot.index+1:i+1)+'</div>'
+        +'<div class="slot-label">Slot '+(idx+1)+'</div>'
         +'<div class="slot-label" style="font-size:10px;color:var(--txt2)">'+pct+'</div>'
+        +'<div style="font-size:9px;color:var(--txt2);margin-top:2px">✏</div>'
         +'</div>';
     });
     document.getElementById('ams-slots').innerHTML=html;
@@ -1766,6 +1849,60 @@ function openSettings(){
 }
 function closeSettings(){
   document.getElementById('settings-modal').classList.remove('open');
+}
+
+// ── AMS Slot Edit ──
+var _slotEditIndex=-1;
+var _MAT_PRESETS=['PLA','PETG','ABS','ASA','TPU','PA','PC','HIPS'];
+function openSlotEdit(i){
+  var slot=(window._amsSlots||[])[i]||{};
+  var index=slot.index!=null?slot.index:i;
+  _slotEditIndex=index;
+  document.getElementById('slot-edit-title').textContent=T.slot_edit_title+' '+(index+1);
+  var rgb=Array.isArray(slot.color)?slot.color:[128,128,128];
+  var hex='#'+rgb.map(function(v){return('0'+Math.min(255,v).toString(16)).slice(-2)}).join('');
+  var ci=document.getElementById('slot-edit-color');
+  ci.value=hex;
+  document.getElementById('slot-edit-preview').style.background=hex;
+  var mat=(slot.type||'PLA').toUpperCase();
+  document.getElementById('slot-edit-mat').value=mat;
+  var btns=document.getElementById('slot-mat-btns');
+  btns.innerHTML=_MAT_PRESETS.map(function(m){
+    return '<button class="mat-preset-btn" data-mat="'+m+'" onclick="selectMatPreset(\''+m+'\')" '
+      +'style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);cursor:pointer;font-size:12px;'
+      +(m===mat?'background:var(--accent);color:#fff':'background:var(--raised);color:var(--txt2)')+'">'+m+'</button>';
+  }).join('');
+  document.getElementById('slot-edit-modal').classList.add('open');
+}
+function closeSlotEdit(){
+  document.getElementById('slot-edit-modal').classList.remove('open');
+}
+function selectMatPreset(m){
+  document.getElementById('slot-edit-mat').value=m;
+  highlightMatBtn(m);
+}
+function highlightMatBtn(val){
+  document.querySelectorAll('.mat-preset-btn').forEach(function(b){
+    var on=b.getAttribute('data-mat')===val.toUpperCase();
+    b.style.background=on?'var(--accent)':'var(--raised)';
+    b.style.color=on?'#fff':'var(--txt2)';
+  });
+}
+function hexToRgb(hex){
+  var r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return[r,g,b];
+}
+function saveSlotEdit(){
+  var hex=document.getElementById('slot-edit-color').value;
+  var mat=document.getElementById('slot-edit-mat').value.trim().toUpperCase()||'PLA';
+  var color=hexToRgb(hex);
+  post('/api/ams/set_slot',{index:_slotEditIndex,type:mat,color:color})
+    .then(function(r){return r.json();})
+    .then(function(r){
+      closeSlotEdit();
+      clog((T.slot_edit_ok||'AMS Slot')+' '+(_slotEditIndex+1)+': '+mat+' '+hex,'msg-ok');
+    })
+    .catch(function(e){clog('Fehler: '+e,'msg-err');});
 }
 document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('s-printer-ip').addEventListener('input',function(){
@@ -2082,6 +2219,35 @@ function toggleCam(){if(camOn)camStop();else camStart()}
             {"taskid": taskid, "settings": {"print_speed_mode": mode}},
         ))
         self._state["print_speed_mode"] = mode
+        return web.json_response({"result": "ok"})
+
+    async def handle_api_ams_set_slot(self, request):
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        index  = int(body.get("index", 0))
+        mat    = str(body.get("type", "PLA")).upper()
+        color  = body.get("color", [255, 255, 255])
+        if not (isinstance(color, list) and len(color) == 3):
+            return web.json_response({"error": "color must be [r,g,b]"}, status=400)
+        loop = asyncio.get_event_loop()
+        def _send():
+            resp = self.client.publish(
+                "multiColorBox", "setInfo",
+                {"multi_color_box": [{"id": -1, "slots": [{"index": index, "type": mat, "color": color}]}]},
+                timeout=5
+            )
+            log.info(f"setInfo slot={index} type={mat} color={color} → {resp}")
+            return resp
+        resp = await loop.run_in_executor(None, _send)
+        if resp and resp.get("code") == 200:
+            # Update cached slot immediately
+            for s in self._ams_slots:
+                if s.get("index") == index:
+                    s["type"]  = mat
+                    s["color"] = color
+                    break
         return web.json_response({"result": "ok"})
 
     async def handle_api_ams_feed(self, request):
@@ -2850,6 +3016,7 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_post("/api/disconnect",          bridge.handle_api_disconnect)
     r.add_post("/api/speed",               bridge.handle_api_speed)
     r.add_post("/api/ams/feed",            bridge.handle_api_ams_feed)
+    r.add_post("/api/ams/set_slot",        bridge.handle_api_ams_set_slot)
     r.add_post("/api/axis",                bridge.handle_api_axis)
     r.add_post("/api/temperature",         bridge.handle_api_temperature)
     r.add_get("/api/camera",               bridge.handle_api_camera)

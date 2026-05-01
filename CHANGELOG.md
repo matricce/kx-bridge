@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.9.4] – 2026-05-01
+
+### New
+- **AMS slot editor:** Click any slot in the AMS panel to open an edit dialog — set color (color picker) and material (preset buttons: PLA/PETG/ABS/ASA/TPU/PA/PC/HIPS or free text) directly from the browser
+- **Improved log panel:** Full MQTT payloads (no truncation), direction filter (All/RX/TX) and topic quick-filter buttons (AMS / print / info / status)
+
+### Fixes
+- **i18n:** Camera placeholder text and log direction "All" button now correctly translated on language switch
+
+---
+
 ## [0.9.3] – 2026-05-01
 
 ### Fixes

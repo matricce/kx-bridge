@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.9.4] – 2026-05-01
+
+### Neu
+- **AMS-Slot-Editor:** Slot im AMS-Panel anklicken → Dialog mit Farbpicker und Material-Auswahl (Schnellbuttons: PLA/PETG/ABS/ASA/TPU/PA/PC/HIPS oder Freitext) direkt im Browser
+- **Verbessertes Log-Panel:** Vollständige MQTT-Payloads (keine Kürzung mehr), Richtungsfilter (Alle/RX/TX) und Topic-Schnellfilter (AMS / print / info / status)
+
+### Fixes
+- **i18n:** Kamera-Placeholder-Text und Log-Richtungs-Button „Alle" werden jetzt korrekt beim Sprachwechsel übersetzt
+
+---
+
 ## [0.9.3] – 2026-05-01
 
 ### Fixes
