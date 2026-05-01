@@ -1013,7 +1013,7 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
 
 <header>
   <div class="logo">⬡ KX-Bridge</div>
-  <div class="hname" id="h-pname">Anycubic Kobra X</div>
+  <div class="hname" id="h-pname">Anycubic Kobra X</div><span id="h-version" style="font-size:11px;opacity:.5;margin-left:6px"></span>
   <div class="hbadge" id="h-badge"><span class="dot"></span><span id="h-state">Standby</span></div>
   <button class="theme-btn" onclick="toggleTheme()">☀ / ☾</button>
   <button class="theme-btn" onclick="toggleLang()" id="lang-btn">EN</button>
@@ -1590,6 +1590,7 @@ function applyState(){
   b.className='hbadge '+s.print_state;
   document.getElementById('h-state').textContent=T['kobra_'+s.kobra_state]||s.kobra_state||T.header_status_standby;
   document.getElementById('h-pname').textContent=s.printer_name;
+  var hv=document.getElementById('h-version');if(hv&&s.version)hv.textContent='v'+s.version;
 
 
   // temps
@@ -2335,6 +2336,7 @@ function toggleCam(){if(camOn)camStop();else camStart()}
             "ams_loaded_slot":  self._ams_loaded_slot,
             "thumbnail":        self._thumbnail_b64,
             "connection_error": s["connection_error"],
+            "version":          self._read_version(),
         })
 
     async def handle_moonraker_database(self, request):
@@ -2453,7 +2455,7 @@ function toggleCam(){if(camOn)camStop();else camStart()}
 
     # ─── Update ──────────────────────────────────────────────────────────────
 
-    STABLE_RELEASE_API = "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases?limit=1&pre-release=true"
+    STABLE_RELEASE_API = "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases?limit=1"
     DEV_RELEASE_API    = "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases?limit=10&pre-release=true"
     GITEA_RAW_BASE     = "https://gitea.it-drui.de/viewit/KX-Bridge-Release/raw/tag"
 
