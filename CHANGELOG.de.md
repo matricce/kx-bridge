@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.9.3] – 2026-05-01
+
+### Fixes
+- **Update-Check:** Stable-User erhalten keine Dev-Pre-Releases mehr — `STABLE_RELEASE_API` hatte `pre-release=true`, wodurch stabile Installationen Dev-Builds statt stabiler Releases fanden (Issue #14)
+- **Version nach Update:** `VERSION`-Datei wird jetzt im Docker-Image mitgeliefert (`COPY VERSION .`) — `_write_version()` benötigt eine vorhandene Datei, ohne die wurde die Version nach dem Self-Update nie aktualisiert (Issue #14)
+
+### Neu
+- **Version im Header:** Laufende Version wird im Web-UI-Header neben dem Druckernamen angezeigt — kein Öffnen der Einstellungen nötig (Issue #14)
+
+---
+
 ## [0.9.2] – 2026-04-29
 
 ### ⚠️ Breaking Change: Konfiguration wechselt von `.env` zu `config/config.ini`

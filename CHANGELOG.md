@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.9.3] – 2026-05-01
+
+### Fixes
+- **Update check:** Stable users no longer receive dev pre-releases — `STABLE_RELEASE_API` had `pre-release=true` which caused stable installs to find dev builds instead of stable releases (Issue #14)
+- **Version after update:** `VERSION` file is now included in the Docker image (`COPY VERSION .`) — `_write_version()` requires the file to exist, without it the version was never updated after self-update (Issue #14)
+
+### New
+- **Version in header:** Running version shown in the Web-UI header next to the printer name — no need to open Settings to check (Issue #14)
+
+---
+
 ## [0.9.2] – 2026-04-29
 
 ### ⚠️ Breaking Change: Configuration moves from `.env` to `config/config.ini`
