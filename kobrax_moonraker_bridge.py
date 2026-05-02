@@ -201,6 +201,9 @@ class KobraXBridge:
             self._state["progress"] = 0.0
             self._state["filename"] = ""
             self._state["file_ready"] = ""
+            self._state["print_duration"] = 0
+            self._state["remain_time"] = 0
+            self._state["slicer_time"] = 0
             self._thumbnail_b64 = ""
         self._state["filename"]       = d.get("filename", self._state["filename"])
         if "progress" in d:
