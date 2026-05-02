@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.6] – 2026-05-02
+
+### New
+- **Progress card:** Elapsed / Slicer estimate / Remaining time shown as mini-cards (same style as temperature cards)
+- **Layer mini-card:** Layer count displayed as mini-card next to the progress bar
+
+### Fixes
+- **Slicer estimate time:** OrcaSlicer writes the estimated time at the end of the GCode file — bridge now also scans the last 64 KB (previously only the first 16 KB were checked)
+- **start.sh:** `config/` directory is now created automatically and `config.ini.example` is copied into it on first run (Issue #15)
+
+---
+
 ## [0.9.5] – 2026-05-01
 
 ### New

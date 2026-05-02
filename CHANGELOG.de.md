@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.6] – 2026-05-02
+
+### Neu
+- **Fortschritts-Karte:** Verstrichen / Slicer-Schätzung / Restzeit als Mini-Cards (gleicher Stil wie Temperaturkarten)
+- **Layer-Mini-Card:** Layerzahl als Mini-Card neben der Fortschrittsleiste
+
+### Fixes
+- **Slicer-Schätzzeit:** OrcaSlicer schreibt die geschätzte Zeit ans Ende der GCode-Datei — Bridge liest jetzt auch die letzten 64 KB (vorher nur die ersten 16 KB)
+- **start.sh:** `config/`-Verzeichnis wird jetzt automatisch erstellt und `config.ini.example` wird beim ersten Start hineinkopiert (Issue #15)
+
+---
+
 ## [0.9.5] – 2026-05-01
 
 ### Neu

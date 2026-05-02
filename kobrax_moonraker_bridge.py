@@ -108,11 +108,17 @@ KLIPPER_VERSION   = "v0.12.0-1"
 
 
 def _parse_gcode_estimated_time(data: bytes) -> int:
-    """Liest '; estimated printing time (normal mode) = Xh Ym Zs' aus GCode-Header.
-    Gibt Sekunden zurück, 0 wenn nicht gefunden. Sucht nur in den ersten 8KB."""
+    """Liest geschätzte Druckzeit aus GCode (OrcaSlicer + PrusaSlicer).
+    Gibt Sekunden zurück, 0 wenn nicht gefunden.
+    PrusaSlicer schreibt die Zeit ins Header (erste 16KB),
+    OrcaSlicer schreibt sie ans Ende der Datei (letzte 16KB)."""
     import re
-    header = data[:8192].decode("utf-8", errors="ignore")
-    m = re.search(r";\s*estimated printing time \(normal mode\)\s*=\s*(.*)", header)
+    # Anfang + Ende der Datei durchsuchen (OrcaSlicer schreibt Zeit am Ende)
+    search_text = (data[:16384] + data[-65536:]).decode("utf-8", errors="ignore")
+    # OrcaSlicer:  ; total estimated time: 9m 20s
+    # PrusaSlicer: ; estimated printing time (normal mode) = 1h 9m 20s
+    m = (re.search(r";\s*total estimated time:\s*(.*)", search_text) or
+         re.search(r";\s*estimated printing time \(normal mode\)\s*=\s*(.*)", search_text))
     if not m:
         return 0
     parts = re.findall(r"(\d+)\s*([hms])", m.group(1))
@@ -121,6 +127,8 @@ def _parse_gcode_estimated_time(data: bytes) -> int:
         if unit == "h":   secs += int(val) * 3600
         elif unit == "m": secs += int(val) * 60
         elif unit == "s": secs += int(val)
+    if secs:
+        log.info(f"Slicer-Schätzzeit: {secs}s ({m.group(1).strip()})")
     return secs
 
 
@@ -869,6 +877,11 @@ main{flex:1;overflow-y:auto;padding:20px}
 .spd-bar{height:4px;border-radius:2px;background:var(--border);margin-top:10px;overflow:hidden}
 .spd-bar-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent2),var(--accent));transition:width .3s}
 
+/* ── TIME CARDS ── */
+.time-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
+.time-block{background:var(--raised);border-radius:10px;padding:10px 12px}
+.time-label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt2);margin-bottom:4px}
+.time-val{font-size:20px;font-weight:700;font-family:var(--mono);color:var(--txt)}
 /* ── TEMPS ── */
 .temp-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .temp-card-inner{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -1202,14 +1215,26 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
           <div class="card-title"><span>◉</span> <span id="d-card-progress">Fortschritt</span></div>
           <img id="d-thumbnail" src="" alt="" style="display:none;width:100%;max-height:160px;object-fit:contain;border-radius:8px;background:#111;margin-bottom:10px">
           <div class="pct-big"><span id="d-pct">0</span><small>%</small></div>
-          <div class="progress-bar" style="margin:8px 0"><div class="progress-fill" id="d-pbar" style="width:0%"></div></div>
-          <div class="meta-row" style="margin-top:6px">
-            <span id="d-elapsed">–</span>
-            <span id="d-remain" style="color:var(--acc)">–</span>
-            <span id="d-layers" class="layer-badge">–</span>
+          <div style="display:flex;align-items:center;gap:10px;margin:8px 0">
+            <div class="progress-bar" style="flex:1;margin:0"><div class="progress-fill" id="d-pbar" style="width:0%"></div></div>
+            <div class="time-block" style="padding:6px 10px;min-width:72px;text-align:center;flex-shrink:0">
+              <div class="time-label" id="d-lbl-layers"></div>
+              <div class="time-val" style="font-size:16px" id="d-layers">–</div>
+            </div>
           </div>
-          <div class="meta-row" style="margin-top:4px;font-size:0.82em;opacity:0.7" id="d-slicer-row">
-            <span id="d-slicer-label"></span><span id="d-slicer-time" style="margin-left:4px">–</span>
+          <div class="time-grid">
+            <div class="time-block">
+              <div class="time-label" id="d-lbl-elapsed"></div>
+              <div class="time-val" id="d-elapsed">–</div>
+            </div>
+            <div class="time-block" id="d-slicer-row" style="display:none">
+              <div class="time-label" id="d-slicer-label"></div>
+              <div class="time-val" id="d-slicer-time">–</div>
+            </div>
+            <div class="time-block" style="color:var(--acc)">
+              <div class="time-label" id="d-lbl-remain"></div>
+              <div class="time-val" id="d-remain" style="color:var(--acc)">–</div>
+            </div>
           </div>
           <div class="fname" id="d-fname" title="" style="margin-top:6px">–</div>
           <div class="ctrl-btns" id="d-ctrl-btns" style="margin-top:12px">
@@ -1422,7 +1447,7 @@ var LANG_DE={
   header_status_standby:'Bereit',header_status_printing:'Druckt',header_status_complete:'Fertig',header_status_error:'Fehler',
   kobra_free:'Bereit',kobra_busy:'Beschäftigt',kobra_printing:'Druckt',kobra_preheating:'Aufheizen',kobra_auto_leveling:'Nivellierung',kobra_checking:'Prüfung',kobra_updated:'Aktualisierung',kobra_init:'Initialisierung',kobra_pausing:'Pausiert...',kobra_paused:'Pausiert',kobra_resuming:'Fortsetzen...',kobra_resumed:'Fortgesetzt',kobra_stopping:'Stoppt...',kobra_stoped:'Gestoppt',kobra_finished:'Abgeschlossen',kobra_failed:'Fehler',kobra_canceled:'Abgebrochen',kobra_offline:'Offline',
   nav_dashboard:'Dashboard',nav_print:'Druck',nav_temps:'Temperaturen',nav_motion:'Achsen',nav_ams:'AMS',nav_extras:'Licht / Lüfter',nav_console:'Konsole',
-  card_progress:'Fortschritt',card_temps:'Temperaturen',card_light_fan:'Lüfter',card_speed:'Druckgeschwindigkeit',card_cam:'Kamera',lbl_elapsed:'Verstrichen',lbl_remaining:'verbleibend',lbl_slicer_time:'Slicer-Schätzung:',
+  card_progress:'Fortschritt',card_temps:'Temperaturen',card_light_fan:'Lüfter',card_speed:'Druckgeschwindigkeit',card_cam:'Kamera',lbl_elapsed:'Verstrichen:',lbl_remaining:'Restzeit:',lbl_slicer_time:'Slicer-Schätzung:',lbl_layers:'Layer',
   speed_silent:'🐢 Leise',speed_normal:'⚡ Normal',speed_sport:'🚀 Sport',
   lbl_light:'💡 Licht',lbl_feed:'Einziehen',lbl_unload:'Ausziehen',
   cam_placeholder:'📷 Kamera nicht gestartet',btn_cam_start:'▶ Kamera',btn_cam_stop:'◼ Kamera',
@@ -1456,7 +1481,7 @@ var LANG_EN={
   header_status_standby:'Ready',header_status_printing:'Printing',header_status_complete:'Complete',header_status_error:'Error',
   kobra_free:'Ready',kobra_busy:'Busy',kobra_printing:'Printing',kobra_preheating:'Preheating',kobra_auto_leveling:'Auto Leveling',kobra_checking:'Checking',kobra_updated:'Updating',kobra_init:'Initializing',kobra_pausing:'Pausing...',kobra_paused:'Paused',kobra_resuming:'Resuming...',kobra_resumed:'Resumed',kobra_stopping:'Stopping...',kobra_stoped:'Stopped',kobra_finished:'Finished',kobra_failed:'Error',kobra_canceled:'Cancelled',kobra_offline:'Offline',
   nav_dashboard:'Dashboard',nav_print:'Print',nav_temps:'Temperatures',nav_motion:'Motion',nav_ams:'AMS',nav_extras:'Light / Fan',nav_console:'Console',
-  card_progress:'Progress',card_temps:'Temperatures',card_light_fan:'Fan',card_speed:'Print Speed',card_cam:'Camera',lbl_elapsed:'Elapsed',lbl_remaining:'remaining',lbl_slicer_time:'Slicer estimate:',
+  card_progress:'Progress',card_temps:'Temperatures',card_light_fan:'Fan',card_speed:'Print Speed',card_cam:'Camera',lbl_elapsed:'Elapsed:',lbl_remaining:'Remaining:',lbl_slicer_time:'Slicer estimate:',lbl_layers:'Layer',
   speed_silent:'🐢 Silent',speed_normal:'⚡ Normal',speed_sport:'🚀 Sport',
   lbl_light:'💡 Light',lbl_feed:'Load',lbl_unload:'Unload',
   cam_placeholder:'📷 Camera not started',btn_cam_start:'▶ Camera',btn_cam_stop:'◼ Camera',
@@ -1510,6 +1535,10 @@ function applyLang(){
   setText('d-card-speed',T.card_speed);
   setText('d-card-cam',T.card_cam);
   setText('d-card-ams',T.panel_ams_title);
+  setText('d-lbl-elapsed',T.lbl_elapsed);
+  setText('d-lbl-remain',T.lbl_remaining);
+  setText('d-slicer-label',T.lbl_slicer_time);
+  setText('d-lbl-layers',T.lbl_layers);
   setText('d-lbl-light',T.lbl_light);
   setText('d-lbl-bed',T.label_bed);
   // Dashboard buttons
@@ -1737,16 +1766,12 @@ function applyState(){
   var layers=s.curr_layer&&s.total_layers?'L '+s.curr_layer+' / '+s.total_layers:'–';
   var dlayers=document.getElementById('d-layers');if(dlayers)dlayers.textContent=layers;
 
-  var elapsed=fmtTime(s.print_duration);
-  var delapsed=document.getElementById('d-elapsed');if(delapsed)delapsed.textContent=elapsed;
-  var remain=s.remain_time>0?'≈ '+fmtTime(s.remain_time)+' '+T.lbl_remaining:'';
-  var dremain=document.getElementById('d-remain');if(dremain)dremain.textContent=remain;
-
+  var delapsed=document.getElementById('d-elapsed');if(delapsed)delapsed.textContent=fmtTime(s.print_duration);
+  var dremain=document.getElementById('d-remain');if(dremain)dremain.textContent=s.remain_time>0?fmtTime(s.remain_time):'–';
   var dslrow=document.getElementById('d-slicer-row');
   var dsltime=document.getElementById('d-slicer-time');
-  var dsllbl=document.getElementById('d-slicer-label');
   if(dslrow&&dsltime){
-    if(s.slicer_time>0){dslrow.style.display='';if(dsllbl)dsllbl.textContent=T.lbl_slicer_time;dsltime.textContent=fmtTime(s.slicer_time);}
+    if(s.slicer_time>0){dslrow.style.display='';dsltime.textContent=fmtTime(s.slicer_time);}
     else{dslrow.style.display='none';}
   }
 

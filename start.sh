@@ -15,6 +15,15 @@ if [[ ! -f .env ]]; then
     fi
 fi
 
+# config/ Verzeichnis und config.ini.example anlegen falls nicht vorhanden
+mkdir -p config
+if [[ ! -f config/config.ini ]] && [[ ! -f config/config.ini.example ]]; then
+    if [[ -f config.ini.example ]]; then
+        cp config.ini.example config/config.ini.example
+        echo "[start] config/config.ini.example aus config.ini.example erstellt"
+    fi
+fi
+
 # Docker verfügbar?
 if ! docker info > /dev/null 2>&1; then
     echo "[start] Docker nicht gefunden – bitte Docker installieren."
