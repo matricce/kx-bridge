@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.6.1] – 2026-05-02
+
+### Fixes
+- **Upload banner:** Banner is no longer shown again after print stop/cancel — `file_ready` and thumbnail are now cleared when the printer reports `stoped` or `canceled`
+
+---
+
 ## [0.9.6] – 2026-05-02
 
 ### New

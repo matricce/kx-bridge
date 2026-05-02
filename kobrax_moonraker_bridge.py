@@ -200,6 +200,8 @@ class KobraXBridge:
         if kobra_state in ("stoped", "canceled"):
             self._state["progress"] = 0.0
             self._state["filename"] = ""
+            self._state["file_ready"] = ""
+            self._thumbnail_b64 = ""
         self._state["filename"]       = d.get("filename", self._state["filename"])
         if "progress" in d:
             self._state["progress"]   = float(d["progress"]) / 100.0

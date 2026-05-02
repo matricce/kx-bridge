@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.6.1] – 2026-05-02
+
+### Fixes
+- **Upload-Banner:** Banner wird nach Stopp/Abbruch nicht mehr erneut angezeigt — `file_ready` und Thumbnail werden jetzt gecleared wenn der Drucker `stoped` oder `canceled` meldet
+
+---
+
 ## [0.9.6] – 2026-05-02
 
 ### Neu
