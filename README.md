@@ -46,6 +46,12 @@ Printer → Connection type **Moonraker** → Host: `http://BRIDGE-IP:7125`
 
 ---
 
+## 📺 Video Tutorial
+
+[![KX-Bridge Setup & Usage](https://img.youtube.com/vi/1Ql4wfH27fM/maxresdefault.jpg)](https://www.youtube.com/watch?v=1Ql4wfH27fM)
+
+---
+
 ## ⚠️ Upgrading from 0.9.1 or earlier
 
 Starting with **0.9.2**, KX-Bridge stores settings in `config/config.ini` instead of `.env`.
