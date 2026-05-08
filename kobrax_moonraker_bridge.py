@@ -178,6 +178,7 @@ class KobraXBridge:
         client.callbacks["info/report"]           = self._on_info
         client.callbacks["file/report"]           = self._on_file
         client.callbacks["multiColorBox/report"]  = self._on_multicolor_box
+        client.callbacks["light/report"]          = self._on_light
 
     # -------------------------------------------------------------------------
     # MQTT callbacks (called from reader thread)
@@ -288,6 +289,12 @@ class KobraXBridge:
             self._ams_slots = slots
             log.info(f"AMS-Slots empfangen: {len(slots)}, loaded_slot={self._ams_loaded_slot}")
             self._push_status_update()
+
+    def _on_light(self, payload: dict):
+        d = payload.get("data") or {}
+        self._state["light_on"]         = bool(d.get("status", 0))
+        self._state["light_brightness"] = int(d.get("brightness", 80))
+        self._push_status_update()
 
     # OrcaSlicer filament preset IDs (MoonrakerPrinterAgent.cpp mapping)
     _TRAY_INFO_IDX = {
@@ -3077,7 +3084,7 @@ def _mqtt_error_msg(exc: Exception) -> str:
 
 
 def build_app(bridge: KobraXBridge) -> web.Application:
-    app = web.Application()
+    app = web.Application(client_max_size=256 * 1024 * 1024)  # 256 MB für große GCode-Dateien
     r = app.router
 
     # Moonraker API

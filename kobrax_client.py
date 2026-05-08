@@ -523,7 +523,7 @@ class KobraXClient:
 
         sock = socket.create_connection((self.host, 18910), timeout=30)
         sock.sendall(headers + body)
-        sock.settimeout(10)
+        sock.settimeout(120)  # große GCode-Dateien brauchen Zeit bis der Drucker antwortet
         response = b""
         try:
             while True:

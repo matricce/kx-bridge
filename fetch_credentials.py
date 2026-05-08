@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
 """
-Decrypt printer configuration data using AES-256-CBC
+fetch_credentials.py – Fetches and decrypts Anycubic Kobra X credentials via HTTP API.
 
-This script decrypts encrypted printer configuration data from a 3D printer using AES-256-CBC. 
-The method was reverse engineered from the vue project embedded in libWorkbench.so, 
-which is part of Anycubic Slicer Next. 
-The decryption key is derived from the device token, 
-and the IV is obtained from the response token in the encrypted data.
+Original approach by bebu (PR #19, KX-Bridge-Release).
+Reverse engineered from the Vue project embedded in libWorkbench.so (Anycubic Slicer Next).
+No running slicer required — only the printer IP in LAN.
 
-- Algorithm: AES-256-CBC
-- Key: Characters 16-32 of the token from info.json
-- IV: The response token from ctrl.json
-- Mode: CBC with PKCS7 padding
+Algorithm: AES-256-CBC
+  Key: token[16:32] from /info response
+  IV:  response token from /ctrl response
 
 Usage:
-    python3 fetch_credentials.py --ip 192.168.2.32
-    python3 fetch_credentials.py --ip 192.168.2.32 --port 18910
-    python3 fetch_credentials.py --ctrl ctrl.json --info info.json --output config.json
+    python3 fetch_credentials.py --ip 192.168.x.x
+    python3 fetch_credentials.py --ip 192.168.x.x --write-config
+    python3 fetch_credentials.py --ip 192.168.x.x --write-config --config-file ../config/config.ini
+    python3 fetch_credentials.py --ctrl ctrl.json --info info.json
 """
 
 import json
@@ -24,6 +22,7 @@ import sys
 import base64
 import hashlib
 import argparse
+import os
 import time
 import random
 import string
@@ -190,18 +189,24 @@ def main():
     
     # Parse command-line arguments
     parser = argparse.ArgumentParser(
-        description='Decrypt Anycubic printer configuration data',
+        description='Fetch and decrypt Anycubic Kobra X credentials via HTTP API',
     )
     # HTTP mode
-    parser.add_argument('--ip', help='IP address of the printer (fetch via HTTP)')
-    parser.add_argument('--port', type=int, default=18910, help='Printer port (default: 18910)')
-    
+    parser.add_argument('--ip', help='IP address of the printer')
+    parser.add_argument('--port', type=int, default=18910, help='Printer HTTP port (default: 18910)')
+
     # File mode
     parser.add_argument('--ctrl', default='ctrl.json', help='Path to ctrl.json (default: ctrl.json)')
     parser.add_argument('--info', default='info.json', help='Path to info.json (default: info.json)')
-    parser.add_argument('--output', default='decrypted_printer_config.json', help='Output file (default: decrypted_printer_config.json)')
+
+    # Output
+    parser.add_argument('--output', default=None, help='Save raw decrypted JSON to file (optional)')
+    parser.add_argument('--write-config', action='store_true',
+                        help='Write credentials to config.ini')
+    parser.add_argument('--config-file', default=None,
+                        help='Path to config.ini (default: ../config/config.ini relative to this script)')
     parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
-    
+
     args = parser.parse_args()
     
     # Determine mode: HTTP or file
@@ -253,15 +258,15 @@ def main():
             print(f"Error: {args.info} not found", file=sys.stderr)
             return 1
         
-        # Read data.json
+        # Read ctrl.json
         try:
-            with open(args.data, 'r') as f:
+            with open(args.ctrl, 'r') as f:
                 data = json.load(f)
         except json.JSONDecodeError as e:
-            print(f"Error reading {args.data}: {e}", file=sys.stderr)
+            print(f"Error reading {args.ctrl}: {e}", file=sys.stderr)
             return 1
         except Exception as e:
-            print(f"Error reading {args.data}: {e}", file=sys.stderr)
+            print(f"Error reading {args.ctrl}: {e}", file=sys.stderr)
             return 1
         
         # Read info.json
@@ -315,30 +320,77 @@ def main():
         print(f"Error during decryption: {result.get('error')}", file=sys.stderr)
         return 1
     
-    # Pretty print result
+    # Show result
+    print()
+    print("=" * 55)
+    print("  CREDENTIALS")
+    print("=" * 55)
+    print(f"  {'Printer IP':12s}  {result.get('ip', 'n/a')}")
+    print(f"  {'Username':12s}  {result.get('username', 'n/a')}")
+    print(f"  {'Password':12s}  {result.get('password', 'n/a')}")
+    print(f"  {'Device-ID':12s}  {result.get('deviceId', 'n/a')}")
+    print(f"  {'Mode-ID':12s}  {result.get('modeId', 'n/a')}")
+    print(f"  {'Model':12s}  {result.get('modelName', 'n/a')}")
+    print(f"  {'Broker':12s}  {result.get('broker', 'n/a')}")
+    print("=" * 55)
+
     if args.verbose:
-        print("=" * 70)
-        print("Decrypted Configuration:")
-        print("=" * 70)
-        print(json.dumps(result, indent=2))
         print()
-    
-    # Save to file
-    try:
-        with open(args.output, 'w') as f:
-            json.dump(result, f, indent=2)
-        
-        if args.verbose:
-            print("=" * 70)
-            print(f"Successfully saved decrypted config to: {args.output}")
-            print("=" * 70)
+        print("Full decrypted config:")
+        # Strip certs/keys from verbose output to avoid cluttering terminal
+        display = {k: v for k, v in result.items() if k not in ('devicecrt', 'devicepk')}
+        print(json.dumps(display, indent=2))
+
+    # Optionally save raw JSON
+    if args.output:
+        try:
+            with open(args.output, 'w') as f:
+                json.dump(result, f, indent=2)
+            print(f"\nRaw config saved to: {args.output}")
+        except Exception as e:
+            print(f"Error writing to {args.output}: {e}", file=sys.stderr)
+            return 1
+
+    # Write config.ini
+    if args.write_config:
+        if args.config_file:
+            config_path = args.config_file
         else:
-            print(f"Decrypted config saved to: {args.output}")
-    except Exception as e:
-        print(f"Error writing to {args.output}: {e}", file=sys.stderr)
-        return 1
-    
+            config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                       '..', 'config', 'config.ini')
+            config_path = os.path.normpath(config_path)
+
+        _write_config_ini(result, config_path)
+    else:
+        print(f"\nTip: pass --write-config to write credentials directly to config.ini")
+
     return 0
+
+
+def _write_config_ini(result: dict, config_path: str):
+    """Write fetched credentials into config.ini, preserving existing non-credential keys."""
+    import configparser
+
+    cfg = configparser.ConfigParser()
+
+    if os.path.isfile(config_path):
+        cfg.read(config_path)
+
+    if not cfg.has_section('connection'):
+        cfg.add_section('connection')
+
+    cfg.set('connection', 'printer_ip', result.get('ip', ''))
+    cfg.set('connection', 'mqtt_port',  '9883')
+    cfg.set('connection', 'username',   result.get('username', ''))
+    cfg.set('connection', 'password',   result.get('password', ''))
+    cfg.set('connection', 'device_id',  result.get('deviceId', ''))
+    cfg.set('connection', 'mode_id',    result.get('modeId', '20030'))
+
+    os.makedirs(os.path.dirname(config_path), exist_ok=True)
+    with open(config_path, 'w') as f:
+        cfg.write(f)
+
+    print(f"\n✓ Credentials written to '{config_path}'.")
 
 
 if __name__ == '__main__':

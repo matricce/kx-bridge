@@ -1,21 +1,28 @@
 # Changelog
 
-## [0.9.6.1] – 2026-05-02
+## [0.9.7] – 2026-05-08
+
+### New
+- **fetch_credentials tool:** Fetches and decrypts MQTT credentials directly from the printer via HTTP — no running Anycubic Slicer required, only the printer IP needed. Linux binary and Windows EXE included in release. (Contributed by bebu, PR #19)
 
 ### Fixes
-- **Upload banner:** Banner is no longer shown again after print stop/cancel — `file_ready` and thumbnail are now cleared when the printer reports `stoped` or `canceled`
+- **Large GCode upload:** Files >1 MB were rejected with HTTP 413 — aiohttp `client_max_size` raised to 256 MB
+- **Upload timeout:** Socket timeout after GCode upload raised from 10s to 120s — large files caused the bridge to crash with an empty response while the printer was still processing
 
 ---
 
 ## [0.9.6] – 2026-05-02
 
 ### New
-- **Progress card:** Elapsed / Slicer estimate / Remaining time shown as mini-cards (same style as temperature cards)
-- **Layer mini-card:** Layer count displayed as mini-card next to the progress bar
+- **Light status sync:** Light on/off state and brightness are now read live from the printer via `light/report` MQTT message — the light toggle in the UI reflects the actual printer state
+- **Time mini-cards:** Progress panel now shows three cards — Elapsed, Remaining and Slicer estimate — with a layer counter badge next to the progress bar
+- **Slicer estimate from GCode:** Estimated print time is parsed directly from the uploaded GCode file (OrcaSlicer: `; total estimated time:` at end of file, PrusaSlicer: `; estimated printing time` in header)
+- **Extended printer status strings:** Added `pausing`, `paused`, `resuming`, `resumed`, `stopping`, `stopped` states — previously missing, causing the UI to show raw status codes during pause/resume/stop transitions
 
 ### Fixes
-- **Slicer estimate time:** OrcaSlicer writes the estimated time at the end of the GCode file — bridge now also scans the last 64 KB (previously only the first 16 KB were checked)
-- **start.sh:** `config/` directory is now created automatically and `config.ini.example` is copied into it on first run (Issue #15)
+- **file_ready banner:** Upload banner is no longer shown after print stop or cancel
+- **Timers on stop/cancel:** Elapsed, remaining and slicer estimate times are reset to zero when a print is stopped or cancelled
+- **start.sh:** `config/` directory and `config.ini.example` are now created automatically on first run if missing (Issue #15)
 
 ---
 

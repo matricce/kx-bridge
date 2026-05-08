@@ -2,7 +2,7 @@
 
 # KX-Bridge – Anycubic Kobra X
 
-**Version:** 0.9.6.1
+**Version:** 0.9.7
 
 Steuere deinen **Anycubic Kobra X** mit OrcaSlicer — ohne Klipper, ohne Raspberry Pi.  
 KX-Bridge ist eine Moonraker-kompatible Bridge die direkt mit dem Drucker kommuniziert.
@@ -18,13 +18,23 @@ Den Kobra X in den LAN-Modus versetzen:
 
 ### Schritt 2 – Credentials holen
 
-Die MQTT-Zugangsdaten sind druckerspezifisch. So holst du sie:
+Die MQTT-Zugangsdaten sind druckerspezifisch und an die Hardware gebunden.
+
+**Option A – fetch_credentials (empfohlen):**
+
+```bash
+fetch_credentials --ip 192.168.x.x --write-config
+```
+
+Holt die Credentials direkt per HTTP vom Drucker und schreibt sie automatisch in `config/config.ini`. Benötigt nur die Drucker-IP — kein Slicer nötig.
+
+**Option B – extract_credentials (wenn Drucker-IP unbekannt):**
 
 1. **AnycubicSlicerNext** öffnen und Drucker verbinden (bis Status angezeigt wird)
-2. **`extract_credentials.exe`** (Windows) oder **`extract_credentials`** (Linux) ausführen — gibt Username, Password, Device-ID und Drucker-IP aus
-3. Werte merken / kopieren
+2. **`extract_credentials`** ausführen — gibt Username, Password, Device-ID und Drucker-IP aus
+3. Werte im Web-UI eintragen (⚙-Menü)
 
-> **Download:** [gitea.it-drui.de/viewit/KX-Bridge-Release/releases](https://gitea.it-drui.de/viewit/KX-Bridge-Release/releases) → `extract_credentials.exe` (Windows) / `extract_credentials` (Linux) im jeweiligen Release-Asset
+> **Download:** [gitea.it-drui.de/viewit/KX-Bridge-Release/releases](https://gitea.it-drui.de/viewit/KX-Bridge-Release/releases) → `fetch_credentials` / `extract_credentials` (Linux & Windows) im jeweiligen Release-Asset
 
 ### Schritt 3 – Bridge starten
 
@@ -36,7 +46,7 @@ Das Skript baut das Docker-Image automatisch beim ersten Aufruf.
 
 **Web-UI öffnen:** `http://BRIDGE-IP:7125`  
 → Das ⚙-Menü öffnet sich beim ersten Start automatisch  
-→ Credentials aus Schritt 2 eintragen → **Speichern & Neustart**
+→ Bei Option B: Credentials aus Schritt 2 eintragen → **Speichern & Neustart**
 
 **OrcaSlicer verbinden:**  
 Drucker → Verbindungstyp **Moonraker** → Host: `http://BRIDGE-IP:7125`
@@ -116,7 +126,8 @@ docker-compose down
 ## Fehlerbehebung
 
 **„Falsche MQTT-Zugangsdaten"** beim Start:
-- AnycubicSlicerNext neu starten, Drucker verbinden, `extract_credentials` erneut ausführen
+- `fetch_credentials --ip <Drucker-IP> --write-config` erneut ausführen und Bridge neu starten
+- Wenn IP unbekannt: AnycubicSlicerNext neu starten, Drucker verbinden, `extract_credentials` erneut ausführen
 - Nur die IP-Adresse ins Feld eintragen, keinen Port (✗ `192.168.1.102:9883` → ✓ `192.168.1.102`)
 
 **Drucker nicht gefunden / kein LAN-Modus:**

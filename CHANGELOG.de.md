@@ -1,21 +1,28 @@
 # Changelog
 
-## [0.9.6.1] – 2026-05-02
+## [0.9.7] – 2026-05-08
+
+### Neu
+- **fetch_credentials-Tool:** Ruft MQTT-Credentials direkt vom Drucker per HTTP ab — kein laufender Anycubic Slicer nötig, nur die Drucker-IP. Linux-Binary und Windows-EXE im Release enthalten. (Beitrag von bebu, PR #19)
 
 ### Fixes
-- **Upload-Banner:** Banner wird nach Stopp/Abbruch nicht mehr erneut angezeigt — `file_ready` und Thumbnail werden jetzt gecleared wenn der Drucker `stoped` oder `canceled` meldet
+- **Upload großer GCode-Dateien:** Dateien >1 MB wurden mit HTTP 413 abgelehnt — aiohttp `client_max_size` auf 256 MB erhöht
+- **Upload-Timeout:** Socket-Timeout nach GCode-Upload von 10s auf 120s erhöht — große Dateien führten zu einem Absturz der Bridge mit leerer Antwort während der Drucker noch verarbeitete
 
 ---
 
 ## [0.9.6] – 2026-05-02
 
 ### Neu
-- **Fortschritts-Karte:** Verstrichen / Slicer-Schätzung / Restzeit als Mini-Cards (gleicher Stil wie Temperaturkarten)
-- **Layer-Mini-Card:** Layerzahl als Mini-Card neben der Fortschrittsleiste
+- **Licht-Status-Synchronisierung:** Ein/Aus-Zustand und Helligkeit des Druckerlichts werden jetzt live über `light/report` MQTT gelesen — der Licht-Toggle in der UI spiegelt den echten Druckerstatus wider
+- **Zeit-Minicards:** Fortschritts-Panel zeigt jetzt drei Karten — Verstrichen, Restzeit und Slicer-Schätzung — sowie einen Layer-Badge neben dem Fortschrittsbalken
+- **Slicer-Schätzzeit aus GCode:** Geschätzte Druckzeit wird direkt aus der hochgeladenen GCode-Datei gelesen (OrcaSlicer: `; total estimated time:` am Dateiende, PrusaSlicer: `; estimated printing time` im Header)
+- **Erweiterte Druckerstatus-Strings:** `pausing`, `paused`, `resuming`, `resumed`, `stopping`, `stopped` hinzugefügt — fehlten bisher und ließen die UI rohe Status-Codes bei Pause/Fortsetzen/Stopp anzeigen
 
 ### Fixes
-- **Slicer-Schätzzeit:** OrcaSlicer schreibt die geschätzte Zeit ans Ende der GCode-Datei — Bridge liest jetzt auch die letzten 64 KB (vorher nur die ersten 16 KB)
-- **start.sh:** `config/`-Verzeichnis wird jetzt automatisch erstellt und `config.ini.example` wird beim ersten Start hineinkopiert (Issue #15)
+- **file_ready-Banner:** Upload-Banner wird nach Stopp oder Abbruch eines Drucks nicht mehr angezeigt
+- **Zeitanzeige bei Stopp/Abbruch:** Verstrichen-, Restzeit- und Slicer-Schätzung werden auf null zurückgesetzt wenn ein Druck gestoppt oder abgebrochen wird
+- **start.sh:** `config/`-Verzeichnis und `config.ini.example` werden beim ersten Start automatisch angelegt wenn sie fehlen (Issue #15)
 
 ---
 
