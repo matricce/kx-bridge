@@ -141,3 +141,9 @@ sudo usermod -aG docker $USER  # then log out and back in
 ## License
 
 Interoperability research under §69e UrhG — private, non-commercial use only.
+
+<p align="center">
+  <a href="https://ko-fi.com/viewitde">
+    <img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Ko-fi Support"/>
+  </a>
+</p>
