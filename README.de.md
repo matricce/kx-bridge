@@ -141,3 +141,9 @@ sudo usermod -aG docker $USER  # dann neu einloggen
 ## Lizenz & Rechtliches
 
 Interoperabilitätsforschung gem. §69e UrhG — ausschließlich private, nicht-kommerzielle Nutzung.
+
+<p align="center">
+  <a href="https://ko-fi.com/viewitde">
+    <img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Ko-fi Support"/>
+  </a>
+</p>
