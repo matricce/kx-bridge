@@ -8,6 +8,8 @@
 
 Eine Moonraker-kompatible Bridge, die direkt mit dem Drucker spricht.
 
+<sub>🇬🇧 <a href="README.md">English version</a></sub>
+
 <br>
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20this%20project-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/viewitde)

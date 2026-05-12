@@ -1,47 +1,94 @@
-<p align="center"><img src="knlogo.png" alt="KX-Bridge Logo" width="180"/></p>
+<div align="center">
 
-# KX-Bridge – Anycubic Kobra X
+<img src="knlogo.png" alt="KX-Bridge" width="160"/>
 
-**Version:** 0.9.8
+# KX-Bridge
 
-Control your **Anycubic Kobra X** with OrcaSlicer — no Klipper, no Raspberry Pi.  
-KX-Bridge is a Moonraker-compatible bridge that communicates directly with the printer.
+**Control your Anycubic Kobra X with OrcaSlicer — no Klipper, no Raspberry Pi.**
+
+A Moonraker-compatible bridge that talks directly to the printer.
+
+<sub>🇩🇪 <a href="README.de.md">Deutsche Version</a></sub>
+
+<br>
+
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20this%20project-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/viewitde)
+&nbsp;
+[![Releases](https://img.shields.io/badge/Download-Releases-2EA043?style=for-the-badge&logo=gitea&logoColor=white)](https://gitea.it-drui.de/viewit/KX-Bridge-Release/releases)
+&nbsp;
+[![Video](https://img.shields.io/badge/YouTube-Tutorial-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=1Ql4wfH27fM)
+
+<sub>Like KX-Bridge? A coffee on <a href="https://ko-fi.com/viewitde">Ko-fi</a> keeps the project alive. ☕</sub>
+
+</div>
 
 ---
 
-## Quick Start in 3 Steps
+## ✨ Features
 
-### Step 1 – Prepare the printer
+| | |
+|---|---|
+| 🖨️ | **Printer control** — start, pause, resume, cancel, temperatures, print speed |
+| 📊 | **Live status** — temperature, progress, layers, remaining time, camera stream |
+| 🎨 | **AMS / multicolor** — filament slots, per-channel remapping, MMU emulation for OrcaSlicer filament sync |
+| 🗂️ | **GCode browser** — uploaded files with thumbnails, print history, search & filter |
+| 🧩 | **Multi-printer** — multiple printers in **one** bridge instance, switch via dropdown |
+| ➕ | **Add a printer with one click** — just enter the IP, credentials are imported automatically |
+| 🔄 | **Self-update** — install new versions directly in the browser |
+| 🌐 | **OrcaSlicer** — full Moonraker protocol (HTTP + WebSocket), EN/DE UI |
 
-Enable LAN mode on the Kobra X:  
+---
+
+## 🚀 Quick Start
+
+### 1. Prepare the printer
+
+Enable LAN mode on the Kobra X:
 **Printer display → Settings → Enable LAN mode**
 
-### Step 2 – Get credentials
+### 2. Start the bridge
 
-The MQTT credentials are printer-specific. Here's how to get them:
-
-1. Open **AnycubicSlicerNext** and connect the printer (wait until status is shown)
-2. Run **`extract_credentials.exe`** (Windows) or **`extract_credentials`** (Linux) — outputs Username, Password, Device ID and printer IP
-3. Note / copy the values
-
-> **Download:** [gitea.it-drui.de/viewit/KX-Bridge-Release/releases](https://gitea.it-drui.de/viewit/KX-Bridge-Release/releases) → `extract_credentials.exe` (Windows) / `extract_credentials` (Linux) in the release assets
-
-### Step 3 – Start the bridge
-
+**Docker (recommended):**
 ```bash
-./start.sh
+docker compose up -d
 ```
 
-The script builds the Docker image automatically on first run.
+**Linux binary (no Docker):**
+```bash
+chmod +x kx-bridge && ./kx-bridge
+```
 
-**Open Web-UI:** `http://BRIDGE-IP:7125`  
-→ The ⚙ menu opens automatically on first start  
-→ Enter credentials from Step 2 → **Save & Restart**
+**Windows EXE (no Docker):**
+```
+kx-bridge.exe
+```
+> `config\` and `data\` are created next to the EXE — portable.
 
-**Connect OrcaSlicer:**  
+> With the Linux and Windows binaries, `config/` and `data/` (settings, SQLite, GCode store)
+> live next to the program. Copy the whole folder = move the installation.
+
+**Python directly:**
+```bash
+pip install -r bridge/requirements.txt
+python bridge/kobrax_moonraker_bridge.py
+```
+
+### 3. Set up the printer
+
+Open the Web UI: **`http://BRIDGE-IP:7125`**
+
+On first start the **Printers tab** shows *"+ Add printer"* — just enter the printer's IP
+address, the rest (username, password, device ID) is fetched from the printer and decrypted
+automatically. Done.
+
+> More than one printer? Just click *"+ Add printer"* again — each gets its own port
+> (7125, 7126, …) and is selectable from the header dropdown.
+
+### 4. Connect OrcaSlicer
+
 Printer → Connection type **Moonraker** → Host: `http://BRIDGE-IP:7125`
 
-> **Important:** Connection type must be **Moonraker** (not "Bambu" or "Klipper").  
+> ⚠️ Connection type must be **Moonraker** (not "Bambu" or "Klipper").
 > Enter the full URL including `http://` and port `:7125` in the host field.
 
 ---
@@ -52,98 +99,84 @@ Printer → Connection type **Moonraker** → Host: `http://BRIDGE-IP:7125`
 
 ---
 
-## ⚠️ Upgrading from 0.9.1 or earlier
+## 🔧 Getting credentials manually
 
-Starting with **0.9.2**, KX-Bridge stores settings in `config/config.ini` instead of `.env`.
+Normally not needed — *"+ Add printer"* does this automatically. If you do need it:
 
-**Migration is automatic** — no manual action required:
-- On first start after upgrade, the bridge reads your existing `.env` and creates `config/config.ini` automatically
-- Settings now survive `docker-compose restart` and future updates
-- The `.env` file stays mounted read-only as a migration source — you can keep it in place
-- If you want to create a `config.ini` manually: copy `config/config.ini.example`
-
----
-
-## What's supported?
-
-| Feature | Details |
-|---------|---------|
-| Printer status | Temperature, progress, state, remaining time |
-| Print control | Start, pause, resume, cancel |
-| Temperature control | Nozzle and bed during print |
-| Print speed | Silent / Normal / Sport |
-| AMS filament change | Load / unload filament |
-| Light & fan | Print light and fan speed |
-| Web-UI | Dashboard, motion control, camera view |
-| Self-update | Install new versions directly in the browser |
-| OrcaSlicer | Moonraker protocol (HTTP + WebSocket) |
-
----
-
-## Alternatives to Docker
-
-**Linux binary** (no Docker needed):
 ```bash
-chmod +x kx-bridge
-./kx-bridge
+fetch_credentials --ip 192.168.x.x --write-config
 ```
+Fetches the credentials directly from the printer via HTTP and writes them to `config/config.ini`.
+Only the printer IP is required, no slicer.
 
-**Python directly:**
-```bash
-pip install aiohttp
-python bridge/kobrax_moonraker_bridge.py
-```
+Alternatively (if the IP is unknown): open AnycubicSlicerNext, connect the printer, then run
+`extract_credentials` → outputs username, password, device ID and the printer IP.
 
-Web-UI available at `http://localhost:7125` — the ⚙ menu guides through initial setup.
+> **Downloads:** [Releases](https://gitea.it-drui.de/viewit/KX-Bridge-Release/releases) → `fetch_credentials` / `extract_credentials` (Linux & Windows)
 
 ---
 
-## Useful commands
+## ⚙️ Useful commands
 
 ```bash
-# Show logs
-docker-compose logs -f
-
-# Stop bridge
-docker-compose down
-
-# Restart bridge (after update)
-./start.sh
+docker compose logs -f       # show logs
+docker compose down          # stop the bridge
+docker compose up -d --build # rebuild & start (after an update)
 ```
 
 ---
 
-## Troubleshooting
+## 🩹 Troubleshooting
 
-**"Wrong MQTT credentials"** on start:
-- Restart AnycubicSlicerNext, reconnect the printer, run `extract_credentials` again
+<details>
+<summary><b>"Wrong MQTT credentials" on start</b></summary>
+
+- Re-add the printer via *"+ Add printer"*, or run
+  `fetch_credentials --ip <ip> --write-config` and restart the bridge
 - Enter only the IP address, no port (✗ `192.168.1.102:9883` → ✓ `192.168.1.102`)
+</details>
 
-**Printer not found / no LAN mode:**
+<details>
+<summary><b>Printer not found / no LAN mode</b></summary>
+
 - On the printer display: Settings → Enable LAN mode
 - Printer and bridge must be on the same network
+</details>
 
-**Docker: Permission denied:**
+<details>
+<summary><b>Docker: Permission denied</b></summary>
+
 ```bash
-sudo usermod -aG docker $USER  # then log out and back in
+sudo usermod -aG docker $USER   # then log out and back in
 ```
+</details>
+
+<details>
+<summary><b>Upgrading from 0.9.1 or earlier</b></summary>
+
+Starting with 0.9.2, KX-Bridge stores settings in `config/config.ini` instead of `.env`.
+Migration runs automatically on first start after the upgrade — no action required.
+</details>
 
 ---
 
-## Security
+## 🔒 Security
 
-- The bridge is accessible on the local network at `http://<host-IP>:7125` — do not expose to the internet
+- The bridge is reachable on the local network at `http://<host-IP>:7125` — **do not** expose it to the internet
 - `config/config.ini` contains printer credentials — do not share publicly
-- Credentials do not grant access to Anycubic cloud services
+- The credentials do **not** grant access to Anycubic cloud services
 
 ---
 
-## License
+## 📄 License
 
 Interoperability research under §69e UrhG — private, non-commercial use only.
 
-<p align="center">
-  <a href="https://ko-fi.com/viewitde">
-    <img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Ko-fi Support"/>
-  </a>
-</p>
+<div align="center">
+<br>
+
+**If KX-Bridge helps you, the project appreciates your support:**
+
+[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/viewitde)
+
+</div>
