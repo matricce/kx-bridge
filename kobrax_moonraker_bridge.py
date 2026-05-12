@@ -11,6 +11,8 @@ OrcaSlicer-Konfiguration:
 """
 
 import argparse
+import sqlite3
+import uuid
 try:
     import config_loader as env_loader
 except ImportError:
@@ -22,6 +24,7 @@ import logging
 import os
 import pathlib
 import re
+import subprocess
 import sys
 import tempfile
 import time
@@ -51,6 +54,60 @@ try:
 except ImportError:
     print("Fehler: aiohttp nicht installiert. Bitte: pip install aiohttp")
     sys.exit(1)
+
+try:
+    import base64 as _base64
+    from Crypto.Cipher import AES as _AES
+    from Crypto.Util.Padding import unpad as _unpad
+    _HAS_CRYPTO = True
+except ImportError:
+    _HAS_CRYPTO = False
+
+
+def _kx_generate_signature(token: str, ts: int, nonce: str) -> str:
+    first = hashlib.md5(token[:16].encode()).hexdigest()
+    return hashlib.md5((first + str(ts) + nonce).encode()).hexdigest()
+
+
+def _kx_decrypt_info(encrypted_b64: str, key: str, iv: str) -> dict:
+    cipher = _AES.new(key.encode(), _AES.MODE_CBC, iv.encode())
+    raw = _base64.b64decode(encrypted_b64)
+    return json.loads(_unpad(cipher.decrypt(raw), _AES.block_size).decode())
+
+
+async def _kx_fetch_credentials(ip: str, port: int = 18910) -> dict:
+    """Holt + entschlüsselt Drucker-Credentials via HTTP /info + /ctrl.
+
+    Wirft eine Exception bei Netzwerk-/Decrypt-Fehlern. Algorithmus aus
+    tools/fetch_credentials.py (AES-256-CBC, Key=token[16:32], IV=ctrl-token).
+    """
+    if not _HAS_CRYPTO:
+        raise RuntimeError("pycryptodome nicht installiert")
+    import random, string
+    nonce = "".join(random.choice(string.ascii_letters + string.digits) for _ in range(6))
+    timeout = aiohttp.ClientTimeout(total=10)
+    async with aiohttp.ClientSession() as s:
+        async with s.get(f"http://{ip}:{port}/info", timeout=timeout) as r:
+            r.raise_for_status()
+            info = await r.json()
+        token = info["token"]
+        ts = int(time.time() * 1000)
+        sign = _kx_generate_signature(token, ts, nonce)
+        params = {"ts": ts, "nonce": nonce, "sign": sign, "did": "random"}
+        async with s.post(f"http://{ip}:{port}/ctrl", params=params, timeout=timeout) as r:
+            r.raise_for_status()
+            data = await r.json()
+    result = _kx_decrypt_info(data["data"]["info"], token[16:32], data["data"]["token"])
+    if "error" in result:
+        raise RuntimeError(result.get("error", "decrypt failed"))
+    return {
+        "printer_ip": result.get("ip", ip),
+        "username":   result.get("username", ""),
+        "password":   result.get("password", ""),
+        "device_id":  result.get("deviceId", ""),
+        "mode_id":    str(result.get("modeId", "20030")),
+        "model":      result.get("modelName", "Anycubic Kobra"),
+    }
 
 logging.basicConfig(level=logging.INFO,
                     format="[%(asctime)s] %(levelname)-5s %(name)s: %(message)s",
@@ -132,10 +189,215 @@ def _parse_gcode_estimated_time(data: bytes) -> int:
     return secs
 
 
+def _extract_thumbnail(data: bytes) -> str:
+    """Extrahiert Base64-PNG-Thumbnail aus GCode (OrcaSlicer-Format)."""
+    try:
+        marker = b"; thumbnail begin"
+        end_marker = b"; thumbnail end"
+        start = data.find(marker)
+        if start == -1:
+            return ""
+        start = data.find(b"\n", start) + 1
+        end = data.find(end_marker, start)
+        if end == -1:
+            return ""
+        lines = data[start:end].split(b"\n")
+        b64 = b"".join(
+            line[2:].strip() if line.startswith(b"; ") else line.strip()
+            for line in lines
+        )
+        return b64.decode("ascii")
+    except Exception:
+        return ""
+
+
+def _extract_filament_info(data: bytes) -> list[dict]:
+    """Liest filament_colour + filament_type aus GCode-Header (OrcaSlicer/PrusaSlicer).
+
+    Gibt Liste von {color_hex, material} pro Slot zurück, leer wenn nicht gefunden.
+    Liest nur die ersten 8KB (Header-Bereich).
+    """
+    try:
+        header = data[:8192].decode("utf-8", errors="ignore")
+        colors, materials = [], []
+        for line in header.splitlines():
+            if line.startswith("; filament_colour"):
+                val = line.split("=", 1)[-1].strip()
+                colors = [c.strip().lstrip("#") for c in val.split(";") if c.strip()]
+            elif line.startswith("; filament_type"):
+                val = line.split("=", 1)[-1].strip()
+                materials = [m.strip() for m in val.split(";") if m.strip()]
+        if not colors:
+            return []
+        result = []
+        for i, hex_color in enumerate(colors):
+            result.append({
+                "slot_index": i,
+                "color_hex":  "#" + hex_color.upper() if hex_color else "#FFFFFF",
+                "material":   materials[i] if i < len(materials) else "PLA",
+            })
+        return result
+    except Exception:
+        return []
+
+
+class GCodeStore:
+    """Persistenter GCode-Store pro Bridge-Instanz (SQLite)."""
+
+    def __init__(self, data_dir: str):
+        os.makedirs(data_dir, exist_ok=True)
+        self._gcode_dir = os.path.join(data_dir, "gcodes")
+        os.makedirs(self._gcode_dir, exist_ok=True)
+        db_path = os.path.join(data_dir, "kx-bridge.db")
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._conn.row_factory = sqlite3.Row
+        self._lock = threading.Lock()
+        self._init_schema()
+
+    def _init_schema(self):
+        with self._lock:
+            self._conn.executescript("""
+                CREATE TABLE IF NOT EXISTS gcode_files (
+                    id TEXT PRIMARY KEY,
+                    filename TEXT NOT NULL,
+                    path TEXT NOT NULL,
+                    size_bytes INTEGER NOT NULL,
+                    uploaded_at TEXT NOT NULL,
+                    thumbnail_b64 TEXT,
+                    est_print_time_sec INTEGER,
+                    filament_used_mm REAL,
+                    layer_count INTEGER,
+                    gcode_filaments TEXT
+                );
+                CREATE TABLE IF NOT EXISTS print_jobs (
+                    id TEXT PRIMARY KEY,
+                    gcode_file_id TEXT NOT NULL,
+                    printer_id TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    ended_at TEXT,
+                    status TEXT NOT NULL,
+                    duration_sec INTEGER,
+                    filament_assignments TEXT,
+                    abort_reason TEXT
+                );
+            """)
+            # Migration: Spalte gcode_filaments nachrüsten falls DB älter
+            try:
+                self._conn.execute("ALTER TABLE gcode_files ADD COLUMN gcode_filaments TEXT")
+                self._conn.commit()
+            except Exception:
+                pass
+
+    def save_file(self, file_id: str, filename: str, data: bytes,
+                  est_time_sec: int = 0, thumbnail_b64: str = "",
+                  gcode_filaments: list | None = None) -> str:
+        """Speichert GCode-Datei auf Disk und in DB. Gibt Pfad zurück."""
+        safe_name = os.path.basename(filename)
+        path = os.path.join(self._gcode_dir, safe_name)
+        with open(path, "wb") as f:
+            f.write(data)
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        with self._lock:
+            filaments_json = json.dumps(gcode_filaments) if gcode_filaments else None
+            self._conn.execute(
+                """INSERT OR REPLACE INTO gcode_files
+                   (id, filename, path, size_bytes, uploaded_at, thumbnail_b64, est_print_time_sec, gcode_filaments)
+                   VALUES (?,?,?,?,?,?,?,?)""",
+                (file_id, filename, path, len(data), now, thumbnail_b64 or None, est_time_sec or None, filaments_json)
+            )
+            self._conn.commit()
+        return path
+
+    def list_files(self) -> list:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM gcode_files ORDER BY uploaded_at DESC"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_file(self, file_id: str) -> dict | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM gcode_files WHERE id=?", (file_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_file_by_name(self, filename: str) -> dict | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM gcode_files WHERE filename=? ORDER BY uploaded_at DESC LIMIT 1",
+                (filename,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def delete_file(self, file_id: str) -> bool:
+        row = self.get_file(file_id)
+        if not row:
+            return False
+        try:
+            os.remove(row["path"])
+        except OSError:
+            pass
+        with self._lock:
+            self._conn.execute("DELETE FROM gcode_files WHERE id=?", (file_id,))
+            self._conn.commit()
+        return True
+
+    def start_job(self, gcode_file_id: str, printer_id: str,
+                  filament_assignments: list | None = None) -> str:
+        job_id = str(uuid.uuid4())
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        assignments_json = json.dumps(filament_assignments) if filament_assignments else None
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO print_jobs
+                   (id, gcode_file_id, printer_id, started_at, status, filament_assignments)
+                   VALUES (?,?,?,?,'printing',?)""",
+                (job_id, gcode_file_id, printer_id, now, assignments_json)
+            )
+            self._conn.commit()
+        return job_id
+
+    def finish_job(self, job_id: str, status: str = "completed",
+                   abort_reason: str = "") -> None:
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT started_at FROM print_jobs WHERE id=?", (job_id,)
+            ).fetchone()
+            duration = None
+            if row:
+                try:
+                    import calendar
+                    start = time.strptime(row["started_at"], "%Y-%m-%dT%H:%M:%SZ")
+                    duration = int(time.time() - calendar.timegm(start))
+                except Exception:
+                    pass
+            self._conn.execute(
+                """UPDATE print_jobs SET ended_at=?, status=?, duration_sec=?, abort_reason=?
+                   WHERE id=?""",
+                (now, status, duration, abort_reason or None, job_id)
+            )
+            self._conn.commit()
+
+    def list_jobs(self, limit: int = 50, offset: int = 0) -> list:
+        with self._lock:
+            rows = self._conn.execute(
+                """SELECT j.*, f.filename, f.thumbnail_b64
+                   FROM print_jobs j
+                   LEFT JOIN gcode_files f ON j.gcode_file_id = f.id
+                   ORDER BY j.started_at DESC LIMIT ? OFFSET ?""",
+                (limit, offset)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+
 class KobraXBridge:
-    def __init__(self, client: KobraXClient, args=None):
+    def __init__(self, client: KobraXClient, args=None, store=None, printer_id: str = "1", all_bridges=None):
         self.client = client
         self._args = args
+        self._printer_id = printer_id
+        self._all_bridges = all_bridges if all_bridges is not None else {}
         self.ws_clients: set[web.WebSocketResponse] = set()
         self._last_state: dict = {}
         self._state = {
@@ -152,7 +414,7 @@ class KobraXBridge:
             "remain_time":        0,
             "curr_layer":         0,
             "total_layers":       0,
-            "printer_name":       "Anycubic Kobra X",
+            "printer_name":       env_loader.get("BRIDGE_PRINTER_NAME", "Anycubic Kobra X"),
             "firmware_version":   "unknown",
             "upload_url":         "",
             "camera_url":         "",
@@ -167,8 +429,9 @@ class KobraXBridge:
         self._ams_slots: list[dict] = []
         self._ams_loaded_slot: int = -1
         self._last_uploaded_file: str = ""
-        self._serve_dir = tempfile.TemporaryDirectory(prefix="kobrax_serve_")
-        self._serve_dir_path: str = self._serve_dir.name
+        self._store = store if store is not None else GCodeStore(args.data_dir)
+        self._serve_dir_path: str = self._store._gcode_dir
+        self._current_job_id: str = ""
 
         self._thumbnail_b64: str = ""
 
@@ -198,6 +461,29 @@ class KobraXBridge:
         self._state["print_state"]    = KOBRA_TO_KLIPPER_STATE.get(kobra_state, "printing")
         if kobra_state:
             self._state["kobra_state"] = kobra_state
+
+        # Job-History: Druckstart erkennen
+        if kobra_state == "printing" and not self._current_job_id:
+            filename = d.get("filename", self._state.get("filename", ""))
+            if filename:
+                gf = self._store.get_file_by_name(filename)
+                if gf:
+                    self._current_job_id = self._store.start_job(
+                        gcode_file_id=gf["id"],
+                        printer_id=self._printer_id,
+                    )
+                    log.info(f"Job gestartet: {self._current_job_id} für {filename}")
+
+        # Job-History: Druckende erkennen
+        if kobra_state in ("finished",) and self._current_job_id:
+            self._store.finish_job(self._current_job_id, status="completed")
+            log.info(f"Job abgeschlossen: {self._current_job_id}")
+            self._current_job_id = ""
+        elif kobra_state in ("stoped", "canceled") and self._current_job_id:
+            self._store.finish_job(self._current_job_id, status="cancelled")
+            log.info(f"Job abgebrochen: {self._current_job_id}")
+            self._current_job_id = ""
+
         if kobra_state in ("stoped", "canceled"):
             self._state["progress"] = 0.0
             self._state["filename"] = ""
@@ -226,7 +512,9 @@ class KobraXBridge:
 
     def _on_info(self, payload: dict):
         d = payload.get("data") or {}
-        self._state["printer_name"]     = d.get("printerName", self._state["printer_name"])
+        # MQTT-Name nur übernehmen wenn kein eigener Name gesetzt (env oder per-Drucker config)
+        if not env_loader.get("BRIDGE_PRINTER_NAME") and not getattr(self, "_name_locked", False):
+            self._state["printer_name"] = d.get("printerName", self._state["printer_name"])
         self._state["firmware_version"] = d.get("version", self._state["firmware_version"])
         kobra_state = d.get("state", "")
         if kobra_state:
@@ -385,6 +673,42 @@ class KobraXBridge:
                 dead.add(ws)
         self.ws_clients -= dead
 
+    def _build_mmu_object(self) -> dict:
+        slots = self._ams_slots
+        if not slots:
+            return {}
+        _TEMP = {"PLA": 210, "PETG": 230, "ABS": 240, "ASA": 250,
+                 "TPU": 220, "PA": 260, "PC": 270, "HIPS": 220}
+        num_gates = len(slots)
+        gate_status, gate_material, gate_color, gate_temperature, gate_color_rgb = [], [], [], [], []
+        for slot in slots:
+            occupied = slot.get("status") == 5
+            gate_status.append(1 if occupied else 0)
+            material = slot.get("type", "PLA").upper() if occupied else ""
+            gate_material.append(material)
+            c = slot.get("color", [0, 0, 0])
+            if occupied:
+                gate_color.append("#{:02X}{:02X}{:02X}".format(*c[:3]))
+                gate_color_rgb.append([round(c[0]/255, 3), round(c[1]/255, 3), round(c[2]/255, 3)])
+            else:
+                gate_color.append("")
+                gate_color_rgb.append([0.0, 0.0, 0.0])
+            gate_temperature.append(_TEMP.get(material, 210) if occupied else 0)
+        return {
+            "num_gates":          num_gates,
+            "enabled":            True,
+            "gate_status":        gate_status,
+            "gate_material":      gate_material,
+            "gate_color":         gate_color,
+            "gate_temperature":   gate_temperature,
+            "gate_color_rgb":     gate_color_rgb,
+            "gate_filament_name": [""] * num_gates,
+            "gate_spool_id":      [-1] * num_gates,
+            "ttg_map":            list(range(num_gates)),
+            "tool":               max(self._ams_loaded_slot, 0),
+            "gate":               max(self._ams_loaded_slot, 0),
+        }
+
     def _build_printer_objects(self) -> dict:
         s = self._state
         return {
@@ -424,7 +748,180 @@ class KobraXBridge:
                 "print_time":       s["print_duration"],
                 "estimated_print_time": s["print_duration"],
             },
+            "mmu": self._build_mmu_object(),
         }
+
+    # -------------------------------------------------------------------------
+    # /kx/ API handlers (GCode Store, History, Filament)
+    # -------------------------------------------------------------------------
+
+    _CORS = {
+        "Access-Control-Allow-Origin":  "*",
+        "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+    }
+
+    def _json_cors(self, data, status=200):
+        return web.json_response(data, status=status, headers=self._CORS)
+
+    async def handle_kx_options(self, request):
+        return web.Response(status=204, headers=self._CORS)
+
+    async def handle_kx_files(self, request):
+        files = self._store.list_files()
+        # Letzten Job-Status + Dauer pro Datei ergänzen
+        jobs = self._store.list_jobs(limit=500)
+        last_job: dict = {}
+        for j in reversed(jobs):
+            last_job[j["gcode_file_id"]] = j
+        for f in files:
+            lj = last_job.get(f["id"])
+            f["last_print_status"]   = lj["status"]       if lj else None
+            f["last_print_duration"] = lj["duration_sec"] if lj else None
+            f["last_print_at"]       = lj["started_at"]   if lj else None
+        return self._json_cors({"result": files})
+
+    async def handle_kx_file_delete(self, request):
+        file_id = request.match_info["file_id"]
+        if self._store.delete_file(file_id):
+            return self._json_cors({"result": "ok"})
+        return self._json_cors({"error": "not found"}, status=404)
+
+    async def handle_kx_filament_slots(self, request):
+        slots = []
+        for i, s in enumerate(self._ams_slots):
+            slots.append({
+                "slot_index":  i,
+                "material":    s.get("type", ""),
+                "color_hex":   "#{:02X}{:02X}{:02X}".format(*s.get("color", [0,0,0])[:3]),
+                "status":      "loaded" if s.get("status") == 5 else "empty",
+                "nozzle_temp": 0,
+            })
+        return self._json_cors({"result": slots})
+
+    async def handle_kx_history(self, request):
+        limit  = int(request.rel_url.query.get("limit", 50))
+        offset = int(request.rel_url.query.get("offset", 0))
+        jobs   = self._store.list_jobs(limit=limit, offset=offset)
+        return self._json_cors({"result": jobs})
+
+    async def handle_kx_printers(self, request):
+        host = request.host.split(":")[0]
+        out = []
+        for pid, br in self._all_bridges.items():
+            if not (br._args.printer_ip or "").strip():
+                continue  # "leerer" Drucker (kein IP) – nicht in der Liste anzeigen
+            port = getattr(br._args, "port", 7125)
+            out.append({
+                "id":         pid,
+                "name":       br._state.get("printer_name") or f"Drucker {pid}",
+                "bridge_url": f"http://{host}:{port}",
+                "printer_ip": br._args.printer_ip,
+                "device_id":  br._args.device_id or "",
+            })
+        return self._json_cors({"result": out})
+
+    async def handle_kx_print(self, request):
+        """Druckstart aus dem GCode-Store mit optionalen Filament-Assignments."""
+        try:
+            body = await request.json()
+        except Exception:
+            return self._json_cors({"error": "invalid json"}, status=400)
+
+        file_id = body.get("file_id")
+        if not file_id:
+            return self._json_cors({"error": "file_id required"}, status=400)
+
+        gcode_file = self._store.get_file(file_id)
+        if not gcode_file:
+            return self._json_cors({"error": "file not found"}, status=404)
+
+        # filament_assignments: [{slot_index, material, color_hex}, …]
+        assignments = body.get("filament_assignments")
+
+        if assignments:
+            ams_box_mapping = [
+                {
+                    "paint_index":   a.get("paint_index", i),
+                    "ams_index":     a["slot_index"],
+                    "paint_color":   a.get("paint_color", [255, 255, 255, 255]),
+                    "ams_color":     a.get("ams_color",   [255, 255, 255, 255]),
+                    "material_type": a.get("material", "PLA"),
+                }
+                for i, a in enumerate(assignments)
+            ]
+        else:
+            # Kein Dialog → alle belegten Slots wie bei normalem Upload-Druck
+            default_slot = getattr(self._args, "default_ams_slot", "auto")
+            all_loaded = [(i, s) for i, s in enumerate(self._ams_slots) if s.get("status") == 5]
+            if default_slot != "auto":
+                try:
+                    slot_idx = int(default_slot)
+                    loaded = [(i, s) for i, s in all_loaded if i == slot_idx] or all_loaded
+                except ValueError:
+                    loaded = all_loaded
+            else:
+                loaded = all_loaded
+            ams_box_mapping = [
+                {
+                    "paint_index":   i,
+                    "ams_index":     i,
+                    "paint_color":   [255, 255, 255, 255],
+                    "ams_color":     [255, 255, 255, 255],
+                    "material_type": s.get("type", "PLA"),
+                }
+                for i, s in loaded
+            ]
+
+        use_ams = len(ams_box_mapping) > 0
+        auto_leveling = getattr(self._args, "auto_leveling", 1)
+        filename = gcode_file["filename"]
+        file_path = gcode_file["path"]
+
+        # Datei über internes Serve-Endpoint bereitstellen
+        url = f"http://localhost:{self._args.port}/serve/{os.path.basename(file_path)}"
+
+        payload = {
+            "taskid":       "-1",
+            "url":          url,
+            "filename":     filename,
+            "md5":          "",
+            "filepath":     None,
+            "filetype":     1,
+            "project_type": 1,
+            "filesize":     gcode_file.get("size_bytes", 0),
+            "ams_settings": {
+                "use_ams":         use_ams,
+                "ams_box_mapping": ams_box_mapping,
+            },
+            "task_settings": {
+                "auto_leveling":          auto_leveling,
+                "vibration_compensation": 0,
+                "flow_calibration":       0,
+                "dry_mode":               0,
+                "ai_settings":   {"status": 0, "count": 0, "type": 1},
+                "timelapse":     {"status": 0, "count": 0, "type": 64},
+                "drying_settings": {"status": 0, "target_temp": 0, "duration": 0, "remain_time": 0},
+                "model_objects_skip_parts": [],
+            },
+        }
+
+        log.info(f"KX-Store Druckstart: {filename}  ams={len(ams_box_mapping)} slots  assignments={bool(assignments)}")
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None, lambda: self.client.publish("print", "start", payload, timeout=15.0)
+        )
+        if result is None:
+            return self._json_cors({"error": "Keine Antwort vom Drucker"}, status=504)
+
+        # Job in History starten
+        self._current_job_id = self._store.start_job(
+            gcode_file_id=gcode_file["id"],
+            printer_id=getattr(self._args, "device_id", "unknown"),
+            filament_assignments=assignments,
+        )
+
+        return self._json_cors({"result": "ok", "filename": filename})
 
     # -------------------------------------------------------------------------
     # HTTP handlers
@@ -550,18 +1047,26 @@ class KobraXBridge:
         file_md5   = hashlib.md5(file_data).hexdigest()
         file_size  = len(file_data)
 
-        # Slicer-Zeitschätzung aus GCode-Header auslesen
-        self._state["slicer_time"] = _parse_gcode_estimated_time(file_data)
+        # Slicer-Zeitschätzung + Thumbnail aus GCode auslesen
+        est_time = _parse_gcode_estimated_time(file_data)
+        self._state["slicer_time"] = est_time
+        thumbnail_b64 = _extract_thumbnail(file_data)
+        gcode_filaments = _extract_filament_info(file_data)
 
-        # Datei auf Disk ablegen (temp-Verzeichnis) damit Drucker sie per HTTP abrufen kann
-        safe_name = os.path.basename(remote_filename)  # keine Pfad-Traversal
-        serve_path = os.path.join(self._serve_dir_path, safe_name)
-        with open(serve_path, "wb") as f:
-            f.write(file_data)
+        # Datei persistent im GCode-Store ablegen
+        self._store.save_file(
+            file_id=file_md5,
+            filename=remote_filename,
+            data=file_data,
+            est_time_sec=est_time,
+            thumbnail_b64=thumbnail_b64,
+            gcode_filaments=gcode_filaments or None,
+        )
+        serve_path = os.path.join(self._serve_dir_path, os.path.basename(remote_filename))
         del file_data  # RAM freigeben
 
         self._last_uploaded_file = remote_filename
-        log.info(f"Upload: {remote_filename} ({file_size} bytes) md5={file_md5} → Drucker")
+        log.info(f"Upload: {remote_filename} ({file_size} bytes) md5={file_md5} → Store + Drucker")
 
         # Datei per HTTP auf den Drucker hochladen (serve_path liegt bereits auf Disk)
         upload_url = self._state.get("upload_url") or None
@@ -587,6 +1092,10 @@ class KobraXBridge:
         # Thumbnail immer anfordern (Drucker antwortet async mit file/report)
         self._thumbnail_b64 = ""
         self.client.publish("file", "fileDetails", {"root": "local", "filename": remote_filename}, timeout=0)
+
+        self._state["last_upload_url"]  = serve_url
+        self._state["last_upload_md5"]  = file_md5
+        self._state["last_upload_size"] = file_size
 
         if auto_print:
             log.info(f"Upload+Print (print=true): {remote_filename}")
@@ -689,45 +1198,72 @@ class KobraXBridge:
 
         log.info(f"Druck starten: {filename}")
 
-        # AMS-Mapping aus gecachtem State — leere Slots (status != 5) überspringen
-        default_slot = getattr(self._args, "default_ams_slot", "auto")
-        ams_box_mapping = []
-        for i, slot in enumerate(self._ams_slots):
-            if slot.get("status") != 5:
-                log.info(f"AMS-Slot {i} leer (status={slot.get('status')}) – übersprungen")
-                continue
+        # Optionale Slot-Auswahl aus dem Filament-Dialog
+        filament_assignments = body.get("filament_assignments")
+        if filament_assignments is not None:
+            ams_box_mapping = [
+                {
+                    "paint_index":   a.get("paint_index", i),
+                    "ams_index":     a["slot_index"],
+                    "paint_color":   a.get("paint_color", [255, 255, 255, 255]),
+                    "ams_color":     a.get("ams_color",   [255, 255, 255, 255]),
+                    "material_type": a.get("material", "PLA"),
+                }
+                for i, a in enumerate(filament_assignments)
+            ]
+        else:
+            # AMS-Mapping aus gecachtem State — leere Slots (status != 5) überspringen
+            default_slot = getattr(self._args, "default_ams_slot", "auto")
+            all_loaded = [(i, s) for i, s in enumerate(self._ams_slots) if s.get("status") == 5]
             if default_slot != "auto":
                 try:
-                    if i != int(default_slot):
-                        continue
+                    slot_idx = int(default_slot)
+                    loaded = [(i, s) for i, s in all_loaded if i == slot_idx] or all_loaded
                 except ValueError:
-                    pass
-            ams_box_mapping.append({
-                "slot_index": i,
-                "material_type": slot.get("type", "PLA"),
-                "color": slot.get("color", [255, 255, 255]),
-            })
-        # Fallback auf alle belegten Slots wenn gewählter Slot leer war
-        if default_slot != "auto" and not ams_box_mapping:
-            log.warning(f"Standard-Slot {default_slot} leer – fallback auf alle belegten Slots")
-            for i, slot in enumerate(self._ams_slots):
-                if slot.get("status") != 5:
-                    continue
-                ams_box_mapping.append({
-                    "slot_index": i,
-                    "material_type": slot.get("type", "PLA"),
-                    "color": slot.get("color", [255, 255, 255]),
-                })
+                    loaded = all_loaded
+            else:
+                loaded = all_loaded
+            ams_box_mapping = [
+                {
+                    "paint_index":   i,
+                    "ams_index":     i,
+                    "paint_color":   [255, 255, 255, 255],
+                    "ams_color":     [255, 255, 255, 255],
+                    "material_type": s.get("type", "PLA"),
+                }
+                for i, s in loaded
+            ]
 
         use_ams = len(ams_box_mapping) > 0
+        auto_leveling = getattr(self._args, "auto_leveling", 1)
+        url = self._state.get("last_upload_url", "")
+        filesize = self._state.get("last_upload_size", 0)
+        md5 = self._state.get("last_upload_md5", "")
 
         payload = {
-            "filename": filename,
-            "taskid":   str(int(time.time())),
-            "use_ams":  use_ams,
+            "taskid":       "-1",
+            "url":          url,
+            "filename":     filename,
+            "md5":          md5,
+            "filepath":     None,
+            "filetype":     1,
+            "project_type": 1,
+            "filesize":     filesize,
+            "ams_settings": {
+                "use_ams":         use_ams,
+                "ams_box_mapping": ams_box_mapping,
+            },
+            "task_settings": {
+                "auto_leveling":          auto_leveling,
+                "vibration_compensation": 0,
+                "flow_calibration":       0,
+                "dry_mode":               0,
+                "ai_settings":   {"status": 0, "count": 0, "type": 0},
+                "timelapse":     {"status": 0, "count": 0, "type": 0},
+                "drying_settings": {"status": 0, "target_temp": 0, "duration": 0, "remain_time": 0},
+                "model_objects_skip_parts": [],
+            },
         }
-        if ams_box_mapping:
-            payload["ams_box_mapping"] = ams_box_mapping
 
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
@@ -797,7 +1333,7 @@ header{background:var(--card);border-bottom:1px solid var(--border);
   display:flex;align-items:center;gap:12px;padding:0 20px;height:52px;
   position:sticky;top:0;z-index:100}
 .logo{font-size:18px;font-weight:700;color:var(--accent);letter-spacing:-.02em}
-.hname{font-size:13px;color:var(--txt2);flex:1}
+.hname{font-size:13px;color:var(--txt2)}
 .hbadge{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
   padding:4px 10px;border-radius:20px;background:var(--raised);color:var(--txt2);
   text-transform:uppercase;letter-spacing:.04em}
@@ -1059,17 +1595,28 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
 <body>
 
 <div id="conn-error-banner" style="display:none;background:#c0392b;color:#fff;padding:10px 18px;font-size:14px;text-align:center;position:sticky;top:0;z-index:999;"></div>
-<div id="file-ready-banner" style="display:none;background:#1a6e3c;color:#fff;padding:10px 18px;font-size:14px;text-align:center;position:sticky;top:0;z-index:998;display:none;align-items:center;justify-content:center;gap:12px">
+<div id="file-ready-banner" style="display:none;background:#1a6e3c;color:#fff;padding:10px 18px;font-size:14px;text-align:center;position:sticky;top:0;z-index:998;display:none;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap">
   <span>📄 <span id="file-ready-name"></span></span>
   <button id="file-ready-btn" onclick="startReadyFile()"
     style="padding:5px 16px;background:#fff;color:#1a6e3c;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:13px"></button>
+  <button id="file-slots-btn" onclick="startReadyFileWithSlots()"
+    style="padding:5px 16px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.5);border-radius:6px;font-weight:700;cursor:pointer;font-size:13px"></button>
   <button id="file-cancel-btn" onclick="cancelReadyFile()"
     style="padding:5px 16px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.5);border-radius:6px;font-weight:700;cursor:pointer;font-size:13px"></button>
 </div>
 
 <header>
   <div class="logo">⬡ KX-Bridge</div>
-  <div class="hname" id="h-pname">Anycubic Kobra X</div><span id="h-version" style="font-size:11px;opacity:.5;margin-left:6px"></span>
+  <div style="flex:1"></div>
+  <div id="printer-dropdown-wrap" style="display:none;position:relative">
+    <button id="printer-dropdown-btn" onclick="togglePrinterDropdown()" style="background:var(--raised);border:1px solid var(--border);border-radius:6px;padding:4px 10px;color:var(--txt);cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px">
+      <span id="h-pname">Anycubic Kobra X</span><span style="opacity:.5">▾</span>
+    </button>
+    <div id="printer-dropdown-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--card);border:1px solid var(--border);border-radius:8px;min-width:200px;z-index:200;box-shadow:0 4px 16px #0006;overflow:hidden">
+    </div>
+  </div>
+  <div id="h-pname-single" class="hname">Anycubic Kobra X</div>
+  <span id="h-version" style="font-size:11px;opacity:.5;margin-left:6px"></span>
   <div class="hbadge" id="h-badge"><span class="dot"></span><span id="h-state">Standby</span></div>
   <button class="theme-btn" onclick="toggleTheme()">☀ / ☾</button>
   <button class="theme-btn" onclick="toggleLang()" id="lang-btn">EN</button>
@@ -1086,6 +1633,10 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
     </div>
 
     <div>
+      <div class="modal-field" style="margin-bottom:12px">
+        <label id="lbl-printer-name" style="font-weight:600">Drucker-Name</label>
+        <input type="text" id="s-printer-name" placeholder="z.B. Kobra X Links">
+      </div>
       <div class="modal-section" id="modal-sec-connection">Verbindung</div>
       <div class="modal-field">
         <label id="lbl-printer-ip">Drucker-IP</label>
@@ -1098,11 +1649,11 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
       </div>
       <div class="modal-field">
         <label id="lbl-username">MQTT-Benutzername</label>
-        <input type="text" id="s-username" placeholder="userXXXXXXXX" autocomplete="off">
+        <input type="text" id="s-username" placeholder="userXXXXXXXX" autocomplete="new-password">
       </div>
       <div class="modal-field">
         <label id="lbl-password">MQTT-Passwort</label>
-        <input type="password" id="s-password" autocomplete="off">
+        <input type="password" id="s-password" autocomplete="new-password">
       </div>
       <div class="modal-field">
         <label id="lbl-device-id">Device-ID</label>
@@ -1190,6 +1741,10 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
   <nav class="sidebar">
     <button class="nav-btn active" onclick="showPanel('dashboard')" id="nb-dashboard">
       <span class="nav-icon">⊞</span><span class="nav-text">Dashboard</span></button>
+    <button class="nav-btn" onclick="showPanel('printers');loadPrinterTab()" id="nb-printers">
+      <span class="nav-icon">🖨</span><span class="nav-text">Drucker</span></button>
+    <button class="nav-btn" onclick="showPanel('store');loadStore()" id="nb-store">
+      <span class="nav-icon">🗂</span><span class="nav-text">Browser</span></button>
     <button class="nav-btn" onclick="showPanel('console');clearLogBadge()" id="nb-console">
       <span class="nav-icon">≡</span><span class="nav-text">Konsole</span><span id="log-badge" style="display:none;margin-left:4px;background:var(--err);color:#fff;border-radius:10px;font-size:10px;padding:1px 5px;font-weight:700"></span></button>
   </nav>
@@ -1397,6 +1952,50 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
     </div>
 
     <!-- ═══ CONSOLE ═══ -->
+    <!-- ═══ DRUCKER ═══ -->
+    <div class="panel" id="panel-printers">
+      <div class="card">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <span id="printers-panel-title">🖨 Drucker</span>
+          <div style="display:flex;gap:8px">
+            <button onclick="openAddPrinterDialog()" style="font-size:12px;padding:4px 12px;background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-weight:600">+ <span id="add-printer-btn-label">Drucker hinzufügen</span></button>
+            <button onclick="loadPrinterTab()" style="font-size:12px;padding:4px 12px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt2);cursor:pointer">↻</button>
+          </div>
+        </div>
+        <div id="printers-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px"></div>
+      </div>
+    </div>
+
+    <!-- ═══ GCODE STORE ═══ -->
+    <div class="panel" id="panel-store">
+      <div class="card">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <span id="store-panel-title">🗂 Datei-Browser</span>
+          <button id="store-refresh-btn" onclick="loadStore()" style="font-size:12px;padding:4px 12px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt2);cursor:pointer">↻ Aktualisieren</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <input id="store-search" type="text" placeholder="🔍 Suche…" oninput="renderStore()"
+            style="flex:1;min-width:140px;padding:6px 10px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);font-size:13px">
+          <select id="store-filter" onchange="renderStore()"
+            style="padding:6px 8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);font-size:13px">
+            <option value="all" id="sf-all">Alle</option>
+            <option value="completed" id="sf-ok">✓ Erfolgreich</option>
+            <option value="failed" id="sf-err">✗ Fehler</option>
+            <option value="never" id="sf-new">Neu</option>
+          </select>
+          <select id="store-sort" onchange="renderStore()"
+            style="padding:6px 8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);font-size:13px">
+            <option value="date_desc" id="ss-date">↓ Datum</option>
+            <option value="name_asc" id="ss-name">A–Z Name</option>
+            <option value="duration_asc" id="ss-dur">⏱ Druckzeit</option>
+          </select>
+        </div>
+        <div id="store-empty" style="display:none;color:var(--txt2);text-align:center;padding:40px 0;font-size:14px">
+        </div>
+        <div id="store-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px"></div>
+      </div>
+    </div>
+
     <div class="panel" id="panel-console">
       <div class="card">
         <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
@@ -1432,6 +2031,8 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
 
 <nav class="bottom-nav">
   <button class="bnav-btn active" onclick="showPanel('dashboard')" id="bnb-dashboard"><span class="bnav-icon">⊞</span>Dashboard</button>
+  <button class="bnav-btn" onclick="showPanel('printers');loadPrinterTab()" id="bnb-printers"><span class="bnav-icon">🖨</span>Drucker</button>
+  <button class="bnav-btn" onclick="showPanel('store');loadStore()" id="bnb-store"><span class="bnav-icon">🗂</span>Browser</button>
   <button class="bnav-btn" onclick="showPanel('console');clearLogBadge()" id="bnb-console"><span class="bnav-icon">≡</span>Log<span id="log-badge-bot" style="display:none;margin-left:3px;background:var(--err);color:#fff;border-radius:10px;font-size:10px;padding:1px 4px;font-weight:700"></span></button>
 </nav>
 
@@ -1475,7 +2076,7 @@ var LANG_DE={
   log_light_on:'Licht an',log_light_off:'Licht aus',log_fan:'Lüfter →',log_nozzle:'Nozzle →',log_bed:'Bett →',log_axis:'Achse',log_home:'Home',log_home_all:'Home All',log_cam_start:'Kamera gestartet:',log_cam_stop:'Kamera gestoppt',log_poll_error:'Poll-Fehler:',log_error:'Fehler:',
   confirm_cancel:'Druck wirklich abbrechen?',
   settings_title:'Einstellungen',settings_connection:'Verbindung',settings_print:'Druckeinstellungen',settings_poll:'Poll-Intervall',settings_version:'Version',
-  settings_save:'Speichern & Neustart',settings_printer_ip:'Drucker-IP',settings_mqtt_port:'MQTT-Port',
+  settings_save:'Speichern & Neustart',settings_printer_name:'Drucker-Name',settings_printer_ip:'Drucker-IP',settings_mqtt_port:'MQTT-Port',
   settings_username:'MQTT-Benutzername',settings_password:'MQTT-Passwort',settings_device_id:'Device-ID',settings_mode_id:'Mode-ID',hint_ip_no_port:'Nur IP-Adresse, kein Port (z.B. 192.168.1.102)',
   settings_default_slot:'Standard-Slot (Einfarbdruck)',settings_slot_auto:'Auto (alle belegten Slots)',settings_auto_leveling:'Auto-Leveling vor Druck',
   update_check:'Auf Updates prüfen',update_checking:'Prüfe...',update_available:'verfügbar',update_none:'Bereits aktuell',
@@ -1487,7 +2088,29 @@ var LANG_DE={
   slot_edit_ok:'AMS Slot',
   log_dir_all:'Alle',
   file_ready_btn:'▶ Druck starten',
-  file_cancel_btn:'✕ Abbrechen'
+  file_slots_btn:'🎨 Slots wählen',
+  file_cancel_btn:'✕ Abbrechen',
+  nav_printers:'Drucker',
+  add_printer:'Drucker hinzufügen',apd_lbl_ip:'Drucker-IP',apd_lbl_name:'Name (optional)',
+  apd_fetching:'Hole Daten vom Drucker…',apd_success:'Drucker hinzugefügt, Bridge startet neu…',apd_err_ip:'Bitte IP-Adresse eingeben',
+  printers_remove:'Drucker entfernen',printers_remove_confirm:'Drucker "{name}" entfernen? Die Bridge startet neu.',
+  printers_active:'● aktiv',
+  printers_switch:'Wechseln →',
+  printers_current:'Aktueller Drucker',
+  printers_loading:'Lade…',
+  printers_none:'Keine Drucker konfiguriert.',
+  printers_empty_hint:'Noch kein Drucker eingerichtet.',
+  nav_browser:'Browser',
+  panel_browser_title:'Datei-Browser',
+  store_empty:'Noch keine Dateien hochgeladen.',
+  store_refresh:'↻ Aktualisieren',
+  store_print:'▶ Drucken',
+  store_delete_confirm:'Datei löschen?',
+  store_print_confirm:'Datei drucken?',
+  store_no_results:'Keine Dateien gefunden.',
+  store_never:'noch nicht gedruckt',
+  sf_all:'Alle',sf_ok:'✓ Erfolgreich',sf_err:'✗ Fehler',sf_new:'Neu',
+  ss_date:'↓ Datum',ss_name:'A–Z Name',ss_dur:'⏱ Druckzeit'
 };
 var LANG_EN={
   header_status_standby:'Ready',header_status_printing:'Printing',header_status_complete:'Complete',header_status_error:'Error',
@@ -1509,7 +2132,7 @@ var LANG_EN={
   log_light_on:'Light on',log_light_off:'Light off',log_fan:'Fan →',log_nozzle:'Nozzle →',log_bed:'Bed →',log_axis:'Axis',log_home:'Home',log_home_all:'Home All',log_cam_start:'Camera started:',log_cam_stop:'Camera stopped',log_poll_error:'Poll error:',log_error:'Error:',
   confirm_cancel:'Really cancel the print?',
   settings_title:'Settings',settings_connection:'Connection',settings_print:'Print Settings',settings_poll:'Poll Interval',settings_version:'Version',
-  settings_save:'Save & Restart',settings_printer_ip:'Printer IP',settings_mqtt_port:'MQTT Port',
+  settings_save:'Save & Restart',settings_printer_name:'Printer Name',settings_printer_ip:'Printer IP',settings_mqtt_port:'MQTT Port',
   settings_username:'MQTT Username',settings_password:'MQTT Password',settings_device_id:'Device ID',settings_mode_id:'Mode ID',hint_ip_no_port:'IP address only, no port (e.g. 192.168.1.102)',
   settings_default_slot:'Default Slot (single color)',settings_slot_auto:'Auto (all loaded slots)',settings_auto_leveling:'Auto-Leveling before print',
   update_check:'Check for Updates',update_checking:'Checking...',update_available:'available',update_none:'Already up to date',
@@ -1521,8 +2144,89 @@ var LANG_EN={
   slot_edit_ok:'AMS Slot',
   log_dir_all:'All',
   file_ready_btn:'▶ Start Print',
-  file_cancel_btn:'✕ Cancel'
+  file_slots_btn:'🎨 Select Slots',
+  file_cancel_btn:'✕ Cancel',
+  nav_printers:'Printers',
+  add_printer:'Add printer',apd_lbl_ip:'Printer IP',apd_lbl_name:'Name (optional)',
+  apd_fetching:'Fetching data from printer…',apd_success:'Printer added, bridge restarting…',apd_err_ip:'Please enter an IP address',
+  printers_remove:'Remove printer',printers_remove_confirm:'Remove printer "{name}"? The bridge will restart.',
+  printers_active:'● active',
+  printers_switch:'Switch →',
+  printers_current:'Current printer',
+  printers_loading:'Loading…',
+  printers_none:'No printers configured.',
+  printers_empty_hint:'No printer set up yet.',
+  nav_browser:'Browser',
+  panel_browser_title:'File Browser',
+  store_empty:'No files uploaded yet.',
+  store_refresh:'↻ Refresh',
+  store_print:'▶ Print',
+  store_delete_confirm:'Delete file?',
+  store_print_confirm:'Print file?',
+  store_no_results:'No files found.',
+  store_never:'never printed',
+  sf_all:'All',sf_ok:'✓ Completed',sf_err:'✗ Failed',sf_new:'New',
+  ss_date:'↓ Date',ss_name:'A–Z Name',ss_dur:'⏱ Print time'
 };
+// Multi-Printer: BASE_URL aus Pathname (/printer2 → andere Bridge-Instanz)
+var _printers=[];
+var _activePrinter=null;
+(function(){
+  var path=window.location.pathname.replace(/\/+$/,'');
+  var m=path.match(/^\/printer(\d+)$/);
+  var idx=m?parseInt(m[1]):1;
+  window._printerIndex=idx;
+})();
+function _apiUrl(path){
+  if(_activePrinter&&_activePrinter.bridge_url){
+    return _activePrinter.bridge_url.replace(/\/+$/,'')+path;
+  }
+  return path;
+}
+function initPrinters(){
+  fetch('/kx/printers').then(function(r){return r.json()}).then(function(d){  // immer lokale Instanz für Drucker-Liste
+    _printers=d.result||[];
+    var idx=window._printerIndex||1;
+    _activePrinter=_printers.find(function(p){return String(p.id)===String(idx)})||_printers[0]||null;
+    renderPrinterDropdown();
+  }).catch(function(){});
+}
+function renderPrinterDropdown(){
+  var wrap=document.getElementById('printer-dropdown-wrap');
+  var single=document.getElementById('h-pname-single');
+  var name=_printers.length===0?'–':(_activePrinter?(_activePrinter.name||'Kobra X'):'Kobra X');
+  var pname=document.getElementById('h-pname');
+  if(pname)pname.textContent=name;
+  if(single)single.textContent=name;
+  if(_printers.length>1){
+    if(wrap)wrap.style.display='';
+    if(single)single.style.display='none';
+    var menu=document.getElementById('printer-dropdown-menu');
+    if(menu){
+      menu.innerHTML=_printers.map(function(p){
+        var active=_activePrinter&&String(p.id)===String(_activePrinter.id);
+        var num=p.id;
+        return '<a href="/printer'+num+'" style="display:block;padding:10px 14px;color:'+(active?'var(--accent)':'var(--txt)')+';text-decoration:none;font-size:13px;border-bottom:1px solid var(--border)" '+(active?'style="font-weight:600"':'')+'>'+
+          (active?'▶ ':'')+p.name+'</a>';
+      }).join('');
+    }
+  } else {
+    if(wrap)wrap.style.display='none';
+    if(single)single.style.display='';
+  }
+}
+function togglePrinterDropdown(){
+  var menu=document.getElementById('printer-dropdown-menu');
+  if(menu)menu.style.display=menu.style.display==='none'?'block':'none';
+}
+document.addEventListener('click',function(e){
+  var wrap=document.getElementById('printer-dropdown-wrap');
+  if(wrap&&!wrap.contains(e.target)){
+    var menu=document.getElementById('printer-dropdown-menu');
+    if(menu)menu.style.display='none';
+  }
+});
+
 var currentLang='de';
 var T=LANG_DE;
 function toggleLang(){
@@ -1537,9 +2241,24 @@ function applyLang(){
   // Nav
   var nb=document.getElementById('nb-dashboard');if(nb)nb.querySelector('.nav-text').textContent=T.nav_dashboard;
   nb=document.getElementById('nb-console');if(nb)nb.querySelector('.nav-text').textContent=T.nav_console;
+  nb=document.getElementById('nb-printers');if(nb)nb.querySelector('.nav-text').textContent=T.nav_printers;
+  nb=document.getElementById('nb-store');if(nb)nb.querySelector('.nav-text').textContent=T.nav_browser;
   // Bottom nav
   var bnb=document.getElementById('bnb-dashboard');if(bnb)bnb.lastChild.textContent=T.nav_dashboard;
   bnb=document.getElementById('bnb-console');if(bnb)bnb.lastChild.textContent=T.nav_console;
+  bnb=document.getElementById('bnb-printers');if(bnb)bnb.lastChild.textContent=T.nav_printers;
+  bnb=document.getElementById('bnb-store');if(bnb)bnb.lastChild.textContent=T.nav_browser;
+  // Browser panel
+  setText('printers-panel-title','🖨 '+T.nav_printers);
+  setText('add-printer-btn-label',T.add_printer);
+  setText('apd-title',T.add_printer);
+  setText('apd-lbl-ip',T.apd_lbl_ip);
+  setText('apd-lbl-name',T.apd_lbl_name);
+  setText('store-panel-title','🗂 '+T.panel_browser_title);
+  var srb=document.getElementById('store-refresh-btn');if(srb)srb.textContent=T.store_refresh;
+  setText('store-empty',T.store_empty);
+  setText('sf-all',T.sf_all);setText('sf-ok',T.sf_ok);setText('sf-err',T.sf_err);setText('sf-new',T.sf_new);
+  setText('ss-date',T.ss_date);setText('ss-name',T.ss_name);setText('ss-dur',T.ss_dur);
   // Dashboard card titles
   setText('d-card-progress',T.card_progress);
   setText('d-card-temps',T.card_temps);
@@ -1581,6 +2300,7 @@ function applyLang(){
   setText('modal-sec-poll',T.settings_poll);
   setText('modal-sec-version',T.settings_version);
   setText('btn-save-settings',T.settings_save);
+  setText('lbl-printer-name',T.settings_printer_name);
   setText('lbl-printer-ip',T.settings_printer_ip);
   setText('lbl-mqtt-port',T.settings_mqtt_port);
   setText('lbl-username',T.settings_username);
@@ -1609,6 +2329,8 @@ function applyLang(){
   var mi=document.getElementById('slot-edit-mat');if(mi)mi.setAttribute('placeholder',T.slot_edit_custom);
   setText('logdir-all',T.log_dir_all);
   setText('file-ready-btn',T.file_ready_btn);
+  setText('file-slots-btn',T.file_slots_btn);
+  setText('file-cancel-btn',T.file_cancel_btn);
   setText('file-cancel-btn',T.file_cancel_btn);
 }
 function setText(id,txt){var el=document.getElementById(id);if(el)el.textContent=txt;}
@@ -1620,9 +2342,9 @@ function setText(id,txt){var el=document.getElementById(id);if(el)el.textContent
   // defer until DOM ready
   window.addEventListener('DOMContentLoaded',function(){
     applyLang();
-    // Beim ersten Start (keine Zugangsdaten) Settings-Modal automatisch öffnen
-    fetch('/api/settings').then(function(r){return r.json()}).then(function(d){
-      if(!d.printer_ip||!d.device_id)openSettings();
+    // Kein Drucker konfiguriert? → direkt in den Drucker-Tab (zeigt "+ Drucker hinzufügen")
+    fetch('/kx/printers').then(function(r){return r.json()}).then(function(d){
+      if(!d.result||!d.result.length){showPanel('printers');loadPrinterTab();}
     }).catch(function(){});
   });
 })();
@@ -1736,15 +2458,15 @@ function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(
 
 // ── Helpers ──
 function fmtTime(s){if(!s||s<0)return'–';var m=Math.floor(s/60),h=Math.floor(m/60);m%=60;return h>0?h+'h '+m+'m':m+'m'}
-function post(url,body){return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}
+function post(url,body){return fetch(_apiUrl(url),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}
 function clamp(v,lo,hi){return Math.min(hi,Math.max(lo,v))}
 
 // ── Apply state to DOM ──
 function applyState(){
   var s=S;
-  // connection error banner
+  // connection error banner – nur wenn überhaupt ein Drucker konfiguriert ist
   var banner=document.getElementById('conn-error-banner');
-  if(banner){if(s.connection_error){banner.textContent='⚠ '+(T.lbl_conn_error||'Connection error:')+' '+s.connection_error;banner.style.display='block';}else{banner.style.display='none';}}
+  if(banner){if(s.connection_error&&_printers.length>0){banner.textContent='⚠ '+(T.lbl_conn_error||'Connection error:')+' '+s.connection_error;banner.style.display='block';}else{banner.style.display='none';}}
   var frb=document.getElementById('file-ready-banner');
   if(frb){
     if(s.file_ready&&s.print_state==='standby'){
@@ -1756,7 +2478,9 @@ function applyState(){
   var b=document.getElementById('h-badge');
   b.className='hbadge '+s.print_state;
   document.getElementById('h-state').textContent=T['kobra_'+s.kobra_state]||s.kobra_state||T.header_status_standby;
-  document.getElementById('h-pname').textContent=s.printer_name;
+  var _pn=_printers.length===0?'–':((_activePrinter&&_activePrinter.name)||s.printer_name);
+  var _el=document.getElementById('h-pname');if(_el)_el.textContent=_pn;
+  var _el2=document.getElementById('h-pname-single');if(_el2)_el2.textContent=_pn;
   var hv=document.getElementById('h-version');if(hv&&s.version)hv.textContent='v'+s.version;
 
 
@@ -1909,7 +2633,12 @@ function drawChart(id,_,series){
 var _updateTag='';
 var _updateUrl='';
 function openSettings(){
-  fetch('/api/settings').then(function(r){return r.json()}).then(function(d){
+  // Titel mit aktivem Drucker-Namen aktualisieren
+  var pname=_activePrinter&&_activePrinter.name?_activePrinter.name:null;
+  var title=document.getElementById('modal-title-settings');
+  if(title)title.textContent=T.settings_title+(pname?' – '+pname:'');
+  fetch(_apiUrl('/api/settings')).then(function(r){return r.json()}).then(function(d){
+    document.getElementById('s-printer-name').value=d.printer_name||'';
     document.getElementById('s-printer-ip').value=d.printer_ip||'';
     document.getElementById('s-mqtt-port').value=d.mqtt_port||9883;
     document.getElementById('s-username').value=d.username||'';
@@ -2024,6 +2753,7 @@ function saveSettings(){
   var btn=document.getElementById('btn-save-settings');
   btn.disabled=true;btn.textContent='…';
   post('/api/settings',{
+    printer_name:     document.getElementById('s-printer-name').value,
     printer_ip:       document.getElementById('s-printer-ip').value,
     mqtt_port:        parseInt(document.getElementById('s-mqtt-port').value)||9883,
     username:         document.getElementById('s-username').value,
@@ -2050,7 +2780,7 @@ function checkUpdate(){
   sb.textContent=T.update_checking;
   document.getElementById('btn-update-apply').style.display='none';
   _updateTag='';_updateUrl='';
-  fetch('/api/update/check').then(function(r){return r.json()}).then(function(d){
+  fetch(_apiUrl('/api/update/check')).then(function(r){return r.json()}).then(function(d){
     if(d.error){sb.textContent=T.update_error+': '+d.error;return;}
     var cl=document.getElementById('update-changelog');
     if(d.changelog&&d.changelog.trim()){cl.textContent=d.changelog;cl.style.display='block';}
@@ -2083,17 +2813,18 @@ function applyUpdate(){
 // ── Poll ──
 async function poll(){
   try{
-    var r=await fetch('/api/state');
+    var r=await fetch(_apiUrl('/api/state'));
     if(!r.ok)return;
     var d=await r.json();
     Object.assign(S,d);
     applyState();
     updateHistory();
-  }catch(e){clog('Poll-Fehler: '+e,'msg-err')}
+  }catch(e){clog(T.log_poll_error+' '+e,'msg-err')}
 }
 var pollTimer;
 (function(){
   var ms=parseInt(localStorage.getItem('pollInterval')||'2000');
+  initPrinters();
   poll();pollTimer=setInterval(poll,ms);
 })();
 
@@ -2244,7 +2975,370 @@ function camStop(){
   }).catch(function(e){clog((T.log_error||'Fehler:')+' '+e,'msg-err')});
 }
 function toggleCam(){if(camOn)camStop();else camStart()}
+
+// ── GCode Store ──
+var storeFiles=[];
+
+function loadStore(){
+  fetch(_apiUrl('/kx/files')).then(function(r){return r.json()}).then(function(d){
+    storeFiles=d.result||[];
+    renderStore();
+  }).catch(function(e){clog('Store-Fehler: '+e,'msg-err')});
+}
+
+function renderStore(){
+  var grid=document.getElementById('store-grid');
+  var empty=document.getElementById('store-empty');
+
+  // Suche
+  var q=(document.getElementById('store-search')||{value:''}).value.toLowerCase().trim();
+  // Filter
+  var filter=(document.getElementById('store-filter')||{value:'all'}).value;
+  // Sortierung
+  var sort=(document.getElementById('store-sort')||{value:'date_desc'}).value;
+
+  var files=storeFiles.filter(function(f){
+    if(q&&f.filename.toLowerCase().indexOf(q)===-1) return false;
+    if(filter==='completed'&&f.last_print_status!=='completed') return false;
+    if(filter==='failed'&&(f.last_print_status!=='cancelled'&&f.last_print_status!=='failed')) return false;
+    if(filter==='never'&&f.last_print_status) return false;
+    return true;
+  });
+
+  files.sort(function(a,b){
+    if(sort==='name_asc') return a.filename.localeCompare(b.filename);
+    if(sort==='duration_asc'){
+      var da=a.last_print_duration||a.est_print_time_sec||0;
+      var db=b.last_print_duration||b.est_print_time_sec||0;
+      return da-db;
+    }
+    // date_desc (default)
+    return (b.uploaded_at||'').localeCompare(a.uploaded_at||'');
+  });
+
+  if(!storeFiles.length){
+    empty.textContent=T.store_empty;
+    grid.innerHTML='';
+    empty.style.display='block';
+    return;
+  }
+  if(!files.length){
+    empty.textContent=T.store_no_results;
+    grid.innerHTML='';
+    empty.style.display='block';
+    return;
+  }
+  empty.style.display='none';
+  grid.innerHTML=files.map(function(f){
+    var thumb=f.thumbnail_b64
+      ? '<img src="data:image/png;base64,'+f.thumbnail_b64+'" style="width:100%;height:130px;object-fit:cover;border-radius:6px;display:block;margin-bottom:8px">'
+      : '<div style="width:100%;height:130px;background:var(--raised);border-radius:6px;display:flex;align-items:center;justify-content:center;margin-bottom:8px;font-size:32px">🖨</div>';
+    var name=f.filename.length>28?f.filename.slice(0,25)+'…':f.filename;
+    var date=f.uploaded_at?f.uploaded_at.replace('T',' ').slice(0,16):'';
+    var est=f.est_print_time_sec?formatDur(f.est_print_time_sec):'–';
+    var statusBadge='';
+    var lastInfo='';
+    if(f.last_print_status==='completed'){
+      statusBadge='<span style="background:#2a7a3b;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;margin-left:4px">✓</span>';
+      if(f.last_print_duration) lastInfo='<div style="font-size:11px;color:var(--ok);margin-bottom:2px">✓ '+formatDur(f.last_print_duration)+'</div>';
+    } else if(f.last_print_status==='cancelled'||f.last_print_status==='failed'){
+      statusBadge='<span style="background:#a04020;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;margin-left:4px">✗</span>';
+      lastInfo='<div style="font-size:11px;color:var(--err);margin-bottom:2px">✗ '+f.last_print_status+'</div>';
+    } else if(!f.last_print_status){
+      lastInfo='<div style="font-size:11px;color:var(--txt2);margin-bottom:2px;opacity:.6">'+T.store_never+'</div>';
+    }
+    return '<div style="background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:10px;display:flex;flex-direction:column">'+
+      thumb+
+      '<div title="'+f.filename+'" style="font-size:12px;font-weight:600;margin-bottom:4px;color:var(--txt)">'+name+statusBadge+'</div>'+
+      lastInfo+
+      '<div style="font-size:11px;color:var(--txt2);margin-bottom:2px">⏱ Schätzung: '+est+'</div>'+
+      '<div style="font-size:11px;color:var(--txt2);margin-bottom:8px">📅 '+date+'</div>'+
+      '<div style="display:flex;gap:6px;margin-top:auto">'+
+        '<button onclick="storePrint(\''+f.id+'\',\''+f.filename.replace(/'/g,"\\'")+'\')" '+
+          'style="flex:1;font-size:12px;padding:5px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer">'+T.store_print+'</button>'+
+        '<button onclick="storeDelete(\''+f.id+'\')" '+
+          'style="font-size:12px;padding:5px 8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt2);cursor:pointer">🗑</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+function formatDur(sec){
+  var h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60);
+  return h?h+'h '+m+'m':m+'m';
+}
+
+var _storeFileId=null;
+var _storeFilename=null;
+var _filamentDialogMode='store'; // 'store' oder 'banner'
+
+var _gcodeFilaments=[];
+
+function storePrint(fileId, filename){
+  _storeFileId=fileId;
+  _storeFilename=filename;
+  _filamentDialogMode='store';
+  // GCode-Filamente aus Store-Datei holen (für Vorschau im Dialog)
+  var fileObj=storeFiles.find(function(f){return f.id===fileId;});
+  try{ _gcodeFilaments=fileObj&&fileObj.gcode_filaments?JSON.parse(fileObj.gcode_filaments):[]; }
+  catch(e){ _gcodeFilaments=[]; }
+  fetch(_apiUrl('/kx/filament/slots')).then(function(r){return r.json()}).then(function(d){
+    openFilamentDialog(d.result||[]);
+  }).catch(function(){openFilamentDialog([]);});
+}
+
+function startReadyFileWithSlots(){
+  _filamentDialogMode='banner';
+  _storeFilename=S.file_ready||'';
+  fetch(_apiUrl('/kx/filament/slots')).then(function(r){return r.json()}).then(function(d){
+    openFilamentDialog(d.result||[]);
+  }).catch(function(){openFilamentDialog([]);});
+}
+
+var _amsSlots=[];
+
+function openFilamentDialog(slots){
+  _amsSlots=slots.filter(function(s){return s.status==='loaded';});
+  var dlg=document.getElementById('filament-dialog');
+  var title=document.getElementById('fd-title');
+  var body=document.getElementById('fd-slots');
+  if(title)title.textContent='▶ '+_storeFilename;
+
+  // GCode-Kanäle: bevorzugt aus _gcodeFilaments, sonst aus belegten AMS-Slots ableiten
+  var channels=_gcodeFilaments.length?_gcodeFilaments:_amsSlots.map(function(s,i){
+    return {slot_index:i,color_hex:s.color_hex,material:s.material};
+  });
+
+  if(!_amsSlots.length){
+    body.innerHTML='<p style="color:var(--txt2);font-size:13px;text-align:center;padding:16px 0">Keine belegten AMS-Slots.<br>Druck trotzdem starten?</p>';
+  } else {
+    body.innerHTML=channels.map(function(gc,i){
+      // Passende Slots: gleicher Materialtyp
+      var compatible=_amsSlots.filter(function(s){return s.material.toUpperCase()===gc.material.toUpperCase();});
+      if(!compatible.length) compatible=_amsSlots; // Fallback: alle
+      // Standard-Auswahl: Slot mit gleichem Index oder erster kompatibler
+      var defaultSlot=compatible.find(function(s){return s.slot_index===gc.slot_index;})||compatible[0];
+      var opts=compatible.map(function(s){
+        var sel=(s.slot_index===defaultSlot.slot_index)?'selected':'';
+        return '<option value="'+s.slot_index+'" data-color="'+s.color_hex+'" data-material="'+s.material+'" '+sel+'>'+
+          'Slot '+(s.slot_index+1)+' · '+s.material+'</option>';
+      }).join('');
+      return '<div style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;background:var(--raised);border:1px solid var(--border)">'+
+        '<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:'+gc.color_hex+';border:1px solid var(--border);flex-shrink:0"></span>'+
+        '<span style="font-size:13px;font-weight:600;min-width:70px">Kanal '+(i+1)+'</span>'+
+        '<span style="font-size:11px;color:var(--txt2);min-width:32px">'+gc.material+'</span>'+
+        '<span style="font-size:18px;color:var(--txt2)">→</span>'+
+        '<select data-paint="'+i+'" data-paint-color="'+gc.color_hex+'" style="flex:1;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:var(--raised);color:var(--txt);font-size:13px">'+
+        opts+'</select>'+
+      '</div>';
+    }).join('');
+  }
+  if(dlg)dlg.classList.add('open');
+}
+
+function closeFilamentDialog(){
+  var dlg=document.getElementById('filament-dialog');
+  if(dlg)dlg.classList.remove('open');
+}
+
+function confirmFilamentPrint(){
+  var selects=document.querySelectorAll('#fd-slots select');
+  var assignments=[];
+  selects.forEach(function(sel){
+    var paintIdx=parseInt(sel.dataset.paint);
+    var paintColor=sel.dataset.paintColor;
+    var opt=sel.options[sel.selectedIndex];
+    var amsIdx=parseInt(opt.value);
+    var amsSlot=_amsSlots.find(function(s){return s.slot_index===amsIdx;})||{};
+    // Farbe als [R,G,B,255]
+    function hexToRgba(h){
+      var c=h.replace('#','');
+      if(c.length===3)c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+      return [parseInt(c.slice(0,2),16),parseInt(c.slice(2,4),16),parseInt(c.slice(4,6),16),255];
+    }
+    assignments.push({
+      paint_index:  paintIdx,
+      slot_index:   amsIdx,
+      material:     opt.dataset.material||'PLA',
+      paint_color:  hexToRgba(paintColor||'#ffffff'),
+      ams_color:    hexToRgba(amsSlot.color_hex||'#ffffff'),
+    });
+  });
+  closeFilamentDialog();
+  if(_filamentDialogMode==='banner'){
+    // Banner-Modus: normaler print/start mit Slot-Override
+    var btn=document.getElementById('file-ready-btn');
+    if(btn){btn.disabled=true;btn.textContent='…';}
+    post('/printer/print/start',{filename:S.file_ready,filament_assignments:assignments})
+      .then(function(r){return r.json();})
+      .then(function(){
+        document.getElementById('file-ready-banner').style.display='none';
+        if(btn){btn.disabled=false;setText('file-ready-btn',T.file_ready_btn);}
+      })
+      .catch(function(e){
+        clog((T.log_error||'Error:')+' '+e,'msg-err');
+        if(btn){btn.disabled=false;setText('file-ready-btn',T.file_ready_btn);}
+      });
+  } else {
+    // Store-Modus: POST /kx/print
+    fetch(_apiUrl('/kx/print'),{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({file_id:_storeFileId,filament_assignments:assignments})
+    }).then(function(r){return r.json()}).then(function(d){
+      if(d.result==='ok'){clog('Druckstart: '+_storeFilename,'msg-ok');showPanel('dashboard');}
+      else{clog('Druckfehler: '+(d.error||'?'),'msg-err');}
+    }).catch(function(e){clog('Druckfehler: '+e,'msg-err');});
+  }
+}
+
+function storeDelete(fileId){
+  if(!confirm(T.store_delete_confirm)) return;
+  fetch(_apiUrl('/kx/files/'+fileId),{method:'DELETE'}).then(function(r){
+    if(r.ok){loadStore();}
+    else{clog('Löschen fehlgeschlagen','msg-err');}
+  });
+}
+
+// ── Drucker hinzufügen ──
+function openAddPrinterDialog(){
+  document.getElementById('apd-ip').value='';
+  document.getElementById('apd-name').value='';
+  var st=document.getElementById('apd-status');st.textContent='';st.style.color='var(--txt2)';
+  document.getElementById('apd-confirm').disabled=false;
+  document.getElementById('add-printer-dialog').classList.add('open');
+}
+function closeAddPrinterDialog(){
+  document.getElementById('add-printer-dialog').classList.remove('open');
+}
+function confirmAddPrinter(){
+  var ip=document.getElementById('apd-ip').value.trim();
+  var name=document.getElementById('apd-name').value.trim();
+  var st=document.getElementById('apd-status'),btn=document.getElementById('apd-confirm');
+  if(!ip){st.textContent=T.apd_err_ip;st.style.color='var(--err)';return;}
+  st.textContent=T.apd_fetching;st.style.color='var(--txt2)';btn.disabled=true;
+  fetch('/kx/printers/add',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({printer_ip:ip,name:name})})
+    .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
+    .then(function(res){
+      if(!res.ok){st.textContent=(res.j&&res.j.error)||'Fehler';st.style.color='var(--err)';btn.disabled=false;return;}
+      st.textContent=T.apd_success;st.style.color='var(--ok)';
+      setTimeout(function(){location.reload();},2500);
+    })
+    .catch(function(e){st.textContent=''+e;st.style.color='var(--err)';btn.disabled=false;});
+}
+function removePrinter(id,name){
+  if(!confirm(T.printers_remove_confirm.replace('{name}',name)))return;
+  fetch('/kx/printers/'+encodeURIComponent(id),{method:'DELETE'})
+    .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
+    .then(function(res){
+      if(!res.ok){alert((res.j&&res.j.error)||'Fehler');return;}
+      setTimeout(function(){location.href='/printer1';},2000);
+    })
+    .catch(function(e){alert(''+e);});
+}
+
+// ── Drucker-Tab ──
+function loadPrinterTab(){
+  var grid=document.getElementById('printers-grid');
+  if(grid)grid.innerHTML='<div style="color:var(--txt2);font-size:13px;padding:20px">'+T.printers_loading+'</div>';
+  // Drucker-Liste von lokaler Instanz holen
+  fetch('/kx/printers').then(function(r){return r.json()}).then(function(d){
+    var printers=d.result||[];
+    if(!printers.length){
+      if(grid)grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--txt2)">'+
+        '<div style="font-size:32px;margin-bottom:8px">🖨</div>'+
+        '<div style="font-size:14px;margin-bottom:14px">'+T.printers_empty_hint+'</div>'+
+        '<button onclick="openAddPrinterDialog()" style="font-size:13px;padding:8px 18px;background:var(--accent);border:none;border-radius:8px;color:#fff;cursor:pointer;font-weight:600">+ '+T.add_printer+'</button>'+
+      '</div>';
+      return;
+    }
+    // Status jedes Druckers parallel abrufen
+    var fetches=printers.map(function(p){
+      var url=(p.bridge_url||'').replace(/\/+$/,'');
+      return fetch(url+'/api/state',{signal:AbortSignal.timeout(3000)})
+        .then(function(r){return r.json()})
+        .then(function(s){return {printer:p,state:s,online:true};})
+        .catch(function(){return {printer:p,state:{},online:false};});
+    });
+    Promise.all(fetches).then(function(results){
+      var activeId=_activePrinter?String(_activePrinter.id):null;
+      if(grid)grid.innerHTML=results.map(function(res){
+        var p=res.printer,s=res.state,online=res.online;
+        var isActive=String(p.id)===activeId;
+        var url=(p.bridge_url||'').replace(/\/+$/,'');
+        var printerNum=p.id;
+        var ks=online?(s.kobra_state||'free'):'offline';
+        var stateKey='kobra_'+ks;
+        var stateLabel=T[stateKey]||ks;
+        var stateColor=ks==='free'?'var(--ok)':ks==='printing'?'var(--accent)':ks==='offline'?'var(--txt2)':'var(--warn)';
+        var progress=online&&s.progress?Math.round(s.progress*100):null;
+        var filename=online&&s.filename?s.filename:'';
+        var nt=online&&s.nozzle_temp?s.nozzle_temp.toFixed(1):'–';
+        var bt=online&&s.bed_temp?s.bed_temp.toFixed(1):'–';
+        var border=isActive?'2px solid var(--accent)':'1px solid var(--border)';
+        var nameEsc=String(p.name).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        return '<div style="background:var(--raised);border:'+border+';border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px">'+
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'+
+            '<span style="font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🖨 '+p.name+'</span>'+
+            '<span style="display:flex;align-items:center;gap:8px;flex-shrink:0">'+
+              (isActive?'<span style="font-size:11px;color:var(--accent);font-weight:600">'+T.printers_active+'</span>':'')+
+              '<button onclick="removePrinter(\''+printerNum+'\',\''+nameEsc+'\')" title="'+T.printers_remove+'" style="background:none;border:none;color:var(--txt2);font-size:16px;cursor:pointer;line-height:1;padding:0">✕</button>'+
+            '</span>'+
+          '</div>'+
+          '<div style="display:flex;align-items:center;gap:6px">'+
+            '<span style="width:8px;height:8px;border-radius:50%;background:'+stateColor+';display:inline-block"></span>'+
+            '<span style="font-size:13px;color:var(--txt2)">'+stateLabel+'</span>'+
+          '</div>'+
+          (p.printer_ip?'<div style="font-size:12px;color:var(--txt2)">🌐 '+p.printer_ip+'</div>':'')+
+          (filename?'<div style="font-size:12px;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+filename+'">📄 '+filename+'</div>':'')+
+          (progress!==null?'<div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden"><div style="background:var(--accent);height:100%;width:'+progress+'%"></div></div>':'')+
+          '<div style="font-size:12px;color:var(--txt2);display:flex;gap:12px">'+
+            '<span>🌡 '+nt+'°C</span><span>🛏 '+bt+'°C</span>'+
+          '</div>'+
+          (!isActive?'<a href="/printer'+printerNum+'" style="display:block;text-align:center;padding:7px;background:var(--accent);color:#fff;border-radius:7px;font-size:13px;font-weight:600;text-decoration:none;margin-top:4px">'+T.printers_switch+'</a>':'<div style="text-align:center;padding:7px;font-size:12px;color:var(--txt2)">'+T.printers_current+'</div>')+
+        '</div>';
+      }).join('');
+    });
+  }).catch(function(e){
+    if(grid)grid.innerHTML='<div style="color:var(--err);font-size:13px;padding:20px">Fehler: '+e+'</div>';
+  });
+}
 </script>
+<!-- Filament-Slot-Dialog -->
+<div class="modal-overlay" id="filament-dialog" onclick="if(event.target===this)closeFilamentDialog()">
+  <div class="modal-box" style="max-width:380px;width:100%">
+    <div class="modal-header" style="margin-bottom:14px">
+      <span class="modal-title" id="fd-title" style="font-size:14px;word-break:break-all"></span>
+      <button onclick="closeFilamentDialog()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--txt2)">✕</button>
+    </div>
+    <p style="font-size:12px;color:var(--txt2);margin-bottom:10px">GCode-Kanal → AMS-Slot zuweisen:</p>
+    <div id="fd-slots" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeFilamentDialog()" style="padding:8px 16px;background:var(--raised);border:1px solid var(--border);border-radius:8px;color:var(--txt);cursor:pointer">Abbrechen</button>
+      <button onclick="confirmFilamentPrint()" style="padding:8px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">▶ Drucken</button>
+    </div>
+  </div>
+</div>
+<!-- Drucker-hinzufügen-Dialog -->
+<div class="modal-overlay" id="add-printer-dialog" onclick="if(event.target===this)closeAddPrinterDialog()">
+  <div class="modal-box" style="max-width:380px;width:100%">
+    <div class="modal-header" style="margin-bottom:14px">
+      <span class="modal-title" id="apd-title">Drucker hinzufügen</span>
+      <button onclick="closeAddPrinterDialog()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--txt2)">✕</button>
+    </div>
+    <label id="apd-lbl-ip" style="display:block;font-size:12px;color:var(--txt2);margin-bottom:4px">Drucker-IP</label>
+    <input type="text" id="apd-ip" placeholder="192.168.1.100" style="width:100%;box-sizing:border-box;padding:8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);margin-bottom:10px">
+    <label id="apd-lbl-name" style="display:block;font-size:12px;color:var(--txt2);margin-bottom:4px">Name (optional)</label>
+    <input type="text" id="apd-name" placeholder="z.B. Kobra X Wohnzimmer" style="width:100%;box-sizing:border-box;padding:8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);margin-bottom:6px">
+    <div id="apd-status" style="font-size:12px;margin:8px 0;min-height:16px;color:var(--txt2)"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeAddPrinterDialog()" style="padding:8px 16px;background:var(--raised);border:1px solid var(--border);border-radius:8px;color:var(--txt);cursor:pointer">Abbrechen</button>
+      <button id="apd-confirm" onclick="confirmAddPrinter()" style="padding:8px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">Hinzufügen</button>
+    </div>
+  </div>
+</div>
+
 <footer style="text-align:center;padding:12px;font-size:11px;color:var(--txt2);border-top:1px solid var(--border);margin-top:auto">
   &copy; ViewIT 2026
 </footer>
@@ -2665,6 +3759,7 @@ function toggleCam(){if(camOn)camStop();else camStart()}
 
     async def handle_api_settings_get(self, request):
         return web.json_response({
+            "printer_name":     self._state.get("printer_name", ""),
             "printer_ip":       self._args.printer_ip,
             "mqtt_port":        self._args.mqtt_port,
             "username":         self._args.username,
@@ -2702,6 +3797,11 @@ function toggleCam(){if(camOn)camStop();else camStart()}
         cfg.set("print",      "auto_leveling",    str(data.get("auto_leveling",    getattr(self._args, "auto_leveling",    1))))
         if not cfg.has_option("bridge", "poll_interval"):
             cfg.set("bridge", "poll_interval", "3")
+        printer_name = str(data.get("printer_name", "")).strip()
+        if printer_name:
+            cfg.set("bridge", "printer_name", printer_name)
+        elif cfg.has_option("bridge", "printer_name"):
+            cfg.remove_option("bridge", "printer_name")
 
         with open(config_path, "w", encoding="utf-8") as f:
             f.write("# KX-Bridge Konfigurationsdatei\n\n")
@@ -2712,14 +3812,179 @@ function toggleCam(){if(camOn)camStop();else camStart()}
         asyncio.get_event_loop().call_later(0.3, self._restart_bridge)
         return response
 
+    async def handle_kx_printer_add(self, request):
+        """Fügt einen Drucker hinzu: holt Credentials via IP, schreibt [printer_N], Neustart."""
+        try:
+            body = await request.json()
+        except Exception:
+            return self._json_cors({"error": "invalid json"}, status=400)
+        ip   = str(body.get("printer_ip", "")).strip().split(":")[0]
+        name = str(body.get("name", "")).strip()
+        if not ip:
+            return self._json_cors({"error": "printer_ip required"}, status=400)
+        try:
+            creds = await _kx_fetch_credentials(ip)
+        except Exception as e:
+            return self._json_cors({"error": f"Drucker nicht erreichbar oder Fehler: {e}"}, status=502)
+
+        import configparser
+        config_path = self._find_config_path()
+        cfg = configparser.ConfigParser()
+        if config_path.is_file():
+            cfg.read(config_path, encoding="utf-8")
+
+        # Vorhandene [printer_N]-Sektionen + belegte http_ports ermitteln
+        n = 1
+        existing_ports: set[int] = set()
+        while cfg.has_section(f"printer_{n}"):
+            p = cfg[f"printer_{n}"]
+            if p.get("http_port"):
+                try:
+                    existing_ports.add(int(p["http_port"]))
+                except ValueError:
+                    pass
+            n += 1
+
+        # Kein [printer_N], aber ein befüllter [connection]? → als printer_1 migrieren
+        # (leerer [connection] = kein bestehender Drucker → nicht migrieren, neuer wird printer_1)
+        if n == 1 and cfg.has_section("connection") and (cfg["connection"].get("printer_ip") or "").strip():
+            c = cfg["connection"]
+            cfg.add_section("printer_1")
+            cfg.set("printer_1", "name", self._state.get("printer_name") or "Kobra X")
+            for k in ("printer_ip", "mqtt_port", "username", "password", "mode_id", "device_id"):
+                if c.get(k):
+                    cfg.set("printer_1", k, c.get(k))
+            cfg.set("printer_1", "http_port", "7125")
+            existing_ports.add(7125)
+            n = 2
+
+        # Neuen Drucker als [printer_n] anlegen, freien Port wählen
+        new_port = 7125 + (n - 1)
+        while new_port in existing_ports:
+            new_port += 1
+        sec = f"printer_{n}"
+        cfg.add_section(sec)
+        cfg.set(sec, "name",       name or creds["model"])
+        cfg.set(sec, "printer_ip", creds["printer_ip"])
+        cfg.set(sec, "mqtt_port",  "9883")
+        cfg.set(sec, "username",   creds["username"])
+        cfg.set(sec, "password",   creds["password"])
+        cfg.set(sec, "mode_id",    creds["mode_id"])
+        cfg.set(sec, "device_id",  creds["device_id"])
+        cfg.set(sec, "http_port",  str(new_port))
+
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write("# KX-Bridge Konfigurationsdatei\n\n")
+            cfg.write(f)
+        log.info(f"Drucker '{name or creds['model']}' als {sec} hinzugefügt (Port {new_port})")
+        response = self._json_cors({"status": "restarting", "section": sec, "http_port": new_port})
+        asyncio.get_event_loop().call_later(0.5, self._restart_bridge)
+        return response
+
+    async def handle_kx_printer_remove(self, request):
+        """Entfernt einen Drucker aus config.ini, dann Neustart.
+
+        - Multi-Modus: [printer_N] wird gelöscht, übrige umnummeriert (printer_3 → printer_2),
+          printer_1 bekommt immer http_port 7125.
+        - Einzel-Modus (kein [printer_N], nur [connection]): pid "1" leert den [connection]-Block
+          → Bridge startet im Offline-Modus auf 7125, UI bleibt erreichbar.
+        - Wird der letzte [printer_N] entfernt: alle weg → ebenfalls "leerer" Zustand.
+        """
+        pid = str(request.match_info.get("pid", "")).strip()
+        if not pid:
+            return self._json_cors({"error": "printer id required"}, status=400)
+
+        import configparser
+        config_path = self._find_config_path()
+        cfg = configparser.ConfigParser()
+        if config_path.is_file():
+            cfg.read(config_path, encoding="utf-8")
+
+        has_printer_sections = cfg.has_section("printer_1")
+        target = f"printer_{pid}"
+
+        if has_printer_sections:
+            if not cfg.has_section(target):
+                return self._json_cors({"error": f"{target} nicht gefunden"}, status=404)
+            # Alle [printer_N] einsammeln (außer der zu löschenden), neu nummerieren
+            kept = []
+            n = 1
+            while cfg.has_section(f"printer_{n}"):
+                if str(n) != pid:
+                    kept.append(dict(cfg[f"printer_{n}"]))
+                cfg.remove_section(f"printer_{n}")
+                n += 1
+            for i, sec_data in enumerate(kept, start=1):
+                sec = f"printer_{i}"
+                cfg.add_section(sec)
+                for k, v in sec_data.items():
+                    cfg.set(sec, k, v)
+                cfg.set(sec, "http_port", str(7125 + i - 1))
+            remaining = len(kept)
+            # War das der letzte Drucker? Dann auch [connection] leeren → wirklich "kein Drucker"
+            if remaining == 0 and cfg.has_section("connection"):
+                for k in ("printer_ip", "username", "password", "device_id"):
+                    cfg.set("connection", k, "")
+        else:
+            # Einzel-Modus: nur pid "1" ist gültig (Pseudo-Eintrag aus handle_kx_printers)
+            if pid != "1":
+                return self._json_cors({"error": "kein Drucker mit dieser ID"}, status=404)
+            # [connection]-Werte leeren → Bridge startet ohne Drucker
+            if cfg.has_section("connection"):
+                for k in ("printer_ip", "username", "password", "device_id"):
+                    cfg.set("connection", k, "")
+            remaining = 0
+
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write("# KX-Bridge Konfigurationsdatei\n\n")
+            cfg.write(f)
+        log.info(f"Drucker {target} entfernt ({remaining} verbleibend)")
+        response = self._json_cors({"status": "restarting", "removed": target, "remaining": remaining})
+        asyncio.get_event_loop().call_later(0.5, self._restart_bridge)
+        return response
+
     def _restart_bridge(self):
         log.info("Bridge wird neu gestartet …")
-        exe = sys.executable
-        # PyInstaller frozen binary: sys.argv[0] == sys.executable → nicht doppelt übergeben
-        if getattr(sys, "frozen", False):
-            os.execv(exe, [exe])
-        else:
-            os.execv(exe, [exe] + sys.argv)
+        # config_loader cached config.ini-Werte in os.environ ("nur wenn nicht gesetzt").
+        # Bei einem Restart muss environ bereinigt werden, sonst liest der neue Prozess
+        # die alten Werte statt der geänderten config.ini.
+        for _k in ("PRINTER_IP", "MQTT_PORT", "MQTT_USERNAME", "MQTT_PASSWORD",
+                   "MODE_ID", "DEVICE_ID", "DEFAULT_AMS_SLOT", "AUTO_LEVELING",
+                   "BRIDGE_PRINTER_NAME"):
+            os.environ.pop(_k, None)
+
+        in_docker = os.path.exists("/.dockerenv") or os.environ.get("KX_IN_DOCKER")
+        if in_docker:
+            # Docker/systemd: Prozess beenden reicht – der Supervisor startet neu (frische environ)
+            log.info("Container-Umgebung erkannt – beende Prozess für Supervisor-Restart")
+            os._exit(0)
+
+        frozen = getattr(sys, "frozen", False)
+
+        # Linux: os.execv ersetzt das Prozess-Image direkt – sauber auch bei PyInstaller-Onefile
+        # (subprocess+exit würde dort am gelöschten _MEIxxxx-Temp-Verzeichnis scheitern).
+        if sys.platform != "win32":
+            exe = sys.executable
+            try:
+                if frozen:
+                    os.execv(exe, [exe] + sys.argv[1:])
+                else:
+                    os.execv(exe, [exe] + sys.argv)
+            except Exception as e:
+                log.error(f"Restart (execv) fehlgeschlagen: {e} – bitte Bridge manuell neu starten")
+                os._exit(1)
+
+        # Windows: os.execv ist dort kaputt (neue PID, alter Prozess kehrt zurück) → subprocess
+        cmd = ([sys.executable] + sys.argv[1:]) if frozen else ([sys.executable] + sys.argv)
+        try:
+            subprocess.Popen(cmd, cwd=os.getcwd(),
+                             creationflags=(subprocess.DETACHED_PROCESS
+                                            | subprocess.CREATE_NEW_PROCESS_GROUP))
+        except Exception as e:
+            log.error(f"Restart fehlgeschlagen: {e} – bitte Bridge manuell neu starten")
+        os._exit(0)
 
     # ─── Update ──────────────────────────────────────────────────────────────
 
@@ -3083,8 +4348,24 @@ def _mqtt_error_msg(exc: Exception) -> str:
     return msg
 
 
+@web.middleware
+async def cors_middleware(request, handler):
+    if request.method == "OPTIONS":
+        return web.Response(status=204, headers={
+            "Access-Control-Allow-Origin":  "*",
+            "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+        })
+    resp = await handler(request)
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    return resp
+
+
 def build_app(bridge: KobraXBridge) -> web.Application:
-    app = web.Application(client_max_size=256 * 1024 * 1024)  # 256 MB für große GCode-Dateien
+    app = web.Application(
+        client_max_size=256 * 1024 * 1024,
+        middlewares=[cors_middleware],
+    )
     r = app.router
 
     # Moonraker API
@@ -3135,9 +4416,20 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_get("/api/log/stream",           bridge.handle_api_log_stream)
     r.add_get("/api/log/download",         bridge.handle_api_log_download)
     r.add_get("/serve/{filename}",         bridge.handle_serve_file)
+    # /kx/ GCode Store + History + Filament
+    r.add_get("/kx/printers",              bridge.handle_kx_printers)
+    r.add_post("/kx/printers/add",         bridge.handle_kx_printer_add)
+    r.add_delete("/kx/printers/{pid}",     bridge.handle_kx_printer_remove)
+    r.add_post("/kx/print",               bridge.handle_kx_print)
+    r.add_get("/kx/files",                bridge.handle_kx_files)
+    r.add_delete("/kx/files/{file_id}",    bridge.handle_kx_file_delete)
+    r.add_get("/kx/filament/slots",        bridge.handle_kx_filament_slots)
+    r.add_get("/kx/history",               bridge.handle_kx_history)
+    r.add_route("OPTIONS", "/kx/{path:.*}", bridge.handle_kx_options)
 
-    # Root + favicon (OrcaSlicer öffnet / in eingebettetem Browser)
+    # Root + Printer-Routen (Single-Page, JS liest Pathname)
     r.add_get("/",                           bridge.handle_index)
+    r.add_get("/printer{num:\d+}",          bridge.handle_index)
     r.add_get("/favicon.ico",               bridge.handle_favicon)
 
     # WebSocket
@@ -3149,43 +4441,94 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     return app
 
 
+def _build_per_printer_args(base_args, p: dict):
+    """Kopiere CLI-Args, überschreibe mit Druckereintrag aus config.ini."""
+    import copy
+    a = copy.copy(base_args)
+    a.printer_ip = p.get("printer_ip") or base_args.printer_ip
+    a.mqtt_port  = int(p.get("mqtt_port") or base_args.mqtt_port)
+    a.username   = p.get("username")  or base_args.username
+    a.password   = p.get("password")  or base_args.password
+    a.mode_id    = p.get("mode_id")   or base_args.mode_id
+    a.device_id  = p.get("device_id") or base_args.device_id
+    a.port       = int(p.get("http_port") or base_args.port)
+    return a
+
+
 async def run_bridge(args):
-    client = KobraXClient(
-        host=args.printer_ip,
-        port=args.mqtt_port,
-        username=args.username,
-        password=args.password,
-        mode_id=args.mode_id,
-        device_id=args.device_id,
-        client_id="kobrax_bridge",
-    )
+    printers = env_loader.list_printers()
+    multi_mode = bool(printers)
+    if not printers:
+        printers = [{
+            "id":         "1",
+            "name":       getattr(args, "printer_name", None) or "Anycubic Kobra X",
+            "printer_ip": args.printer_ip,
+            "mqtt_port":  args.mqtt_port,
+            "username":   args.username,
+            "password":   args.password,
+            "mode_id":    args.mode_id,
+            "device_id":  args.device_id,
+            "http_port":  args.port,
+        }]
 
-    bridge  = KobraXBridge(client, args=args)
-
-    # Verbindungsversuch beim Start – bei Fehler im Offline-Modus weiterlaufen
-    loop = asyncio.get_event_loop()
-    log.info(f"Verbinde mit Drucker {args.printer_ip}:{args.mqtt_port} …")
-    try:
-        await loop.run_in_executor(None, client.connect)
-        log.info("MQTT verbunden")
-    except Exception as e:
-        err = _mqtt_error_msg(e)
-        log.warning(f"Verbindung fehlgeschlagen: {err} – starte im Offline-Modus")
-        bridge._state["print_state"] = "error"
-        bridge._state["kobra_state"] = "offline"
-        bridge._state["connection_error"] = err
-    app     = build_app(bridge)
-
+    store = GCodeStore(args.data_dir)
+    all_bridges: dict = {}
+    runners = []
     stop_event = threading.Event()
-    poll_thread = threading.Thread(
-        target=bridge._poll_loop, args=(stop_event,), daemon=True, name="poll"
-    )
-    poll_thread.start()
+    loop = asyncio.get_event_loop()
 
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, args.host, args.port)
-    await site.start()
+    for idx, p in enumerate(printers):
+        pid = str(p.get("id") or (idx + 1))
+        per_args = _build_per_printer_args(args, p)
+        # Default-Port-Konvention: 7125 + (id-1) wenn kein http_port gesetzt
+        if not p.get("http_port") and multi_mode:
+            try:
+                per_args.port = 7125 + (int(pid) - 1)
+            except ValueError:
+                per_args.port = 7125 + idx
+
+        client = KobraXClient(
+            host=per_args.printer_ip,
+            port=per_args.mqtt_port,
+            username=per_args.username,
+            password=per_args.password,
+            mode_id=per_args.mode_id,
+            device_id=per_args.device_id,
+            client_id=f"kobrax_bridge_{pid}",
+        )
+        bridge = KobraXBridge(
+            client, args=per_args, store=store,
+            printer_id=pid, all_bridges=all_bridges,
+        )
+        # printer_name aus config.ini übernehmen falls gesetzt
+        if p.get("name"):
+            bridge._state["printer_name"] = p["name"]
+            bridge._name_locked = True
+        all_bridges[pid] = bridge
+
+        log.info(f"[Drucker {pid}] Verbinde mit {per_args.printer_ip}:{per_args.mqtt_port} …")
+        try:
+            await loop.run_in_executor(None, client.connect)
+            log.info(f"[Drucker {pid}] MQTT verbunden")
+        except Exception as e:
+            err = _mqtt_error_msg(e)
+            log.warning(f"[Drucker {pid}] Verbindung fehlgeschlagen: {err} – Offline-Modus")
+            bridge._state["print_state"] = "error"
+            bridge._state["kobra_state"] = "offline"
+            bridge._state["connection_error"] = err
+
+        threading.Thread(
+            target=bridge._poll_loop, args=(stop_event,),
+            daemon=True, name=f"poll-{pid}",
+        ).start()
+
+        app = build_app(bridge)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, args.host, per_args.port)
+        await site.start()
+        runners.append((runner, client, pid))
+        log.info(f"[Drucker {pid}] Bridge läuft auf http://{args.host}:{per_args.port}")
 
     import socket as _socket
     try:
@@ -3194,9 +4537,8 @@ async def run_bridge(args):
             _local_ip = _s.getsockname()[0]
     except Exception:
         _local_ip = args.host
-    log.info(f"Bridge läuft auf http://{_local_ip}:{args.port}")
-    log.info(f"OrcaSlicer → Klipper → Host: {_local_ip}  Port: {args.port}")
-
+    log.info(f"OrcaSlicer → Klipper → Host: {_local_ip}  Ports: " +
+             ", ".join(str(getattr(b._args, 'port', 0)) for b in all_bridges.values()))
     log.info("Ctrl-C zum Beenden")
 
     try:
@@ -3206,9 +4548,28 @@ async def run_bridge(args):
         pass
     finally:
         stop_event.set()
-        await runner.cleanup()
-        client.disconnect()
+        for runner, client, pid in runners:
+            try:
+                await runner.cleanup()
+            except Exception:
+                pass
+            try:
+                client.disconnect()
+            except Exception:
+                pass
         log.info("Bridge beendet")
+
+
+def _default_data_dir() -> str:
+    """Persistenz-Verzeichnis: Docker setzt KX_DATA_DIR, Binary nutzt <exe-dir>/data,
+    Dev-Script nutzt <repo>/data (oder /app/data falls vorhanden)."""
+    if os.environ.get("KX_DATA_DIR"):
+        return os.environ["KX_DATA_DIR"]
+    if getattr(sys, "frozen", False):
+        return os.path.join(os.path.dirname(sys.executable), "data")
+    if os.path.isdir("/app"):
+        return "/app/data"
+    return os.path.normpath(os.path.join(_BASE, "..", "data"))
 
 
 def main():
@@ -3227,6 +4588,8 @@ def main():
                         help="Bind-Adresse für den Bridge-Server")
     parser.add_argument("--port",        type=int, default=7125,
                         help="HTTP/WS-Port (Moonraker-Standard: 7125)")
+    parser.add_argument("--data-dir",    default=_default_data_dir(),
+                        help="Persistenz-Verzeichnis für GCode-Store und DB")
     args = parser.parse_args()
     if args.printer_ip and ":" in args.printer_ip:
         args.printer_ip = args.printer_ip.split(":")[0]

@@ -16,7 +16,12 @@ COPY config/config.ini.example /app/config/config.ini.example
 
 # config/ ist ein Volume-Mountpoint – beim Start wird config.ini aus .env migriert
 # falls noch keine config.ini vorhanden ist.
-RUN mkdir -p /app/config
+RUN mkdir -p /app/config && mkdir -p /app/data
+
+# Daten-Verzeichnis fest auf /app/data (sonst würde der Binary-Default <exe-dir>/data greifen)
+# und Container-Erkennung für den Bridge-Restart (Supervisor startet neu statt subprocess).
+ENV KX_DATA_DIR=/app/data
+ENV KX_IN_DOCKER=1
 
 EXPOSE 7125
 

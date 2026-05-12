@@ -4,9 +4,10 @@ services:
     build: .
     volumes:
       - ./config:/app/config
+      - ./data:/app/data
       - ./.env:/app/.env:ro
     ports:
-      - "7125:7125"
+      - "7125-7130:7125-7130"
     restart: unless-stopped
     logging:
       driver: json-file

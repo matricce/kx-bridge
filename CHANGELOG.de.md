@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.9.8] – 2026-05-12
+
+### Neu
+- **Multi-Printer in einer Bridge-Instanz:** Ein Prozess verwaltet jetzt mehrere Drucker gleichzeitig — N MQTT-Verbindungen + N HTTP-Listener (Ports 7125, 7126, …), geteilte SQLite + GCode-Store. Konfiguration über `[printer_1]`-, `[printer_2]`-… Sektionen in `config.ini`. Einzel-Modus (`[connection]`) funktioniert unverändert weiter. `docker-compose.yml` exposed einen Port-Range `7125-7130`.
+- **Drucker per UI hinzufügen:** „+ Drucker hinzufügen"-Button im Drucker-Tab — nur die IP eingeben, Zugangsdaten (Username, Passwort, Device-ID) werden automatisch vom Drucker geholt und entschlüsselt. Weitere Drucker bekommen den nächsten freien Port (7126, 7127, …).
+- **Drucker per UI entfernen:** „✕"-Button auf jeder Drucker-Karte mit Bestätigung — entfernt die `[printer_N]`-Sektion und nummeriert die übrigen um. Beim Entfernen des letzten Druckers wird auch `[connection]` geleert (leerer Zustand).
+- **GCode Store:** Hochgeladene Dateien werden in SQLite gespeichert, inkl. Thumbnail-Extraktion. Neue `/kx/files`-API.
+- **Browser-Tab:** Grid-Ansicht aller hochgeladenen Dateien — Thumbnail, Status-Badge (✓/✗), letzte Druckdauer, plus Suche, Filter und Sortierung.
+- **Druckhistorie:** Druckaufträge (Start/Ende/Status) werden in SQLite protokolliert, Status pro Datei im Browser-Tab sichtbar.
+- **Filament-Dialog:** Per-Kanal-Remapping vor dem Druckstart — jeder GCode-Farbkanal wird einem physischen AMS-Slot zugewiesen (wie im Anycubic Slicer). Verfügbar im Browser-Tab und im Upload-Banner.
+- **MMU-Emulation:** `GET /printer/objects/query?mmu` liefert eine Happy-Hare-kompatible Struktur, damit OrcaSlicers Filament-Sync die AMS-Slots erkennt.
+- **Drucker-Tab:** Live-Status aller Drucker-Instanzen, IP auf jeder Karte, „Wechseln →"-Button.
+- **Editierbarer Drucker-Name:** Eigener Name in den Einstellungen (gespeichert in `[bridge] printer_name`, hat Vorrang vor dem vom Drucker gemeldeten Namen).
+- **Standalone-tauglich:** Linux-Binary / Windows-EXE laufen ohne Docker — `config/` und `data/` liegen neben dem Programm (portabel). Erststart ohne konfigurierten Drucker zeigt den Drucker-Tab mit „+ Drucker hinzufügen" statt des Einstellungs-Dialogs.
+- **i18n:** Alle neuen UI-Elemente auf Deutsch und Englisch.
+
+### Fixes
+- **CORS:** CORS-Middleware auf allen Endpunkten — Cross-Instance-Fetches in der Multi-Printer-UI funktionieren zuverlässig.
+- **Einstellungen / Update-Check** zeigen im Multi-Printer-Modus jetzt die aktive Bridge-Instanz (via `_apiUrl`).
+- **Bridge-Neustart:** Config-abhängige Umgebungsvariablen werden vor einem Neustart gelöscht (der Config-Loader cachte sie, wodurch Config-Änderungen erst nach einem Kaltstart sichtbar wurden). Der Neustart ist jetzt plattformabhängig: Docker/systemd → Prozess-Exit (Supervisor startet neu), Linux standalone → `os.execv`, Windows → detachter Subprozess.
+- **`--data-dir`-Default** ist jetzt plattformabhängig — der `/app/data`-Default greift nur in Docker (per `ENV` gesetzt), Standalone-Binaries nutzen `<exe-dir>/data`. Behebt einen Startup-Crash beim Ausführen ohne Docker.
+
+---
+
 ## [0.9.7] – 2026-05-08
 
 ### Neu

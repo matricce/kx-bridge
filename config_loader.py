@@ -57,8 +57,9 @@ def _load_config_file(path: pathlib.Path):
         "MQTT_PASSWORD":    (CONFIG_SECTION_CONNECTION, "password"),
         "MODE_ID":          (CONFIG_SECTION_CONNECTION, "mode_id"),
         "DEVICE_ID":        (CONFIG_SECTION_CONNECTION, "device_id"),
-        "DEFAULT_AMS_SLOT": (CONFIG_SECTION_PRINT,      "default_ams_slot"),
-        "AUTO_LEVELING":    (CONFIG_SECTION_PRINT,      "auto_leveling"),
+        "DEFAULT_AMS_SLOT":     (CONFIG_SECTION_PRINT,   "default_ams_slot"),
+        "AUTO_LEVELING":        (CONFIG_SECTION_PRINT,   "auto_leveling"),
+        "BRIDGE_PRINTER_NAME":  (CONFIG_SECTION_BRIDGE,  "printer_name"),
     }
     for env_key, (section, option) in mapping.items():
         if env_key not in os.environ:
@@ -126,6 +127,39 @@ elif _env_path:
     migrate_env_to_config(_env_path, _target)
     _load_config_file(_target)
     _config_path = _target
+
+
+def list_printers() -> list[dict]:
+    """Liest alle [printer_N]-Sektionen aus config.ini.
+
+    Jede Sektion kann folgende Keys haben:
+      name, printer_ip, mqtt_port, username, password, mode_id, device_id,
+      bridge_url, default_ams_slot, auto_leveling
+
+    Gibt eine leere Liste zurück wenn keine [printer_N]-Sektionen vorhanden sind
+    (Single-Printer-Betrieb via [connection]).
+    """
+    path = _find_config_file()
+    if not path:
+        return []
+    cfg = configparser.ConfigParser()
+    cfg.read(path, encoding="utf-8")
+    printers: list[dict] = []
+    idx = 1
+    while True:
+        section = f"printer_{idx}"
+        if not cfg.has_section(section):
+            break
+        p = dict(cfg[section])
+        p.setdefault("id", str(idx))
+        if "mqtt_port" in p:
+            try:
+                p["mqtt_port"] = int(p["mqtt_port"])
+            except ValueError:
+                p["mqtt_port"] = 9883
+        printers.append(p)
+        idx += 1
+    return printers
 
 
 def get(key: str, default: str = "") -> str:

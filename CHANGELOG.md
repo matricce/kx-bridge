@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.9.8] – 2026-05-12
+
+### New
+- **Multi-printer in a single bridge instance:** One process now manages multiple printers — N MQTT connections + N HTTP listeners (ports 7125, 7126, …), shared SQLite + GCode store. Configure via `[printer_1]`, `[printer_2]` … sections in `config.ini`. Single-printer mode (`[connection]` only) keeps working unchanged. `docker-compose.yml` exposes a port range `7125-7130`.
+- **Add printer from the UI:** "+ Add printer" button in the Printers tab — just enter the printer IP, the credentials (username, password, device ID) are fetched and decrypted from the printer automatically. Adding more printers assigns the next free port (7126, 7127, …).
+- **Remove printer from the UI:** "✕" button on each printer card with a confirmation dialog — removes the `[printer_N]` section and renumbers the rest. Removing the last printer clears `[connection]` too, leaving an empty state.
+- **GCode Store:** Uploaded files are persisted in SQLite with thumbnail extraction. New `/kx/files` API.
+- **Browser tab:** Grid view of all uploaded files — thumbnail, status badge (✓/✗), last print duration, plus search, filter and sort.
+- **Print history:** Print jobs (start/end/status) are recorded in SQLite, status shown per file in the Browser tab.
+- **Filament dialog:** Per-channel remapping before print start — assign each GCode color channel to a physical AMS slot (like the Anycubic Slicer does). Available in the Browser tab and the upload banner.
+- **MMU emulation:** `GET /printer/objects/query?mmu` returns a Happy-Hare-compatible structure so OrcaSlicer's filament sync detects the AMS slots.
+- **Printers tab:** Live status of all printer instances, IP shown on each card, "Switch →" button.
+- **Editable printer name:** Set a custom name in Settings (stored in `[bridge] printer_name`, takes precedence over the MQTT-reported name).
+- **Standalone friendly:** Linux binary / Windows EXE run without Docker — `config/` and `data/` are placed next to the executable (portable). First start with no printer configured shows the Printers tab with "+ Add printer" instead of the settings modal.
+- **i18n:** All new UI elements available in German and English.
+
+### Fixes
+- **CORS:** CORS middleware added to all endpoints — cross-instance fetches in the multi-printer UI work reliably.
+- **Settings / update check** now reflect the active bridge instance in multi-printer mode (via `_apiUrl`).
+- **Bridge restart:** Config-dependent environment variables are cleared before a restart (the config loader cached them, which made config changes invisible until the next cold start). Restart is now platform-aware: Docker/systemd → process exit (supervisor restarts), Linux standalone → `os.execv`, Windows → detached subprocess.
+- **`--data-dir` default** is now platform-dependent — the `/app/data` default only applies inside Docker (set via `ENV`), standalone binaries use `<exe-dir>/data`. Fixes a startup crash when running the binary without Docker.
+
+---
+
 ## [0.9.7] – 2026-05-08
 
 ### New
