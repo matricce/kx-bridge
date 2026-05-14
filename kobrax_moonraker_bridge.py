@@ -806,16 +806,26 @@ class KobraXBridge:
         return self._json_cors({"result": jobs})
 
     async def handle_kx_printers(self, request):
+        # Aktive Drucker (mit IP) sammeln
+        active = [(pid, br) for pid, br in self._all_bridges.items()
+                  if (br._args.printer_ip or "").strip()]
+        # Host für bridge_url: Browser-Sicht beibehalten, aber niemals "localhost" exportieren –
+        # sonst scheitern Fetches aus dem Browser, wenn die UI über die LAN-IP geöffnet ist.
         host = request.host.split(":")[0]
+        if host in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+            host = ""
         out = []
-        for pid, br in self._all_bridges.items():
-            if not (br._args.printer_ip or "").strip():
-                continue  # "leerer" Drucker (kein IP) – nicht in der Liste anzeigen
+        for pid, br in active:
             port = getattr(br._args, "port", 7125)
+            # Nur bei Multi-Printer eine konkrete bridge_url setzen (Cross-Instance-Fetch).
+            # Single-Printer: leere bridge_url → JS nutzt relative Pfade (gleiche Origin wie UI).
+            bridge_url = ""
+            if len(active) > 1 and host:
+                bridge_url = f"http://{host}:{port}"
             out.append({
                 "id":         pid,
                 "name":       br._state.get("printer_name") or f"Drucker {pid}",
-                "bridge_url": f"http://{host}:{port}",
+                "bridge_url": bridge_url,
                 "printer_ip": br._args.printer_ip,
                 "device_id":  br._args.device_id or "",
             })

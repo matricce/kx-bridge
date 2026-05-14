@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.9] – 2026-05-14
+
+### Fixes
+- **"Failed to fetch" loop in the UI (Issue #21):** When the web UI was opened via the LAN IP, `/kx/printers` was returning `bridge_url: http://localhost:7125`, which caused the browser to fire cross-origin requests from the LAN IP to `localhost` — these were silently blocked, producing a flood of `TypeError: Failed to fetch` poll errors. The bridge now sends an empty `bridge_url` in single-printer mode so the frontend uses relative paths against the same origin as the UI. In multi-printer mode, `localhost`/`127.0.0.1` are filtered out as bridge hosts.
+- **Windows EXE startup crash (Issue #21):** The v0.9.8 `kx-bridge.exe` was built with a stale `config_loader.py` from an earlier release and crashed on startup with `AttributeError: module 'config_loader' has no attribute 'list_printers'`. `release.sh` now syncs `config_loader.py` into the Windows build repository together with the other source files.
+
+---
+
 ## [0.9.8] – 2026-05-12
 
 ### New
