@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.9.10] – 2026-05-17
+
+> **Hinweis:** Mit diesem Release wird der Fokus von neuen Features auf
+> **Stabilisierung und Bugfixing** verlagert. Die Kern-Workflows
+> (Multi-Printer, Drucker hinzufügen/entfernen, Filament-Dialog,
+> Skip-Objekte, Standalone-Binaries) sind funktional ausreichend — ab jetzt
+> steht Robustheit vor neuen Features. Größere Feature-Wünsche (ACE Pro 2,
+> Home-Assistant-Integration vervollständigen, …) bleiben vorerst im Backlog.
+
+### Neu
+- **Objekte überspringen (vor und während des Drucks):** Aus dem AnycubicSlicerNext-Workbench-Bundle rekonstruiert — der Kobra X kann das nativ über sein Protokoll, der Anycubic-Slicer bietet es bloß nicht im UI an. Die Bridge schon, in zwei Varianten:
+  - **Vor dem Druck:** beim Starten eines Multi-Object-Drucks aus dem Browser-Tab hat der Filament-Dialog jetzt einen zusätzlichen Abschnitt „Objekte". Einzelne Objekte abwählen (oder Polygon direkt im Build-Plate-SVG anklicken) — sie werden vor dem Druck herausgenommen.
+  - **Während des Drucks:** neuer ✂-Button im Dashboard (nur während eines laufenden Drucks sichtbar). Öffnet einen Dialog mit derselben interaktiven SVG-Vorschau — Teil anklicken, bestätigen, der Drucker druckt es nicht weiter. Bereits übersprungene Teile bleiben ausgegraut, der Dialog aktualisiert sich live damit man sieht welche schon weg sind.
+- **Filament-Dialog – farbige Kanal- und Slot-Marker (Issue #23):** Die GCode-Kanal-Nummer sitzt jetzt in einer farbigen Box links (Hintergrund = Kanal-Farbe, Auto-Kontrast-Text statt des alten kleinen Punktes), der zugewiesene AMS-Slot bekommt rechts neben dem Dropdown denselben Look — aktualisiert sich live wenn man die Auswahl ändert. Funktioniert mit 4 Kanälen; das Layout iteriert sauber für mehr, aber >4 echte Filament-Slots brauchen eine ACE-Pro-2-Box und sind ohne entsprechende Hardware nicht durchgängig testbar (geparkt als Feature-Request, Issues #22 und #23).
+
+### Intern
+- Neue Helfer `kobrax_client.skip_objects(names)` / `query_skip_objects()`.
+- Neue Endpunkte: `GET /kx/files/{id}/objects`, `POST /kx/skip`, `POST /kx/skip/query`, `GET /kx/skip/state`.
+- SQLite-Schema: `gcode_files` bekommt die Spalten `objects_skip_parts` und `svg_image` (Auto-Migration auf bestehenden DBs).
+- `_on_file` extrahiert die vom Drucker gelieferte Objektliste + SVG-Vorschau und speichert sie pro Datei.
+- `_on_skip`-Callback verfolgt, welche Objekte der Drucker aktuell als übersprungen meldet.
+
+---
+
 ## [0.9.9] – 2026-05-14
 
 ### Fixes

@@ -458,6 +458,20 @@ class KobraXClient:
     def stop_print(self, taskid: str = "-1") -> dict | None:
         return self.publish("print", "stop", {"taskid": taskid})
 
+    # -- Part-Skip ("Exclude Object") ---------------------------------------
+
+    def query_skip_objects(self) -> dict | None:
+        """Fragt den Drucker nach der aktuellen Objekt-/Skip-Liste."""
+        return self.publish("skip", "query_obj")
+
+    def skip_objects(self, names: list[str]) -> dict | None:
+        """Überspringt die genannten Objekte – auch mid-print möglich.
+
+        Namen entsprechen den EXCLUDE_OBJECT_DEFINE NAME=… Einträgen
+        im GCode-Header bzw. file_details.objects_skip_parts.
+        """
+        return self.publish("skip", "start", {"objects_skip_parts": list(names)})
+
     # -- G-Code Upload -------------------------------------------------------
 
     def upload_gcode(self, filepath: str, remote_filename: str | None = None,

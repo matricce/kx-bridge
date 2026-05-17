@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.9.10] – 2026-05-17
+
+> **Heads-up:** with this release the focus shifts from new features to
+> **stabilization and bug-fixing**. The core flows (multi-printer, add/remove,
+> filament dialog, skip objects, standalone binaries) are feature-complete
+> enough — from now on the priority is making them rock-solid before adding
+> more on top. Bigger feature requests (ACE Pro 2, Home Assistant integration
+> completeness, …) stay on the backlog for now.
+
+### New
+- **Skip objects (pre-print and mid-print):** Reverse-engineered from the AnycubicSlicerNext Workbench bundle — the Kobra X actually supports object skipping over its native protocol, but the Anycubic slicer doesn't expose it. The bridge does now, in both flavors:
+  - **Pre-print:** when starting a multi-object print from the Browser tab, the filament dialog now has an additional "Objects" section. Uncheck individual objects (or click the polygon directly on the build-plate SVG preview) and they're stripped from the print before it starts.
+  - **Mid-print:** new ✂ button on the dashboard (only visible during an active print). Opens a dialog with the same interactive SVG preview — click a part to mark it for skipping, hit confirm, and the printer drops it from the rest of the run. Already-skipped parts stay greyed out and the dialog refreshes live so you can see which ones are gone.
+- **Filament dialog – colored channel and slot markers (Issue #23):** the GCode channel number now sits in a colored box on the left (background = channel color, auto-contrast text instead of the old tiny dot), and the assigned AMS slot gets the same treatment on the right of the dropdown — updates live as you change the selection. Plays well with 4 channels; the layout iterates so more channels render correctly, but >4 actual filament slots still need an ACE Pro 2 hub to be testable end-to-end (parked as a feature request, Issues #22 and #23).
+
+### Internal
+- New `kobrax_client.skip_objects(names)` / `query_skip_objects()` helpers.
+- New endpoints: `GET /kx/files/{id}/objects`, `POST /kx/skip`, `POST /kx/skip/query`, `GET /kx/skip/state`.
+- SQLite schema: `gcode_files` gained `objects_skip_parts` and `svg_image` columns (auto-migrates on existing DBs).
+- `_on_file` now extracts the printer-provided object list + SVG preview and persists them per file.
+- `_on_skip` callback tracks which objects the printer reports as currently skipped.
+
+---
+
 ## [0.9.9] – 2026-05-14
 
 ### Fixes

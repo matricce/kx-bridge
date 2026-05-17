@@ -267,7 +267,9 @@ class GCodeStore:
                     est_print_time_sec INTEGER,
                     filament_used_mm REAL,
                     layer_count INTEGER,
-                    gcode_filaments TEXT
+                    gcode_filaments TEXT,
+                    objects_skip_parts TEXT,
+                    svg_image TEXT
                 );
                 CREATE TABLE IF NOT EXISTS print_jobs (
                     id TEXT PRIMARY KEY,
@@ -287,6 +289,13 @@ class GCodeStore:
                 self._conn.commit()
             except Exception:
                 pass
+            # Migration: Spalten objects_skip_parts + svg_image (Part-Skip-Feature, v0.9.10)
+            for col, typ in (("objects_skip_parts", "TEXT"), ("svg_image", "TEXT")):
+                try:
+                    self._conn.execute(f"ALTER TABLE gcode_files ADD COLUMN {col} {typ}")
+                    self._conn.commit()
+                except Exception:
+                    pass
 
     def save_file(self, file_id: str, filename: str, data: bytes,
                   est_time_sec: int = 0, thumbnail_b64: str = "",
@@ -329,6 +338,18 @@ class GCodeStore:
                 (filename,)
             ).fetchone()
         return dict(row) if row else None
+
+    def update_file_objects(self, filename: str, objects: list, svg: str = "") -> None:
+        """Speichert Objekt-Liste + optionales SVG zu einer Datei (matcht via filename)."""
+        if not filename:
+            return
+        with self._lock:
+            self._conn.execute(
+                "UPDATE gcode_files SET objects_skip_parts=?, svg_image=? "
+                "WHERE filename=?",
+                (json.dumps(objects), svg or "", filename),
+            )
+            self._conn.commit()
 
     def delete_file(self, file_id: str) -> bool:
         row = self.get_file(file_id)
@@ -435,6 +456,9 @@ class KobraXBridge:
 
         self._thumbnail_b64: str = ""
 
+        # Part-Skip: zuletzt vom Drucker gemeldete Skip-Liste (v0.9.10)
+        self._skip_state: dict = {"objects": [], "skipped": [], "ts": 0}
+
         # Register MQTT push callbacks
         client.callbacks["tempature/report"]      = self._on_temp
         client.callbacks["print/report"]          = self._on_print
@@ -442,6 +466,7 @@ class KobraXBridge:
         client.callbacks["file/report"]           = self._on_file
         client.callbacks["multiColorBox/report"]  = self._on_multicolor_box
         client.callbacks["light/report"]          = self._on_light
+        client.callbacks["skip/report"]           = self._on_skip
 
     # -------------------------------------------------------------------------
     # MQTT callbacks (called from reader thread)
@@ -539,6 +564,23 @@ class KobraXBridge:
             self._state["print_speed_mode"] = int(speed_mode)
         self._push_status_update()
 
+    def _on_skip(self, payload: dict):
+        """skip/report-Callback (Part-Skip-Feature, v0.9.10).
+
+        Drucker meldet hier IMMER die Liste der bereits geskippten Objekte
+        zurück (objects_skip_parts), egal ob auf query_obj oder nach skip/start.
+        Die Gesamt-Objektliste kommt aus file/report.
+        """
+        d = payload.get("data") or {}
+        skipped = d.get("objects_skip_parts") or d.get("skipped") or d.get("skipped_parts") or []
+        # Liste immer (auch leer) übernehmen – sonst bleibt sie auf alten Stand
+        self._skip_state = {
+            "skipped":  list(skipped),
+            "ts":       int(time.time()),
+        }
+        if payload.get("state") == "done" or payload.get("code") == 200:
+            log.info(f"Skip-Antwort: state={payload.get('state')} code={payload.get('code')} skipped={skipped}")
+
     def _on_file(self, payload: dict):
         d = payload.get("data") or {}
         details = d.get("file_details") or {}
@@ -546,6 +588,17 @@ class KobraXBridge:
         if thumb:
             self._thumbnail_b64 = thumb
             log.info(f"Vorschaubild empfangen: {len(thumb)} Zeichen base64")
+        # Part-Skip: Objekt-Liste + optionales SVG (v0.9.10)
+        objs = details.get("objects_skip_parts") or []
+        svg  = details.get("svg_image") or ""
+        if objs:
+            filename = d.get("filename") or details.get("filename") or self._last_uploaded_file
+            if filename:
+                try:
+                    self._store.update_file_objects(filename, objs, svg)
+                    log.info(f"Skip-Objekte für {filename}: {len(objs)} ({'mit SVG' if svg else 'ohne SVG'})")
+                except Exception as e:
+                    log.warning(f"update_file_objects fehlgeschlagen: {e}")
         self._push_status_update()
 
     def _on_multicolor_box(self, payload: dict):
@@ -805,6 +858,91 @@ class KobraXBridge:
         jobs   = self._store.list_jobs(limit=limit, offset=offset)
         return self._json_cors({"result": jobs})
 
+    async def handle_kx_file_objects(self, request):
+        """Liefert die Objekt-Liste + optionales SVG für eine Datei.
+
+        GET /kx/files/{id}/objects → {"names": [...], "svg_b64": "..."}
+        Wenn Datei noch keine Objekte hat (alter Eintrag): file/fileDetails
+        beim Drucker abfragen und Antwort abwarten ist Aufgabe des Frontends
+        (Reload nach Upload). Hier nur Datenbankstand zurückgeben.
+        """
+        fid = request.match_info.get("id", "")
+        f = self._store.get_file(fid)
+        if not f:
+            return self._json_cors({"error": "file not found"}, status=404)
+        try:
+            names = json.loads(f.get("objects_skip_parts") or "[]")
+        except Exception:
+            names = []
+        return self._json_cors({
+            "result": {
+                "names":   names,
+                "svg_b64": f.get("svg_image") or "",
+            }
+        })
+
+    async def handle_kx_skip(self, request):
+        """Mid-Print Skip auslösen.
+
+        POST /kx/skip  body={"names": ["..", ".."]}
+        """
+        try:
+            body = await request.json()
+        except Exception:
+            return self._json_cors({"error": "invalid json"}, status=400)
+        names = body.get("names") or []
+        if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+            return self._json_cors({"error": "names must be list[str]"}, status=400)
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, lambda: self.client.skip_objects(names))
+        except Exception as e:
+            return self._json_cors({"error": str(e)}, status=502)
+        return self._json_cors({"result": "ok", "names": names})
+
+    async def handle_kx_skip_query(self, request):
+        """Druck-Objektliste vom Drucker neu abfragen.
+
+        POST /kx/skip/query  → triggert skip/query_obj, gibt zuletzt bekannten
+        Stand zurück (skip/report kommt async, Frontend pollt /kx/skip/state).
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, lambda: self.client.query_skip_objects())
+        except Exception as e:
+            return self._json_cors({"error": str(e)}, status=502)
+        return self._json_cors({"result": self._skip_state})
+
+    async def handle_kx_skip_state(self, request):
+        """Aktueller Skip-State.
+
+        Kombiniert:
+        - Gesamt-Objektliste: aus dem GCode-Store, gematcht über den aktuell
+          laufenden filename (file/report beim Druckstart hat die Liste gefüllt).
+          skip/query_obj liefert nämlich NUR die bereits geskippten zurück,
+          nicht die Gesamtliste.
+        - Geskippt: aus self._skip_state (von skip/report aktualisiert).
+        """
+        filename = self._state.get("filename", "")
+        all_objects: list[str] = []
+        svg = ""
+        if filename:
+            try:
+                f = self._store.get_file_by_name(filename)
+                if f:
+                    all_objects = json.loads(f.get("objects_skip_parts") or "[]")
+                    svg = f.get("svg_image") or ""
+            except Exception as e:
+                log.warning(f"skip_state lookup failed: {e}")
+        result = {
+            "objects":  all_objects,
+            "skipped":  list(self._skip_state.get("skipped", [])),
+            "svg_b64":  svg,
+            "ts":       self._skip_state.get("ts", 0),
+            "filename": filename,
+        }
+        return self._json_cors({"result": result})
+
     async def handle_kx_printers(self, request):
         # Aktive Drucker (mit IP) sammeln
         active = [(pid, br) for pid, br in self._all_bridges.items()
@@ -848,6 +986,10 @@ class KobraXBridge:
 
         # filament_assignments: [{slot_index, material, color_hex}, …]
         assignments = body.get("filament_assignments")
+        # excluded_objects: ["name1","name2",...] – Pre-Print Skip (v0.9.10)
+        excluded_objects = body.get("excluded_objects") or []
+        if not isinstance(excluded_objects, list):
+            excluded_objects = []
 
         if assignments:
             ams_box_mapping = [
@@ -912,11 +1054,11 @@ class KobraXBridge:
                 "ai_settings":   {"status": 0, "count": 0, "type": 1},
                 "timelapse":     {"status": 0, "count": 0, "type": 64},
                 "drying_settings": {"status": 0, "target_temp": 0, "duration": 0, "remain_time": 0},
-                "model_objects_skip_parts": [],
+                "model_objects_skip_parts": excluded_objects,
             },
         }
 
-        log.info(f"KX-Store Druckstart: {filename}  ams={len(ams_box_mapping)} slots  assignments={bool(assignments)}")
+        log.info(f"KX-Store Druckstart: {filename}  ams={len(ams_box_mapping)} slots  assignments={bool(assignments)}  excluded={len(excluded_objects)}")
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             None, lambda: self.client.publish("print", "start", payload, timeout=15.0)
@@ -1210,6 +1352,10 @@ class KobraXBridge:
 
         # Optionale Slot-Auswahl aus dem Filament-Dialog
         filament_assignments = body.get("filament_assignments")
+        # Pre-Print Skip (v0.9.10)
+        excluded_objects = body.get("excluded_objects") or []
+        if not isinstance(excluded_objects, list):
+            excluded_objects = []
         if filament_assignments is not None:
             ams_box_mapping = [
                 {
@@ -1271,7 +1417,7 @@ class KobraXBridge:
                 "ai_settings":   {"status": 0, "count": 0, "type": 0},
                 "timelapse":     {"status": 0, "count": 0, "type": 0},
                 "drying_settings": {"status": 0, "target_temp": 0, "duration": 0, "remain_time": 0},
-                "model_objects_skip_parts": [],
+                "model_objects_skip_parts": excluded_objects,
             },
         }
 
@@ -1423,6 +1569,7 @@ main{flex:1;overflow-y:auto;padding:20px}
 .btn-start{background:var(--ok);color:#0d2010}
 .btn-pause{background:var(--raised);color:var(--txt);border:1px solid var(--border)}
 .btn-resume{background:#0d2d1a;color:var(--ok);border:1px solid var(--ok)}
+.btn-skip{background:var(--raised);color:var(--warn);border:1px solid var(--warn)}
 .btn-cancel{background:#2d0d0d;color:var(--err);border:1px solid var(--err)}
 .btn-accent{background:var(--accent);color:#001a24}
 .btn-sm{padding:7px 12px;font-size:12px}
@@ -1817,6 +1964,7 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
           <div class="ctrl-btns" id="d-ctrl-btns" style="margin-top:12px">
             <button class="btn btn-pause btn-sm" id="d-btn-pause" onclick="printAction('pause')">⏸ Pause</button>
             <button class="btn btn-resume btn-sm" id="d-btn-resume" onclick="printAction('resume')">▶ Weiter</button>
+            <button class="btn btn-skip btn-sm" id="d-btn-skip" onclick="openSkipDialog()" style="display:none">✂ <span id="d-btn-skip-label">Objekte</span></button>
             <button class="btn btn-cancel btn-sm" id="d-btn-cancel" onclick="confirmCancel()">✕ Stopp</button>
           </div>
         </div>
@@ -2101,6 +2249,11 @@ var LANG_DE={
   file_slots_btn:'🎨 Slots wählen',
   file_cancel_btn:'✕ Abbrechen',
   nav_printers:'Drucker',
+  skip_title:'✂ Objekte überspringen',skip_hint:'Objekte abwählen, die nicht weiter gedruckt werden sollen:',
+  skip_btn_label:'Objekte',skip_no_objects:'Keine Objekte in diesem Druck.',
+  skip_already:'übersprungen',skip_select_at_least_one:'Bitte mindestens ein Objekt wählen.',
+  skip_sending:'Sende …',skip_success:'Objekte werden übersprungen.',
+  fd_objects_hint:'Objekte überspringen (optional):',
   add_printer:'Drucker hinzufügen',apd_lbl_ip:'Drucker-IP',apd_lbl_name:'Name (optional)',
   apd_fetching:'Hole Daten vom Drucker…',apd_success:'Drucker hinzugefügt, Bridge startet neu…',apd_err_ip:'Bitte IP-Adresse eingeben',
   printers_remove:'Drucker entfernen',printers_remove_confirm:'Drucker "{name}" entfernen? Die Bridge startet neu.',
@@ -2157,6 +2310,11 @@ var LANG_EN={
   file_slots_btn:'🎨 Select Slots',
   file_cancel_btn:'✕ Cancel',
   nav_printers:'Printers',
+  skip_title:'✂ Skip objects',skip_hint:'Uncheck objects you no longer want to print:',
+  skip_btn_label:'Objects',skip_no_objects:'No objects in this print.',
+  skip_already:'skipped',skip_select_at_least_one:'Please pick at least one object.',
+  skip_sending:'Sending …',skip_success:'Objects will be skipped.',
+  fd_objects_hint:'Skip objects (optional):',
   add_printer:'Add printer',apd_lbl_ip:'Printer IP',apd_lbl_name:'Name (optional)',
   apd_fetching:'Fetching data from printer…',apd_success:'Printer added, bridge restarting…',apd_err_ip:'Please enter an IP address',
   printers_remove:'Remove printer',printers_remove_confirm:'Remove printer "{name}"? The bridge will restart.',
@@ -2262,6 +2420,10 @@ function applyLang(){
   setText('printers-panel-title','🖨 '+T.nav_printers);
   setText('add-printer-btn-label',T.add_printer);
   setText('apd-title',T.add_printer);
+  setText('skip-title',T.skip_title);
+  setText('skip-hint',T.skip_hint);
+  setText('d-btn-skip-label',T.skip_btn_label);
+  setText('fd-objects-hint',T.fd_objects_hint);
   setText('apd-lbl-ip',T.apd_lbl_ip);
   setText('apd-lbl-name',T.apd_lbl_name);
   setText('store-panel-title','🗂 '+T.panel_browser_title);
@@ -2484,6 +2646,13 @@ function applyState(){
       frb.style.display='flex';
     }else{frb.style.display='none';}
   }
+  // skip-button (mid-print) – nur sichtbar wenn aktuell gedruckt wird
+  var skipBtn=document.getElementById('d-btn-skip');
+  if(skipBtn){
+    var printing=(s.print_state==='printing'||s.print_state==='paused');
+    skipBtn.style.display=printing?'':'none';
+  }
+
   // header
   var b=document.getElementById('h-badge');
   b.className='hbadge '+s.print_state;
@@ -3106,6 +3275,32 @@ function startReadyFileWithSlots(){
 }
 
 var _amsSlots=[];
+var _printObjects=[]; // [{name, skip}] für aktuell offenen Dialog
+var _printObjectsSvg=''; // base64-SVG aus DB für Visualisierung
+
+// Hilfsfunktionen für farbige Kanal/Slot-Marker (Issue #23)
+function _contrastText(hex){
+  // Helle Farbe → dunkler Text, dunkle Farbe → heller Text
+  var c=(hex||'').replace('#','');
+  if(c.length===3)c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+  if(c.length<6)return '#fff';
+  var r=parseInt(c.slice(0,2),16),g=parseInt(c.slice(2,4),16),b=parseInt(c.slice(4,6),16);
+  // YIQ-Helligkeit
+  var y=(r*299 + g*587 + b*114)/1000;
+  return y>=140?'#111':'#fff';
+}
+function _updateSlotMarker(sel){
+  var opt=sel.options[sel.selectedIndex];
+  var color=opt&&opt.dataset.color?opt.dataset.color:'#888';
+  var slotIdx=parseInt(opt.value);
+  var paintIdx=sel.dataset.paint;
+  var marker=document.querySelector('.fd-slot-marker[data-for-paint="'+paintIdx+'"]');
+  if(marker){
+    marker.style.background=color;
+    marker.style.color=_contrastText(color);
+    marker.textContent=(slotIdx+1);
+  }
+}
 
 function openFilamentDialog(slots){
   _amsSlots=slots.filter(function(s){return s.status==='loaded';});
@@ -3113,6 +3308,24 @@ function openFilamentDialog(slots){
   var title=document.getElementById('fd-title');
   var body=document.getElementById('fd-slots');
   if(title)title.textContent='▶ '+_storeFilename;
+  // Objekt-Liste laden (nur Store-Modus: per File-ID; Banner-Modus hat keine ID)
+  _printObjects=[];
+  _printObjectsSvg='';
+  var objSection=document.getElementById('fd-objects-section');
+  if(objSection)objSection.style.display='none';
+  if(_storeFileId){
+    fetch(_apiUrl('/kx/files/'+encodeURIComponent(_storeFileId)+'/objects'))
+      .then(function(r){return r.json()})
+      .then(function(d){
+        var names=(d.result&&d.result.names)||[];
+        _printObjectsSvg=(d.result&&d.result.svg_b64)||'';
+        if(names.length>=2){
+          _printObjects=names.map(function(n){return {name:n,skip:false};});
+          renderObjectChecklist(); renderObjectSvg();
+          if(objSection)objSection.style.display='block';
+        }
+      }).catch(function(){});
+  }
 
   // GCode-Kanäle: bevorzugt aus _gcodeFilaments, sonst aus belegten AMS-Slots ableiten
   var channels=_gcodeFilaments.length?_gcodeFilaments:_amsSlots.map(function(s,i){
@@ -3131,14 +3344,18 @@ function openFilamentDialog(slots){
       var opts=compatible.map(function(s){
         var sel=(s.slot_index===defaultSlot.slot_index)?'selected':'';
         return '<option value="'+s.slot_index+'" data-color="'+s.color_hex+'" data-material="'+s.material+'" '+sel+'>'+
-          'Slot '+(s.slot_index+1)+' · '+s.material+'</option>';
+          '● Slot '+(s.slot_index+1)+' · '+s.material+'</option>';
       }).join('');
-      return '<div style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:6px;background:var(--raised);border:1px solid var(--border)">'+
-        '<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:'+gc.color_hex+';border:1px solid var(--border);flex-shrink:0"></span>'+
-        '<span style="font-size:13px;font-weight:600;min-width:70px">Kanal '+(i+1)+'</span>'+
-        '<span style="font-size:11px;color:var(--txt2);min-width:32px">'+gc.material+'</span>'+
-        '<span style="font-size:18px;color:var(--txt2)">→</span>'+
-        '<select data-paint="'+i+'" data-paint-color="'+gc.color_hex+'" style="flex:1;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:var(--raised);color:var(--txt);font-size:13px">'+
+      // Kanal-Box (links): farbige Box mit Nummer + auto Kontrast-Text
+      var txt=_contrastText(gc.color_hex);
+      var slotColor=defaultSlot?defaultSlot.color_hex:'#888';
+      var slotTxt=_contrastText(slotColor);
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:6px;background:var(--raised);border:1px solid var(--border)">'+
+        '<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;background:'+gc.color_hex+';color:'+txt+';font-weight:700;font-size:13px;border:1px solid var(--border);flex-shrink:0">'+(i+1)+'</span>'+
+        '<span style="font-size:11px;color:var(--txt2);min-width:36px">'+gc.material+'</span>'+
+        '<span style="font-size:16px;color:var(--txt2)">→</span>'+
+        '<span class="fd-slot-marker" data-for-paint="'+i+'" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:5px;background:'+slotColor+';color:'+slotTxt+';font-weight:700;font-size:12px;border:1px solid var(--border);flex-shrink:0">'+(defaultSlot?defaultSlot.slot_index+1:'?')+'</span>'+
+        '<select data-paint="'+i+'" data-paint-color="'+gc.color_hex+'" onchange="_updateSlotMarker(this)" style="flex:1;min-width:0;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:var(--raised);color:var(--txt);font-size:12px">'+
         opts+'</select>'+
       '</div>';
     }).join('');
@@ -3174,12 +3391,14 @@ function confirmFilamentPrint(){
       ams_color:    hexToRgba(amsSlot.color_hex||'#ffffff'),
     });
   });
+  // Pre-Print Skip: Namen der abgehakten Objekte sammeln
+  var excludedObjects=_printObjects.filter(function(o){return o.skip;}).map(function(o){return o.name;});
   closeFilamentDialog();
   if(_filamentDialogMode==='banner'){
     // Banner-Modus: normaler print/start mit Slot-Override
     var btn=document.getElementById('file-ready-btn');
     if(btn){btn.disabled=true;btn.textContent='…';}
-    post('/printer/print/start',{filename:S.file_ready,filament_assignments:assignments})
+    post('/printer/print/start',{filename:S.file_ready,filament_assignments:assignments,excluded_objects:excludedObjects})
       .then(function(r){return r.json();})
       .then(function(){
         document.getElementById('file-ready-banner').style.display='none';
@@ -3194,12 +3413,170 @@ function confirmFilamentPrint(){
     fetch(_apiUrl('/kx/print'),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({file_id:_storeFileId,filament_assignments:assignments})
+      body:JSON.stringify({file_id:_storeFileId,filament_assignments:assignments,excluded_objects:excludedObjects})
     }).then(function(r){return r.json()}).then(function(d){
       if(d.result==='ok'){clog('Druckstart: '+_storeFilename,'msg-ok');showPanel('dashboard');}
       else{clog('Druckfehler: '+(d.error||'?'),'msg-err');}
     }).catch(function(e){clog('Druckfehler: '+e,'msg-err');});
   }
+}
+
+function renderObjectChecklist(){
+  var box=document.getElementById('fd-objects');
+  if(!box)return;
+  box.innerHTML=_printObjects.map(function(o,i){
+    var label=o.name;
+    // Klipper-Namen sind oft "Datei.stl_id_N_copy_M" → schöner darstellen
+    var m=label.match(/^(.+)\.stl_id_(\d+)_copy_(\d+)$/);
+    if(m)label=m[1]+' #'+(parseInt(m[2])+1)+(m[3]!=='0'?' ('+(parseInt(m[3])+1)+')':'');
+    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:var(--raised);border:1px solid var(--border);cursor:pointer;font-size:12px">'+
+      '<input type="checkbox" data-idx="'+i+'" '+(o.skip?'checked':'')+' onchange="_toggleObjectSkip('+i+',this.checked)">'+
+      '<span style="word-break:break-all">'+label+'</span>'+
+      '</label>';
+  }).join('');
+}
+function _toggleObjectSkip(idx,val){
+  if(_printObjects[idx])_printObjects[idx].skip=!!val;
+  renderObjectSvg();
+}
+function renderObjectSvg(){
+  var box=document.getElementById('fd-objects-svg');
+  if(!box)return;
+  if(!_printObjectsSvg||!_printObjects.length){box.style.display='none';box.innerHTML='';return;}
+  box.style.display='block';
+  var svg=''; try{ svg=atob(_printObjectsSvg);}catch(e){ box.style.display='none'; return; }
+  box.innerHTML=svg;
+  var svgEl=box.querySelector('svg');
+  if(!svgEl)return;
+  svgEl.style.width='100%'; svgEl.style.maxHeight='200px'; svgEl.style.height='auto';
+  _printObjects.forEach(function(o,i){
+    var g=svgEl.querySelector('g[id="'+CSS.escape(o.name)+'"]');
+    if(!g)return;
+    var path=g.querySelector('path');
+    g.style.cursor='pointer';
+    g.setAttribute('opacity', o.skip?'0.8':'0.35');
+    if(path){
+      path.setAttribute('fill', o.skip?'#ff5e5b':'#5fa7ff');
+      path.setAttribute('fill-opacity', o.skip?'0.4':'0.18');
+    }
+    g.onclick=function(){
+      _printObjects[i].skip=!_printObjects[i].skip;
+      renderObjectChecklist(); renderObjectSvg();
+    };
+  });
+}
+
+// ── Mid-Print Skip ──
+var _skipObjects=[]; // [{name, skipped, willSkip}]
+var _skipSvg='';
+function openSkipDialog(){
+  document.getElementById('skip-status').textContent='';
+  document.getElementById('skip-confirm').disabled=false;
+  _refreshSkipDialog();
+  document.getElementById('skip-dialog').classList.add('open');
+}
+function _refreshSkipDialog(){
+  // Erst aktueller State (mit DB-Objects + svg), dann query_obj für frischen skipped
+  fetch(_apiUrl('/kx/skip/state')).then(function(r){return r.json()}).then(function(d){
+    var s=d.result||{};
+    _skipSvg=s.svg_b64||'';
+    _skipObjects=(s.objects||[]).map(function(n){
+      return {name:n, skipped:(s.skipped||[]).indexOf(n)>=0, willSkip:false};
+    });
+    renderSkipList(); renderSkipSvg();
+  });
+  // Frisch nachfragen (skipped-Liste aktualisieren)
+  fetch(_apiUrl('/kx/skip/query'),{method:'POST'}).then(function(r){return r.json()}).then(function(){
+    setTimeout(function(){
+      fetch(_apiUrl('/kx/skip/state')).then(function(r){return r.json()}).then(function(d){
+        var s=d.result||{};
+        var skipped=s.skipped||[];
+        _skipObjects.forEach(function(o){ o.skipped=skipped.indexOf(o.name)>=0; if(o.skipped)o.willSkip=false; });
+        renderSkipList(); renderSkipSvg();
+      });
+    }, 500);
+  }).catch(function(){});
+}
+function closeSkipDialog(){
+  document.getElementById('skip-dialog').classList.remove('open');
+}
+function _shortLabel(name){
+  var m=name.match(/^(.+)\.[sS][tT][lL]_id_(\d+)_copy_(\d+)$/);
+  if(!m)return name;
+  return m[1]+' #'+(parseInt(m[2])+1)+(m[3]!=='0'?' ('+(parseInt(m[3])+1)+')':'');
+}
+function renderSkipList(){
+  var box=document.getElementById('skip-list');
+  if(!box)return;
+  if(!_skipObjects.length){
+    box.innerHTML='<div style="color:var(--txt2);font-size:12px;padding:12px;text-align:center">'+(T.skip_no_objects||'Keine Objekte in diesem Druck.')+'</div>';
+    return;
+  }
+  box.innerHTML=_skipObjects.map(function(o,i){
+    var label=_shortLabel(o.name);
+    var dis=o.skipped?'disabled':'';
+    var note=o.skipped?'<span style="font-size:11px;color:var(--warn);margin-left:auto">'+(T.skip_already||'übersprungen')+'</span>':'';
+    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:var(--raised);border:1px solid var(--border);font-size:12px;'+(o.skipped?'opacity:0.5':'')+'">'+
+      '<input type="checkbox" data-idx="'+i+'" '+(o.willSkip?'checked':'')+' '+dis+' onchange="_toggleWillSkip('+i+',this.checked)">'+
+      '<span style="word-break:break-all">'+label+'</span>'+note+
+      '</label>';
+  }).join('');
+}
+function renderSkipSvg(){
+  var box=document.getElementById('skip-svg');
+  if(!box)return;
+  if(!_skipSvg||!_skipObjects.length){box.style.display='none';box.innerHTML='';return;}
+  box.style.display='block';
+  // SVG aus base64 dekodieren
+  var svg='';
+  try{ svg=atob(_skipSvg); }catch(e){ box.style.display='none'; return; }
+  box.innerHTML=svg;
+  // Polygone interaktiv machen: jeder <g id="..."> entspricht einem Objekt
+  var svgEl=box.querySelector('svg');
+  if(!svgEl)return;
+  svgEl.style.width='100%'; svgEl.style.maxHeight='280px'; svgEl.style.height='auto';
+  _skipObjects.forEach(function(o,i){
+    var g=svgEl.querySelector('g[id="'+CSS.escape(o.name)+'"]');
+    if(!g)return;
+    var path=g.querySelector('path');
+    if(o.skipped){
+      // bereits übersprungen → ausgegraut, kein Klick
+      g.setAttribute('opacity','0.25');
+      if(path){path.setAttribute('fill','#888');path.setAttribute('fill-opacity','0.3');}
+      g.style.cursor='not-allowed';
+    } else {
+      g.style.cursor='pointer';
+      g.setAttribute('opacity', o.willSkip?'0.8':'0.35');
+      if(path){
+        path.setAttribute('fill', o.willSkip?'#ff5e5b':'#5fa7ff');
+        path.setAttribute('fill-opacity', o.willSkip?'0.4':'0.18');
+      }
+      g.onclick=function(){
+        _skipObjects[i].willSkip=!_skipObjects[i].willSkip;
+        renderSkipList(); renderSkipSvg();
+      };
+    }
+  });
+}
+function _toggleWillSkip(idx,val){
+  if(_skipObjects[idx])_skipObjects[idx].willSkip=!!val;
+  renderSkipSvg();
+}
+function confirmSkip(){
+  var names=_skipObjects.filter(function(o){return o.willSkip;}).map(function(o){return o.name;});
+  var st=document.getElementById('skip-status');
+  var btn=document.getElementById('skip-confirm');
+  if(!names.length){st.textContent=T.skip_select_at_least_one||'Bitte mindestens ein Objekt wählen.';st.style.color='var(--warn)';return;}
+  btn.disabled=true; st.textContent=T.skip_sending||'Sende …'; st.style.color='var(--txt2)';
+  fetch(_apiUrl('/kx/skip'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({names:names})})
+    .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
+    .then(function(res){
+      if(!res.ok){st.textContent=(res.j&&res.j.error)||'Fehler';st.style.color='var(--err)';btn.disabled=false;return;}
+      st.textContent=T.skip_success||'Objekte werden übersprungen.';st.style.color='var(--ok)';
+      // Dialog offen lassen + neu laden damit der "übersprungen"-Status erscheint
+      setTimeout(function(){ _refreshSkipDialog(); btn.disabled=false; st.textContent=''; }, 1500);
+    })
+    .catch(function(e){st.textContent=''+e;st.style.color='var(--err)';btn.disabled=false;});
 }
 
 function storeDelete(fileId){
@@ -3322,11 +3699,16 @@ function loadPrinterTab(){
       <span class="modal-title" id="fd-title" style="font-size:14px;word-break:break-all"></span>
       <button onclick="closeFilamentDialog()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--txt2)">✕</button>
     </div>
-    <p style="font-size:12px;color:var(--txt2);margin-bottom:10px">GCode-Kanal → AMS-Slot zuweisen:</p>
+    <p id="fd-slots-hint" style="font-size:12px;color:var(--txt2);margin-bottom:10px">GCode-Kanal → AMS-Slot zuweisen:</p>
     <div id="fd-slots" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
+    <div id="fd-objects-section" style="display:none;margin-bottom:16px">
+      <p id="fd-objects-hint" style="font-size:12px;color:var(--txt2);margin-bottom:8px">Objekte überspringen (optional):</p>
+      <div id="fd-objects-svg" style="display:none;background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:6px;margin-bottom:8px;text-align:center"></div>
+      <div id="fd-objects" style="display:flex;flex-direction:column;gap:6px;max-height:140px;overflow-y:auto"></div>
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button onclick="closeFilamentDialog()" style="padding:8px 16px;background:var(--raised);border:1px solid var(--border);border-radius:8px;color:var(--txt);cursor:pointer">Abbrechen</button>
-      <button onclick="confirmFilamentPrint()" style="padding:8px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">▶ Drucken</button>
+      <button id="fd-cancel" onclick="closeFilamentDialog()" style="padding:8px 16px;background:var(--raised);border:1px solid var(--border);border-radius:8px;color:var(--txt);cursor:pointer">Abbrechen</button>
+      <button id="fd-print" onclick="confirmFilamentPrint()" style="padding:8px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">▶ Drucken</button>
     </div>
   </div>
 </div>
@@ -3345,6 +3727,23 @@ function loadPrinterTab(){
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button onclick="closeAddPrinterDialog()" style="padding:8px 16px;background:var(--raised);border:1px solid var(--border);border-radius:8px;color:var(--txt);cursor:pointer">Abbrechen</button>
       <button id="apd-confirm" onclick="confirmAddPrinter()" style="padding:8px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">Hinzufügen</button>
+    </div>
+  </div>
+</div>
+<!-- Mid-Print Skip-Dialog -->
+<div class="modal-overlay" id="skip-dialog" onclick="if(event.target===this)closeSkipDialog()">
+  <div class="modal-box" style="max-width:420px;width:100%">
+    <div class="modal-header" style="margin-bottom:14px">
+      <span class="modal-title" id="skip-title">✂ Objekte überspringen</span>
+      <button onclick="closeSkipDialog()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--txt2)">✕</button>
+    </div>
+    <p id="skip-hint" style="font-size:12px;color:var(--txt2);margin-bottom:10px">Objekte abwählen, die nicht weiter gedruckt werden sollen:</p>
+    <div id="skip-svg" style="display:none;background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:6px;margin-bottom:10px;text-align:center"></div>
+    <div id="skip-list" style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto;margin-bottom:12px"></div>
+    <div id="skip-status" style="font-size:12px;color:var(--txt2);min-height:16px;margin-bottom:8px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeSkipDialog()" style="padding:8px 16px;background:var(--raised);border:1px solid var(--border);border-radius:8px;color:var(--txt);cursor:pointer">Abbrechen</button>
+      <button id="skip-confirm" onclick="confirmSkip()" style="padding:8px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">Überspringen</button>
     </div>
   </div>
 </div>
@@ -4435,6 +4834,10 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_delete("/kx/files/{file_id}",    bridge.handle_kx_file_delete)
     r.add_get("/kx/filament/slots",        bridge.handle_kx_filament_slots)
     r.add_get("/kx/history",               bridge.handle_kx_history)
+    r.add_get("/kx/files/{id}/objects",    bridge.handle_kx_file_objects)
+    r.add_post("/kx/skip",                 bridge.handle_kx_skip)
+    r.add_post("/kx/skip/query",           bridge.handle_kx_skip_query)
+    r.add_get("/kx/skip/state",            bridge.handle_kx_skip_state)
     r.add_route("OPTIONS", "/kx/{path:.*}", bridge.handle_kx_options)
 
     # Root + Printer-Routen (Single-Page, JS liest Pathname)
