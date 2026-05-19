@@ -170,7 +170,19 @@ Die Migration läuft automatisch beim ersten Start nach dem Upgrade — keine Ak
 
 ## 📄 Lizenz
 
-Interoperabilitätsforschung gem. §69e UrhG — private, nicht-kommerzielle Nutzung.
+[![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
+
+KX-Bridge steht unter der **GNU General Public License v3.0** ([LICENSE](LICENSE)).
+Forks und Erweiterungen müssen bei Weitergabe ebenfalls unter GPLv3 stehen.
+
+Die MQTT-Protokoll-Implementierung ist das Ergebnis unabhängiger
+Reverse-Engineering-Arbeit zur Herstellung der Interoperabilität (§69e UrhG /
+EU-Softwarerichtlinie Art. 6). Drittmaterial im Repository (Anycubic-
+TLS-Zertifikate) fällt **nicht** unter die GPLv3 und ist ausschließlich
+enthalten, um die Authentifizierung am eigenen Drucker zu ermöglichen.
+Details + Disclaimer in [NOTICE.md](NOTICE.md).
+
+Dieses Projekt ist unabhängig und steht in keinem Zusammenhang mit Anycubic.
 
 <div align="center">
 <br>
