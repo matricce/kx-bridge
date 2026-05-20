@@ -8,6 +8,21 @@ Verwendung:
 
 OrcaSlicer-Konfiguration:
   Drucker-Typ: Klipper  |  Host: 127.0.0.1  |  Port: 7125
+
+────────────────────────────────────────────────────────────────────────────
+Copyright (C) 2026 viewit (KX-Bridge contributors)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License v3.0 as published
+by the Free Software Foundation. See the LICENSE file in the project root
+or <https://www.gnu.org/licenses/gpl-3.0.html> for the full text.
+
+This program is distributed WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+Reverse-engineering of the Anycubic Kobra X MQTT protocol was carried out
+for interoperability purposes (§69e UrhG / EU Software Directive Art. 6).
+This project is not affiliated with Anycubic. See NOTICE.md for details.
 """
 
 import argparse
@@ -212,33 +227,91 @@ def _extract_thumbnail(data: bytes) -> str:
 
 
 def _extract_filament_info(data: bytes) -> list[dict]:
-    """Liest filament_colour + filament_type aus GCode-Header (OrcaSlicer/PrusaSlicer).
+  """Liest Filament-Farben/Materialien inkl. Tool-Reihenfolge aus Orca/Prusa-GCode.
 
-    Gibt Liste von {color_hex, material} pro Slot zurück, leer wenn nicht gefunden.
-    Liest nur die ersten 8KB (Header-Bereich).
-    """
+  Gibt Liste von {slot_index, color_hex, material} in Tool-/Paint-Reihenfolge
+  (T0, T1, ...) zurück.
+  Sucht sowohl am Anfang als auch am Ende der Datei, da Orca große
+  Thumbnail-Blöcke einfügen kann und Metadaten dann im Tail stehen.
+  """
+  try:
+    head = data[:131072]
+    tail = data[-131072:] if len(data) > 131072 else b""
+    header = (head + b"\n" + tail).decode("utf-8", errors="ignore")
+    colors, materials = [], []
+    paint_count_hint = 0
+    tool_filament_order = []
+    for line in header.splitlines():
+      if re.match(r"^\s*;\s*filament_colour\s*=", line):
+        val = line.split("=", 1)[-1].strip()
+        colors = [c.strip().lstrip("#") for c in val.split(";") if c.strip()]
+      elif re.match(r"^\s*;\s*filament_multi_colour\s*=", line) and not colors:
+        val = line.split("=", 1)[-1].strip()
+        colors = [c.strip().lstrip("#") for c in val.split(";") if c.strip()]
+      elif re.match(r"^\s*;\s*filament_type\s*=", line):
+        val = line.split("=", 1)[-1].strip()
+        parts = [m.strip() for m in re.split(r"[;,]", val) if m.strip()]
+        materials = parts
+        paint_count_hint = max(paint_count_hint, len(parts))
+      elif re.match(r"^\s*;\s*filament_density\s*:", line):
+        val = line.split(":", 1)[-1].strip()
+        parts = [x.strip() for x in re.split(r"[;,]", val) if x.strip()]
+        paint_count_hint = max(paint_count_hint, len(parts))
+      elif re.match(r"^\s*;\s*filament_diameter\s*:", line):
+        val = line.split(":", 1)[-1].strip()
+        parts = [x.strip() for x in re.split(r"[;,]", val) if x.strip()]
+        paint_count_hint = max(paint_count_hint, len(parts))
+      elif re.match(r"^\s*;\s*filament\s*:", line):
+        raw = line.split(":", 1)[-1]
+        parsed = []
+        for p in [x.strip() for x in raw.split(",") if x.strip()]:
+          try:
+            parsed.append(int(p))
+          except Exception:
+            pass
+        if parsed:
+          tool_filament_order = parsed
+    total_paints = max(len(colors), len(materials), paint_count_hint)
+    if tool_filament_order:
+      total_paints = max(total_paints, max(tool_filament_order))
+    if total_paints <= 0:
+      return []
+
+    # Keep full paint list visible; mark paints referenced by Orca tool order as used.
+    if len(colors) < total_paints:
+      colors.extend(["FFFFFF"] * (total_paints - len(colors)))
+    if len(materials) < total_paints:
+      materials.extend(["PLA"] * (total_paints - len(materials)))
+    # Prefer actual tool-change commands from the GCode body.
+    # This avoids forwarding paints that are present in metadata but never used.
+    used_paints_zero_based = set()
     try:
-        header = data[:8192].decode("utf-8", errors="ignore")
-        colors, materials = [], []
-        for line in header.splitlines():
-            if line.startswith("; filament_colour"):
-                val = line.split("=", 1)[-1].strip()
-                colors = [c.strip().lstrip("#") for c in val.split(";") if c.strip()]
-            elif line.startswith("; filament_type"):
-                val = line.split("=", 1)[-1].strip()
-                materials = [m.strip() for m in val.split(";") if m.strip()]
-        if not colors:
-            return []
-        result = []
-        for i, hex_color in enumerate(colors):
-            result.append({
-                "slot_index": i,
-                "color_hex":  "#" + hex_color.upper() if hex_color else "#FFFFFF",
-                "material":   materials[i] if i < len(materials) else "PLA",
-            })
-        return result
+      for m in re.finditer(br"(?m)^[ \t]*T([0-9]+)\b", data):
+        used_paints_zero_based.add(int(m.group(1)))
     except Exception:
-        return []
+      used_paints_zero_based = set()
+
+    # Fallback for slicers that only provide paint usage in header metadata.
+    used_paints_from_header = set()
+    for n in tool_filament_order:
+      try:
+        # Orca/Prusa filament: list is typically 1-based.
+        used_paints_from_header.add(max(0, int(n) - 1))
+      except Exception:
+        pass
+
+    result = []
+    for i in range(total_paints):
+      hex_color = colors[i] if i < len(colors) else "FFFFFF"
+      result.append({
+        "slot_index": i,
+        "color_hex":  "#" + hex_color.upper() if hex_color else "#FFFFFF",
+        "material":   materials[i] if i < len(materials) else "PLA",
+        "is_used":    (i in used_paints_zero_based) if used_paints_zero_based else ((i in used_paints_from_header) if used_paints_from_header else True),
+      })
+    return result
+  except Exception:
+    return []
 
 
 class GCodeStore:
@@ -351,6 +424,15 @@ class GCodeStore:
             )
             self._conn.commit()
 
+    def update_file_filaments(self, file_id: str, gcode_filaments: list | None) -> None:
+      """Aktualisiert geparste GCode-Filamente für einen bestehenden DB-Eintrag."""
+      with self._lock:
+        self._conn.execute(
+          "UPDATE gcode_files SET gcode_filaments=? WHERE id=?",
+          (json.dumps(gcode_filaments) if gcode_filaments else None, file_id),
+        )
+        self._conn.commit()
+
     def delete_file(self, file_id: str) -> bool:
         row = self.get_file(file_id)
         if not row:
@@ -422,39 +504,47 @@ class KobraXBridge:
         self.ws_clients: set[web.WebSocketResponse] = set()
         self._last_state: dict = {}
         self._state = {
-            "nozzle_temp":        0.0,
-            "nozzle_target":      0.0,
-            "bed_temp":           0.0,
-            "bed_target":         0.0,
-            "print_state":        "standby",
-            "kobra_state":        "free",
-            "filename":           "",
-            "slicer_time":        0,
-            "progress":           0.0,
-            "print_duration":     0,
-            "remain_time":        0,
-            "curr_layer":         0,
-            "total_layers":       0,
-            "printer_name":       env_loader.get("BRIDGE_PRINTER_NAME", "Anycubic Kobra X"),
-            "firmware_version":   "unknown",
-            "upload_url":         "",
-            "camera_url":         "",
-            "fan_speed":          0,
-            "light_on":           False,
-            "light_brightness":   80,
-            "taskid":             "-1",
-            "print_speed_mode":   2,
-            "connection_error":   "",
-            "file_ready":         "",
+          "nozzle_temp":        0.0,
+          "nozzle_target":      0.0,
+          "bed_temp":           0.0,
+          "bed_target":         0.0,
+          "print_state":        "standby",
+          "kobra_state":        "free",
+          "filename":           "",
+          "slicer_time":        0,
+          "progress":           0.0,
+          "print_duration":     0,
+          "remain_time":        0,
+          "curr_layer":         0,
+          "total_layers":       0,
+          "printer_name":       env_loader.get("BRIDGE_PRINTER_NAME", "Anycubic Kobra X"),
+          "firmware_version":   "unknown",
+          "upload_url":         "",
+          "camera_url":         "",
+          "fan_speed":          0,
+          "light_on":           False,
+          "light_brightness":   80,
+          "taskid":             "-1",
+          "print_speed_mode":   2,
+          "connection_error":   "",
+          "file_ready":         "",
+          "filament_mode":      "toolhead",
+          "ace_drying": {"status": 0, "target_temp": 0, "duration": 0, "remain_time": 0, "humidity": None, "current_temp": None},
         }
-        self._ams_slots: list[dict] = []
-        self._ams_loaded_slot: int = -1
+        self._ams_slots: list[dict] = []       # flat global list; each entry has global_index + box_id
+        self._ams_loaded_slot: int = -1        # global slot index of currently loaded slot
+        self._pending_load_slot: int = -1      # global slot index requested via /api/ams/feed type=1
+        self._ace_box_ids: list[int] = []      # detected ACE unit IDs (0..3)
+        self._ace_auto_feed: dict[int, int] = {}   # per-box auto_feed state (0/1)
+        self._head_tools_model: int = -1
+        self._filament_mode: str = "toolhead"
         self._last_uploaded_file: str = ""
         self._store = store if store is not None else GCodeStore(args.data_dir)
         self._serve_dir_path: str = self._store._gcode_dir
         self._current_job_id: str = ""
 
         self._thumbnail_b64: str = ""
+        self._ace_dry_presets: dict[str, dict] = self._load_ace_dry_presets_config()
 
         # Part-Skip: zuletzt vom Drucker gemeldete Skip-Liste (v0.9.10)
         self._skip_state: dict = {"objects": [], "skipped": [], "ts": 0}
@@ -467,6 +557,73 @@ class KobraXBridge:
         client.callbacks["multiColorBox/report"]  = self._on_multicolor_box
         client.callbacks["light/report"]          = self._on_light
         client.callbacks["skip/report"]           = self._on_skip
+
+    def _default_ace_dry_presets(self) -> dict[str, dict]:
+        return {
+            "pla": {"temp": 45, "duration_sec": 4 * 3600},
+        "pla_plus": {"temp": 45, "duration_sec": 4 * 3600},
+        "petg": {"temp": 50, "duration_sec": 4 * 3600},
+        "tpu": {"temp": 55, "duration_sec": 4 * 3600},
+        "abs_asa": {"temp": 45, "duration_sec": 8 * 3600},
+        "pa_pc": {"temp": 55, "duration_sec": 12 * 3600},
+        "custom_1": {"name": "Custom 1", "temp": 45, "duration_sec": 4 * 3600},
+        "custom_2": {"name": "Custom 2", "temp": 45, "duration_sec": 4 * 3600},
+        "custom_3": {"name": "Custom 3", "temp": 45, "duration_sec": 4 * 3600},
+        }
+
+    def _sanitize_ace_dry_presets(self, presets: dict) -> dict[str, dict]:
+        out = self._default_ace_dry_presets()
+        for key in list(out.keys()):
+            src = presets.get(key) if isinstance(presets, dict) else None
+            if not isinstance(src, dict):
+                continue
+            try:
+                t = int(src.get("temp", out[key]["temp"]))
+            except Exception:
+                t = out[key]["temp"]
+            try:
+                d = int(src.get("duration_sec", out[key]["duration_sec"]))
+            except Exception:
+                d = out[key]["duration_sec"]
+            out[key]["temp"] = max(30, min(80, t))
+            out[key]["duration_sec"] = max(10 * 60, min(24 * 3600, d))
+            if key.startswith("custom_"):
+                name = str(src.get("name", out[key].get("name", key.replace("_", " ").title()))).strip()
+                out[key]["name"] = name or out[key].get("name", "Custom")
+        return out
+
+    def _load_ace_dry_presets_config(self) -> dict[str, dict]:
+        import configparser
+        defaults = self._default_ace_dry_presets()
+        cfg_path = self._find_config_path()
+        if not cfg_path.is_file():
+            return defaults
+        cfg = configparser.ConfigParser()
+        cfg.read(cfg_path, encoding="utf-8")
+        sec = "ace_dry_presets"
+        if not cfg.has_section(sec):
+            return defaults
+        out = {}
+        for key, d in defaults.items():
+            temp_k = f"{key}_temp"
+            dur_k = f"{key}_duration_sec"
+            try:
+                temp = int(cfg.get(sec, temp_k, fallback=str(d["temp"])))
+            except Exception:
+                temp = d["temp"]
+            try:
+                dur = int(cfg.get(sec, dur_k, fallback=str(d["duration_sec"])))
+            except Exception:
+                dur = d["duration_sec"]
+            out[key] = {
+                "temp": max(30, min(80, temp)),
+                "duration_sec": max(10 * 60, min(24 * 3600, dur)),
+            }
+            if key.startswith("custom_"):
+              name_k = f"{key}_name"
+              name = cfg.get(sec, name_k, fallback=str(d.get("name", key.replace("_", " ").title()))).strip()
+              out[key]["name"] = name or str(d.get("name", "Custom"))
+        return out
 
     # -------------------------------------------------------------------------
     # MQTT callbacks (called from reader thread)
@@ -601,35 +758,412 @@ class KobraXBridge:
                     log.warning(f"update_file_objects fehlgeschlagen: {e}")
         self._push_status_update()
 
+    @staticmethod
+    def _detect_filament_mode(boxes: list, head_tools_model: int = -1) -> str:
+        """Detect active filament topology mode.
+
+        Modes:
+        - toolhead: only toolhead slots
+        - ace_direct: ACE channels directly mapped (no toolhead box present)
+        - ace_hub: toolhead + ACE via hub (slot 4 as hub path)
+        """
+        toolhead = any(b.get("id") == -1 for b in boxes)
+        ace = any(b.get("id", -1) >= 0 for b in boxes)
+        if ace and toolhead:
+            return "ace_hub"
+        if ace:
+            return "ace_direct"
+        return "toolhead"
+
+    @staticmethod
+    def _aggregate_slots(boxes: list, mode: str = "toolhead") -> tuple:
+        """Aggregate multi_color_box list into a flat global slot list."""
+        toolhead = next((b for b in boxes if b.get("id") == -1), None)
+        ace_boxes = sorted(
+            [b for b in boxes if b.get("id", -1) >= 0],
+            key=lambda b: b["id"]
+        )
+
+        global_slots: list = []
+        global_loaded: int = -1
+
+        if mode == "toolhead":
+            if toolhead:
+                for local_idx, s in enumerate(toolhead.get("slots") or []):
+                    s = dict(s)
+                    s["global_index"] = local_idx
+                    s["box_id"] = -1
+                    global_slots.append(s)
+                loaded = toolhead.get("loaded_slot", -1)
+                if loaded >= 0:
+                    global_loaded = loaded
+            return global_slots, global_loaded
+
+        if mode == "ace_direct":
+          # ace_direct exposes exactly 4 channels total.
+          # If firmware reports multiple ACE boxes, keep only the first one.
+          if ace_boxes:
+            ace = ace_boxes[0]
+            ace_id = ace["id"]
+            for local_idx, s in enumerate((ace.get("slots") or [])[:4]):
+              s = dict(s)
+              s["global_index"] = local_idx
+              s["box_id"] = ace_id
+              global_slots.append(s)
+            ace_loaded = ace.get("loaded_slot", -1)
+            if 0 <= ace_loaded < 4:
+              global_loaded = ace_loaded
+            return global_slots, global_loaded
+
+        # ace_hub
+        if toolhead:
+            for local_idx, s in enumerate((toolhead.get("slots") or [])[:3]):
+                s = dict(s)
+                s["global_index"] = local_idx
+                s["box_id"] = -1
+                global_slots.append(s)
+            th_loaded = toolhead.get("loaded_slot", -1)
+            if 0 <= th_loaded <= 2:
+                global_loaded = th_loaded
+
+        for ace in ace_boxes:
+            ace_id = ace["id"]
+            base = 3 + ace_id * 4
+            for local_idx, s in enumerate(ace.get("slots") or []):
+                s = dict(s)
+                s["global_index"] = base + local_idx
+                s["box_id"] = ace_id
+                global_slots.append(s)
+            ace_loaded = ace.get("loaded_slot", -1)
+            if ace_loaded >= 0:
+                global_loaded = base + ace_loaded
+
+        return global_slots, global_loaded
+
+    def _global_to_box_slot(self, global_index: int) -> tuple:
+        """Convert a global slot index to (box_id, local_slot_index)."""
+        for s in self._ams_slots:
+            if s.get("global_index") == global_index:
+                return s.get("box_id", -1), s.get("index", global_index)
+
+        ace_present = any(s.get("box_id", -1) >= 0 for s in self._ams_slots)
+        if self._filament_mode == "ace_direct" and ace_present:
+            return global_index // 4, global_index % 4
+        if not ace_present or global_index < 3:
+            return -1, global_index
+        offset = global_index - 3
+        return offset // 4, offset % 4
+
+    def _slot_to_print_ams_index(self, global_index: int) -> int:
+      """Convert UI/global slot index to printer print/start ams_index.
+
+      In ace_hub mode, print/start uses global channel numbering where
+      toolhead channels occupy 1..3 and ACE0 starts at index 4.
+      """
+      idx = int(global_index)
+      if self._filament_mode == "ace_hub":
+        box_id, local_slot = self._global_to_box_slot(idx)
+        if box_id >= 0:
+          return 4 + box_id * 4 + int(local_slot)
+        return idx
+      return idx
+
+    def _slot_usable_for_print(self, global_index: int) -> bool:
+        """Whether a global slot can be used for current filament mode."""
+        slot = next((s for s in self._ams_slots if int(s.get("global_index", -1)) == int(global_index)), None)
+        if not slot:
+            return False
+        if int(slot.get("status", 0)) != 5:
+            return False
+
+        box_id = int(slot.get("box_id", -1))
+        if self._filament_mode == "ace_hub":
+          # In hub mode, toolhead channels (0..2) and ACE channels are both printable.
+          return box_id == -1 or box_id >= 0
+        if self._filament_mode == "ace_direct":
+            return box_id >= 0
+        return box_id == -1
+
+    def _loaded_slots_for_print(self) -> list[tuple[int, dict]]:
+        """Loaded slots filtered for current filament mode."""
+        loaded = [
+            (int(s.get("global_index", i)), s)
+            for i, s in enumerate(self._ams_slots)
+        if s.get("status") == 5 and self._slot_usable_for_print(int(s.get("global_index", i)))
+        ]
+        return loaded
+
+    def _select_loaded_slots_for_print(self, warn_on_empty_default: bool = False) -> list[tuple[int, dict]]:
+        """Return loaded slots, honoring default_ams_slot when configured."""
+        default_slot = getattr(self._args, "default_ams_slot", "auto")
+        all_loaded = self._loaded_slots_for_print()
+        if default_slot == "auto":
+            return all_loaded
+
+        try:
+            slot_idx = int(default_slot)
+        except ValueError:
+            return all_loaded
+
+        selected = [(i, s) for i, s in all_loaded if i == slot_idx]
+        if selected:
+            return selected
+
+        if warn_on_empty_default:
+            log.warning(f"Standard-Slot {slot_idx} ist leer – fallback auf Auto")
+        return all_loaded
+
+    @staticmethod
+    def _slot_color_rgba(slot: dict) -> list[int]:
+        color = slot.get("color", [255, 255, 255])
+        if isinstance(color, list) and len(color) >= 3:
+            return [int(color[0]), int(color[1]), int(color[2]), 255]
+        return [255, 255, 255, 255]
+
+    def _build_auto_ams_box_mapping(
+        self,
+        warn_on_empty_default: bool = False,
+        loaded_slots: list[tuple[int, dict]] | None = None,
+    ) -> list[dict]:
+        """Build print mapping from currently loaded slots (no explicit dialog assignments)."""
+        loaded = loaded_slots
+        if loaded is None:
+            loaded = self._select_loaded_slots_for_print(warn_on_empty_default=warn_on_empty_default)
+        return [
+            {
+                "paint_index": pidx,
+                "ams_index": self._slot_to_print_ams_index(gidx),
+                "paint_color": [255, 255, 255, 255],
+                "ams_color": self._slot_color_rgba(s),
+                "material_type": s.get("type", "PLA"),
+            }
+            for pidx, (gidx, s) in enumerate(loaded)
+        ]
+
+    def _build_assigned_ams_box_mapping(self, assignments: list) -> tuple[list[dict], int, int]:
+        """Build print mapping from UI filament assignments.
+
+        Returns (mapping, unused_count, invalid_count).
+        """
+        slot_by_global_index = {
+            int(s.get("global_index", i)): s
+            for i, s in enumerate(self._ams_slots)
+        }
+        ams_box_mapping: list[dict] = []
+        unused_count = 0
+        invalid_count = 0
+
+        for i, a in enumerate(assignments):
+            try:
+                if a.get("is_used") is False:
+                    unused_count += 1
+                    continue
+                global_slot = int(a["slot_index"])
+            except (ValueError, TypeError, KeyError):
+                invalid_count += 1
+                continue
+
+            if global_slot < 0:
+                unused_count += 1
+                continue
+            if not self._slot_usable_for_print(global_slot):
+                invalid_count += 1
+                continue
+
+            slot = slot_by_global_index.get(global_slot, {})
+            ams_box_mapping.append({
+                # Preserve slicer paint indices (can be sparse when paint 0 is unused).
+                "paint_index": a.get("paint_index", i),
+                "ams_index": self._slot_to_print_ams_index(global_slot),
+                "paint_color": a.get("paint_color", [255, 255, 255, 255]),
+                "ams_color": self._slot_color_rgba(slot),
+                "material_type": slot.get("type", a.get("material", "PLA")),
+            })
+
+        return ams_box_mapping, unused_count, invalid_count
+
+    def _box_local_to_global(self, box_id: int, local_slot: int, boxes: list) -> int:
+        """Convert (box_id, local slot) to global slot index for current topology."""
+        if box_id == -1:
+            return local_slot
+        if self._filament_mode == "ace_direct":
+            return local_slot
+        return 3 + box_id * 4 + local_slot
+
+    def _slot_activity_map(self, boxes: list, global_loaded: int = -1) -> dict:
+        """Build {global_slot_index: loading|unloading} from feed_status data."""
+        activity: dict = {}
+        primary_ace_id = -1
+        if self._filament_mode == "ace_direct":
+            ace_ids = sorted(int(b.get("id", -1)) for b in boxes if int(b.get("id", -1)) >= 0)
+            if ace_ids:
+                primary_ace_id = ace_ids[0]
+        for box in boxes:
+            if self._filament_mode == "ace_direct" and primary_ace_id >= 0 and int(box.get("id", -1)) != primary_ace_id:
+                continue
+            fs = box.get("feed_status") or {}
+            current_status = int(fs.get("current_status", -1))
+            local_slot = int(fs.get("slot_index", -1))
+            feed_type = int(fs.get("type", -1))
+            if current_status in (-1, 10, 11) or local_slot < 0:
+                continue
+            box_slots = box.get("slots") or []
+            if local_slot >= len(box_slots) or (box_slots[local_slot] or {}).get("status") != 5:
+                continue
+            if feed_type == 1:
+                act = "loading"
+            elif feed_type == 2:
+                act = "unloading"
+            else:
+                continue
+            global_slot = self._box_local_to_global(int(box.get("id", -1)), local_slot, boxes)
+            if feed_type == 1 and self._pending_load_slot >= 0 and global_slot != self._pending_load_slot:
+                # Ignore transient firmware-reported loading slots that differ from the requested target.
+                if global_loaded >= 0 and global_loaded != self._pending_load_slot:
+                    activity[global_loaded] = "unloading"
+                continue
+            if feed_type == 1 and global_loaded >= 0 and global_slot != global_loaded:
+                # During a slot swap the firmware reports the target slot immediately,
+                # while the previously loaded slot is still being unloaded first.
+                activity[global_loaded] = "unloading"
+            activity[global_slot] = act
+        return activity
+
     def _on_multicolor_box(self, payload: dict):
-        boxes = (payload.get("data") or {}).get("multi_color_box") or []
+        data = payload.get("data") or {}
+        boxes = data.get("multi_color_box") or []
         if not boxes:
             return
-        box = boxes[0]
-        slots = box.get("slots") or []
-        loaded = box.get("loaded_slot", -1)
-        if loaded != -1:
-            self._ams_loaded_slot = loaded
+        self._head_tools_model = int(data.get("head_tools_model", self._head_tools_model))
+        self._filament_mode = self._detect_filament_mode(boxes, self._head_tools_model)
+        self._state["filament_mode"] = self._filament_mode
+
+        global_slots, global_loaded = self._aggregate_slots(boxes, self._filament_mode)
+        self._ams_loaded_slot = global_loaded
+        self._update_ace_drying_state(data, boxes)
+        for box in boxes:
+            bid = int(box.get("id", -1))
+            if 0 <= bid <= 3 and "auto_feed" in box:
+                self._ace_auto_feed[bid] = int(box["auto_feed"])
+        if self._pending_load_slot >= 0 and global_loaded == self._pending_load_slot:
+          self._pending_load_slot = -1
+        activity_map = self._slot_activity_map(boxes, global_loaded)
+        for s in global_slots:
+            s["activity"] = activity_map.get(s.get("global_index"), "")
+
         # Tip-Forming: nach Einziehen (status=10) oder Ausziehen (status=11)
-        # schickt der originale Slicer automatisch type=3 (Extruder-Rückzug)
-        fs = box.get("feed_status") or {}
-        current_status = fs.get("current_status")
-        slot_index = fs.get("slot_index", 0)
-        if current_status in (10, 11):
-            import threading
-            def _tip_form():
-                import time; time.sleep(2)
-                self.client.publish(
-                    "multiColorBox", "feedFilament",
-                    {"multi_color_box": [{"id": -1, "feed_status": {"slot_index": slot_index, "type": 3}}]},
-                    timeout=0
-                )
-                log.info(f"Tip-Forming (type=3) nach status={current_status} slot={slot_index}")
-            threading.Thread(target=_tip_form, daemon=True).start()
-        if slots:
-            self._ams_slots = slots
-            log.info(f"AMS-Slots empfangen: {len(slots)}, loaded_slot={self._ams_loaded_slot}")
+        # schickt der originale Slicer automatisch type=3 (Extruder-Rückzug).
+        # Check ALL boxes so ACE-triggered events are handled correctly.
+        for box in boxes:
+            fs = box.get("feed_status") or {}
+            current_status = fs.get("current_status")
+            slot_index = fs.get("slot_index", 0)
+            box_id = box.get("id", -1)
+            if current_status in (10, 11):
+                def _tip_form(bi=box_id, si=slot_index, cs=current_status):
+                    import time; time.sleep(2)
+                    self.client.publish(
+                        "multiColorBox", "feedFilament",
+                        {"multi_color_box": [{"id": bi, "feed_status": {"slot_index": si, "type": 3}}]},
+                        timeout=0
+                    )
+                    log.info(f"Tip-Forming (type=3) nach status={cs} box={bi} slot={si}")
+                threading.Thread(target=_tip_form, daemon=True).start()
+
+        if global_slots:
+            self._ams_slots = global_slots
+            log.info(f"AMS-Slots empfangen: {len(global_slots)}, loaded_slot={self._ams_loaded_slot}")
             self._push_status_update()
+
+    def _update_ace_drying_state(self, data: dict, boxes: list):
+        """Extract ACE drying state from multiColorBox report/getInfo payloads."""
+        ace_ids = sorted({int(b.get("id", -1)) for b in boxes if int(b.get("id", -1)) >= 0})
+        self._ace_box_ids = [i for i in ace_ids if 0 <= i <= 3]
+
+        def _num_from(src: dict, keys: tuple[str, ...], default=None):
+            for k in keys:
+                v = src.get(k)
+                if v is not None:
+                    try:
+                        return float(v)
+                    except Exception:
+                        return default
+            return default
+
+        def _humidity_from(src: dict, default=None):
+            return _num_from(src, ("humidity", "current_humidity", "cur_humidity", "relative_humidity", "humidity_value"), default)
+
+        def _current_temp_from(src: dict, default=None):
+            return _num_from(src, ("current_temp", "cur_temp", "temperature", "temp", "drying_temp", "chamber_temp"), default)
+
+        def _minutes_from(src: dict, key: str, default=0):
+          raw = src.get(key, default)
+          try:
+            value = int(float(raw))
+          except Exception:
+            return int(default)
+          # Some firmware payloads report dryer times in seconds while the UI uses minutes.
+          if value > (24 * 60):
+            return max(0, int(round(value / 60.0)))
+          return max(0, value)
+
+        per_unit: list[dict] = []
+        for box in boxes:
+            bid = int(box.get("id", -1))
+            if bid < 0:
+                continue
+
+            bs = box.get("drying_status") or box.get("drying_settings")
+            bs = bs if isinstance(bs, dict) else {}
+            hu = _humidity_from(bs, _humidity_from(box))
+            ct = _current_temp_from(bs, _current_temp_from(box))
+
+            if bs or hu is not None or ct is not None:
+                per_unit.append({
+                    "id": bid,
+                    "status": int(bs.get("status", 0)),
+                    "target_temp": int(bs.get("target_temp", 0)),
+                "duration": _minutes_from(bs, "duration", 0),
+                "remain_time": _minutes_from(bs, "remain_time", 0),
+                    "humidity": hu,
+                    "current_temp": ct,
+                })
+
+        src = data.get("drying_status") or data.get("drying_settings")
+        if not isinstance(src, dict):
+            for box in boxes:
+                if int(box.get("id", -1)) < 0:
+                    continue
+                cand = box.get("drying_status") or box.get("drying_settings")
+                if isinstance(cand, dict):
+                    src = cand
+                    break
+
+        if isinstance(src, dict):
+          cur = self._state.get("ace_drying") or {}
+          active = [u for u in per_unit if u.get("status", 0)]
+          primary = active[0] if active else (per_unit[0] if per_unit else {})
+          self._state["ace_drying"] = {
+            "status": int(src.get("status", cur.get("status", 0))),
+            "target_temp": int(src.get("target_temp", cur.get("target_temp", 0))),
+            "duration": _minutes_from(src, "duration", cur.get("duration", 0)),
+            "remain_time": _minutes_from(src, "remain_time", cur.get("remain_time", 0)),
+            "humidity": _humidity_from(src, primary.get("humidity", cur.get("humidity"))),
+            "current_temp": _current_temp_from(src, primary.get("current_temp", cur.get("current_temp"))),
+            "units": per_unit,
+          }
+        elif per_unit:
+            active = [u for u in per_unit if u.get("status", 0)]
+            primary = active[0] if active else per_unit[0]
+            self._state["ace_drying"] = {
+                "status": int(primary.get("status", 0)),
+                "target_temp": int(primary.get("target_temp", 0)),
+                "duration": int(primary.get("duration", 0)),
+                "remain_time": int(primary.get("remain_time", 0)),
+                "humidity": primary.get("humidity"),
+                "current_temp": primary.get("current_temp"),
+                "units": per_unit,
+            }
 
     def _on_light(self, payload: dict):
         d = payload.get("data") or {}
@@ -647,63 +1181,57 @@ class KobraXBridge:
     }
 
     def _build_lane_data(self) -> dict:
-        """Baut BBL-AMS-JSON für OrcaSlicer DevFilaSystemParser::ParseV1_0."""
-        slots = self._ams_slots
-        total = len(slots)
-        if total == 0:
-            return {"ams": [], "ams_exist_bits": "0", "tray_exist_bits": "0"}
+      """Build lane_data for filament sync from loaded, printable slots only.
 
-        ams_count = (total + 3) // 4
-        ams_exist_bits = 0
-        tray_exist_bits = 0
-        ams_array = []
+      Slots are compacted in sync order (installed slots first) so Orca/Happy
+      Hare does not infer empty gaps between tray ids.
+      """
+      loaded_slots = self._loaded_slots_for_print()
+      if not loaded_slots:
+        return {"ams": [], "ams_exist_bits": "0", "tray_exist_bits": "0"}
 
-        for ams_id in range(ams_count):
-            ams_exist_bits |= (1 << ams_id)
-            tray_array = []
-            max_slot = min(3, total - ams_id * 4 - 1)
-            for slot_id in range(max_slot + 1):
-                slot_index = ams_id * 4 + slot_id
-                slot = slots[slot_index] if slot_index < total else {}
-                occupied = slot.get("status") == 5
+      ams_buckets: dict[int, list[tuple[int, dict]]] = {}
+      tray_exist_bits = 0
 
-                if occupied:
-                    tray_exist_bits |= (1 << slot_index)
-                    color_raw = slot.get("color", [255, 255, 255])
-                    if isinstance(color_raw, list) and len(color_raw) >= 3:
-                        color_hex = "{:02X}{:02X}{:02X}FF".format(
-                            int(color_raw[0]), int(color_raw[1]), int(color_raw[2])
-                        )
-                    elif isinstance(color_raw, str) and len(color_raw) >= 6:
-                        color_hex = color_raw[:6].upper() + "FF"
-                    else:
-                        color_hex = "FFFFFFFF"
-                    material = slot.get("type", "PLA").upper()
-                    tray_info_idx = self._TRAY_INFO_IDX.get(material, "OGFL99")
-                    tray_array.append({
-                        "id":           str(slot_id),
-                        "tag_uid":      "0000000000000000",
-                        "tray_info_idx": tray_info_idx,
-                        "tray_type":    material,
-                        "tray_color":   color_hex,
-                    })
-                else:
-                    tray_array.append({
-                        "id":                str(slot_id),
-                        "tag_uid":           "0000000000000000",
-                        "tray_info_idx":     "",
-                        "tray_type":         "",
-                        "tray_color":        "00000000",
-                        "tray_slot_placeholder": "1",
-                    })
+      for sync_index, (_global_index, slot) in enumerate(sorted(loaded_slots, key=lambda item: item[0])):
+        ams_id = sync_index // 4
+        slot_id = sync_index % 4
+        tray_exist_bits |= (1 << sync_index)
+        ams_buckets.setdefault(ams_id, []).append((slot_id, slot))
 
-            ams_array.append({"id": str(ams_id), "info": "0002", "tray": tray_array})
+      ams_exist_bits = 0
+      ams_array = []
+      for ams_id in sorted(ams_buckets.keys()):
+        ams_exist_bits |= (1 << ams_id)
+        tray_array = []
+        for slot_id, slot in sorted(ams_buckets[ams_id], key=lambda item: item[0]):
+          color_raw = slot.get("color", [255, 255, 255])
+          if isinstance(color_raw, list) and len(color_raw) >= 3:
+            color_hex = "{:02X}{:02X}{:02X}FF".format(
+              int(color_raw[0]), int(color_raw[1]), int(color_raw[2])
+            )
+          elif isinstance(color_raw, str) and len(color_raw) >= 6:
+            color_hex = color_raw[:6].upper() + "FF"
+          else:
+            color_hex = "FFFFFFFF"
 
-        return {
-            "ams":             ams_array,
-            "ams_exist_bits":  format(ams_exist_bits, "X"),
-            "tray_exist_bits": format(tray_exist_bits, "X"),
-        }
+          material = slot.get("type", "PLA").upper()
+          tray_info_idx = self._TRAY_INFO_IDX.get(material, "OGFL99")
+          tray_array.append({
+            "id": str(slot_id),
+            "tag_uid": "0000000000000000",
+            "tray_info_idx": tray_info_idx,
+            "tray_type": material,
+            "tray_color": color_hex,
+          })
+
+        ams_array.append({"id": str(ams_id), "info": "0002", "tray": tray_array})
+
+      return {
+        "ams": ams_array,
+        "ams_exist_bits": format(ams_exist_bits, "X"),
+        "tray_exist_bits": format(tray_exist_bits, "X"),
+      }
 
     # -------------------------------------------------------------------------
     # WebSocket push
@@ -727,40 +1255,39 @@ class KobraXBridge:
         self.ws_clients -= dead
 
     def _build_mmu_object(self) -> dict:
-        slots = self._ams_slots
-        if not slots:
-            return {}
-        _TEMP = {"PLA": 210, "PETG": 230, "ABS": 240, "ASA": 250,
-                 "TPU": 220, "PA": 260, "PC": 270, "HIPS": 220}
-        num_gates = len(slots)
-        gate_status, gate_material, gate_color, gate_temperature, gate_color_rgb = [], [], [], [], []
-        for slot in slots:
-            occupied = slot.get("status") == 5
-            gate_status.append(1 if occupied else 0)
-            material = slot.get("type", "PLA").upper() if occupied else ""
-            gate_material.append(material)
-            c = slot.get("color", [0, 0, 0])
-            if occupied:
-                gate_color.append("#{:02X}{:02X}{:02X}".format(*c[:3]))
-                gate_color_rgb.append([round(c[0]/255, 3), round(c[1]/255, 3), round(c[2]/255, 3)])
-            else:
-                gate_color.append("")
-                gate_color_rgb.append([0.0, 0.0, 0.0])
-            gate_temperature.append(_TEMP.get(material, 210) if occupied else 0)
-        return {
-            "num_gates":          num_gates,
-            "enabled":            True,
-            "gate_status":        gate_status,
-            "gate_material":      gate_material,
-            "gate_color":         gate_color,
-            "gate_temperature":   gate_temperature,
-            "gate_color_rgb":     gate_color_rgb,
-            "gate_filament_name": [""] * num_gates,
-            "gate_spool_id":      [-1] * num_gates,
-            "ttg_map":            list(range(num_gates)),
-            "tool":               max(self._ams_loaded_slot, 0),
-            "gate":               max(self._ams_loaded_slot, 0),
-        }
+      loaded_slots = sorted(self._loaded_slots_for_print(), key=lambda item: item[0])
+      if not loaded_slots:
+        return {}
+
+      _TEMP = {"PLA": 210, "PETG": 230, "ABS": 240, "ASA": 250,
+           "TPU": 220, "PA": 260, "PC": 270, "HIPS": 220}
+      num_gates = len(loaded_slots)
+      gate_status, gate_material, gate_color, gate_temperature, gate_color_rgb = [], [], [], [], []
+      for _global_index, slot in loaded_slots:
+        gate_status.append(1)
+        material = slot.get("type", "PLA").upper()
+        gate_material.append(material)
+        c = slot.get("color", [0, 0, 0])
+        gate_color.append("#{:02X}{:02X}{:02X}".format(*c[:3]))
+        gate_color_rgb.append([round(c[0]/255, 3), round(c[1]/255, 3), round(c[2]/255, 3)])
+        gate_temperature.append(_TEMP.get(material, 210))
+
+      loaded_index_map = {global_index: idx for idx, (global_index, _) in enumerate(loaded_slots)}
+      active_gate = loaded_index_map.get(int(self._ams_loaded_slot), -1)
+      return {
+        "num_gates":          num_gates,
+        "enabled":            True,
+        "gate_status":        gate_status,
+        "gate_material":      gate_material,
+        "gate_color":         gate_color,
+        "gate_temperature":   gate_temperature,
+        "gate_color_rgb":     gate_color_rgb,
+        "gate_filament_name": [""] * num_gates,
+        "gate_spool_id":      [-1] * num_gates,
+        "ttg_map":            list(range(num_gates)),
+        "tool":               active_gate,
+        "gate":               active_gate,
+      }
 
     def _build_printer_objects(self) -> dict:
         s = self._state
@@ -822,6 +1349,30 @@ class KobraXBridge:
 
     async def handle_kx_files(self, request):
         files = self._store.list_files()
+        # Legacy-Einträge ohne gespeicherte Filament-Metadaten nachziehen,
+        # damit Dialog links die GCode-Farben statt AMS-Slots zeigt.
+        for f in files:
+            needs_refresh = not f.get("gcode_filaments")
+            if not needs_refresh:
+                try:
+                    cached = f.get("gcode_filaments")
+                    parsed_cached = cached if isinstance(cached, list) else json.loads(cached)
+                    needs_refresh = any("is_used" not in item for item in (parsed_cached or []))
+                except Exception:
+                    needs_refresh = True
+            if not needs_refresh:
+                continue
+            path = f.get("path") or ""
+            if not path or not os.path.isfile(path):
+                continue
+            try:
+                with open(path, "rb") as fh:
+                    parsed_filaments = _extract_filament_info(fh.read())
+                if parsed_filaments:
+                    f["gcode_filaments"] = json.dumps(parsed_filaments)
+                    self._store.update_file_filaments(f["id"], parsed_filaments)
+            except Exception:
+                pass
         # Letzten Job-Status + Dauer pro Datei ergänzen
         jobs = self._store.list_jobs(limit=500)
         last_job: dict = {}
@@ -843,8 +1394,9 @@ class KobraXBridge:
     async def handle_kx_filament_slots(self, request):
         slots = []
         for i, s in enumerate(self._ams_slots):
+            gidx = int(s.get("global_index", i))
             slots.append({
-                "slot_index":  i,
+                "slot_index":  gidx,
                 "material":    s.get("type", ""),
                 "color_hex":   "#{:02X}{:02X}{:02X}".format(*s.get("color", [0,0,0])[:3]),
                 "status":      "loaded" if s.get("status") == 5 else "empty",
@@ -992,38 +1544,16 @@ class KobraXBridge:
             excluded_objects = []
 
         if assignments:
-            ams_box_mapping = [
-                {
-                    "paint_index":   a.get("paint_index", i),
-                    "ams_index":     a["slot_index"],
-                    "paint_color":   a.get("paint_color", [255, 255, 255, 255]),
-                    "ams_color":     a.get("ams_color",   [255, 255, 255, 255]),
-                    "material_type": a.get("material", "PLA"),
-                }
-                for i, a in enumerate(assignments)
-            ]
+          ams_box_mapping, unused_count, invalid_count = self._build_assigned_ams_box_mapping(assignments)
+          if unused_count:
+            log.debug(f"Skipped {unused_count} unused filament assignment(s) for mode={self._filament_mode}")
+          if invalid_count:
+            log.warning(f"Ignored {invalid_count} unusable filament assignment(s) for mode={self._filament_mode}")
+            if not ams_box_mapping:
+                return self._json_cors({"error": "no usable filament assignments for current filament mode"}, status=400)
         else:
             # Kein Dialog → alle belegten Slots wie bei normalem Upload-Druck
-            default_slot = getattr(self._args, "default_ams_slot", "auto")
-            all_loaded = [(i, s) for i, s in enumerate(self._ams_slots) if s.get("status") == 5]
-            if default_slot != "auto":
-                try:
-                    slot_idx = int(default_slot)
-                    loaded = [(i, s) for i, s in all_loaded if i == slot_idx] or all_loaded
-                except ValueError:
-                    loaded = all_loaded
-            else:
-                loaded = all_loaded
-            ams_box_mapping = [
-                {
-                    "paint_index":   i,
-                    "ams_index":     i,
-                    "paint_color":   [255, 255, 255, 255],
-                    "ams_color":     [255, 255, 255, 255],
-                    "material_type": s.get("type", "PLA"),
-                }
-                for i, s in loaded
-            ]
+            ams_box_mapping = self._build_auto_ams_box_mapping()
 
         use_ams = len(ams_box_mapping) > 0
         auto_leveling = getattr(self._args, "auto_leveling", 1)
@@ -1133,12 +1663,14 @@ class KobraXBridge:
 
     async def handle_objects_query(self, request):
         objects = self._build_printer_objects()
-        # filter by requested objects if specified
-        requested = dict(request.rel_url.query)
-        if requested:
-            filtered = {k: objects[k] for k in requested if k in objects}
-        else:
-            filtered = objects
+        requested = []
+        query = request.rel_url.query
+        if "objects" in query:
+            requested = [x.strip() for x in str(query.get("objects", "")).split(",") if x.strip()]
+        elif query:
+            requested = [k for k in query.keys() if k]
+
+        filtered = {k: objects[k] for k in requested if k in objects} if requested else objects
         return web.json_response({"result": {"status": filtered, "eventtime": time.time()}})
 
     async def handle_objects_list(self, request):
@@ -1280,31 +1812,10 @@ class KobraXBridge:
 
     def _start_print(self, filename: str, url: str = "", md5: str = "", filesize: int = 0):
         self._state["file_ready"] = ""
-        default_slot = getattr(self._args, "default_ams_slot", "auto")
-        all_loaded = [(i, s) for i, s in enumerate(self._ams_slots) if s.get("status") == 5]
-        if default_slot != "auto":
-            try:
-                slot_idx = int(default_slot)
-                loaded = [(i, s) for i, s in all_loaded if i == slot_idx]
-                if not loaded:
-                    log.warning(f"Standard-Slot {slot_idx} ist leer – fallback auf Auto")
-                    loaded = all_loaded
-            except ValueError:
-                loaded = all_loaded
-        else:
-            loaded = all_loaded
+        loaded = self._select_loaded_slots_for_print(warn_on_empty_default=True)
         use_ams = len(loaded) > 0
-        ams_box_mapping = [
-            {
-                "paint_index":  i,
-                "ams_index":    i,
-                "paint_color":  [255, 255, 255, 255],
-                "ams_color":    [255, 255, 255, 255],
-                "material_type": s.get("type", "PLA"),
-            }
-            for i, s in loaded
-        ]
-        log.info(f"AMS-Slots: {len(loaded)}/{len(self._ams_slots)} belegt → {[i for i,_ in loaded]}")
+        ams_box_mapping = self._build_auto_ams_box_mapping(loaded_slots=loaded)
+        log.debug(f"AMS-Slots: {len(loaded)}/{len(self._ams_slots)} belegt → {[i for i, _ in loaded]}")
         auto_leveling = getattr(self._args, "auto_leveling", 1)
         payload = {
             "taskid":       "-1",
@@ -1330,7 +1841,7 @@ class KobraXBridge:
                 "model_objects_skip_parts": [],
             },
         }
-        log.info(f"print/start → {filename}  url={url}  ams={len(self._ams_slots)} slots")
+        log.info(f"print/start → {filename}  url={url}  ams={len(ams_box_mapping)} slots  mode={self._filament_mode}")
         result = self.client.publish("print", "start", payload, timeout=15.0)
         if result:
             log.info(f"Druckstart bestätigt: state={result.get('state')}")
@@ -1357,38 +1868,16 @@ class KobraXBridge:
         if not isinstance(excluded_objects, list):
             excluded_objects = []
         if filament_assignments is not None:
-            ams_box_mapping = [
-                {
-                    "paint_index":   a.get("paint_index", i),
-                    "ams_index":     a["slot_index"],
-                    "paint_color":   a.get("paint_color", [255, 255, 255, 255]),
-                    "ams_color":     a.get("ams_color",   [255, 255, 255, 255]),
-                    "material_type": a.get("material", "PLA"),
-                }
-                for i, a in enumerate(filament_assignments)
-            ]
+          ams_box_mapping, unused_count, invalid_count = self._build_assigned_ams_box_mapping(filament_assignments)
+          if unused_count:
+            log.debug(f"Skipped {unused_count} unused filament assignment(s) for mode={self._filament_mode}")
+          if invalid_count:
+            log.warning(f"Ignored {invalid_count} unusable filament assignment(s) for mode={self._filament_mode}")
+            if not ams_box_mapping:
+                return web.json_response({"error": "no usable filament assignments for current filament mode"}, status=400)
         else:
             # AMS-Mapping aus gecachtem State — leere Slots (status != 5) überspringen
-            default_slot = getattr(self._args, "default_ams_slot", "auto")
-            all_loaded = [(i, s) for i, s in enumerate(self._ams_slots) if s.get("status") == 5]
-            if default_slot != "auto":
-                try:
-                    slot_idx = int(default_slot)
-                    loaded = [(i, s) for i, s in all_loaded if i == slot_idx] or all_loaded
-                except ValueError:
-                    loaded = all_loaded
-            else:
-                loaded = all_loaded
-            ams_box_mapping = [
-                {
-                    "paint_index":   i,
-                    "ams_index":     i,
-                    "paint_color":   [255, 255, 255, 255],
-                    "ams_color":     [255, 255, 255, 255],
-                    "material_type": s.get("type", "PLA"),
-                }
-                for i, s in loaded
-            ]
+            ams_box_mapping = self._build_auto_ams_box_mapping()
 
         use_ams = len(ams_box_mapping) > 0
         auto_leveling = getattr(self._args, "auto_leveling", 1)
@@ -1420,6 +1909,11 @@ class KobraXBridge:
                 "model_objects_skip_parts": excluded_objects,
             },
         }
+
+        log.info(
+          f"print/start api=1 mode={self._filament_mode} "
+          f"ams={len(ams_box_mapping)} slots assignments={filament_assignments is not None}"
+        )
 
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
@@ -1620,11 +2114,26 @@ canvas.tchart{width:100%;height:60px;display:block;border-radius:6px;background:
 .home-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;justify-content:center}
 
 /* ── AMS ── */
-.ams-slots{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.ams-slots{display:flex;flex-direction:column;gap:12px}
+.ams-box-group{}
+.ams-box-label{font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;padding-left:2px}
+.ams-box-slots{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .ams-slot{background:var(--raised);border-radius:10px;padding:10px;text-align:center;
   border:2px solid transparent;transition:.2s;position:relative}
 .ams-slot.active{border-color:var(--slot-color,var(--accent));
   box-shadow:0 0 12px rgba(var(--slot-rgb,0,200,255),.3)}
+.ams-slot.loaded{border-color:var(--ok)!important;
+  box-shadow:0 0 0 2px rgba(64,220,120,.35),0 0 14px rgba(64,220,120,.35)}
+.ams-slot.loading{border-color:var(--ok)!important;animation:amsPulseGreen 1s ease-in-out infinite}
+.ams-slot.unloading{border-color:var(--err)!important;animation:amsPulseRed 1s ease-in-out infinite}
+@keyframes amsPulseGreen{0%{box-shadow:0 0 0 0 rgba(64,220,120,.55)}50%{box-shadow:0 0 0 4px rgba(64,220,120,.25),0 0 18px rgba(64,220,120,.45)}100%{box-shadow:0 0 0 0 rgba(64,220,120,.55)}}
+@keyframes amsPulseRed{0%{box-shadow:0 0 0 0 rgba(230,80,80,.55)}50%{box-shadow:0 0 0 4px rgba(230,80,80,.25),0 0 18px rgba(230,80,80,.45)}100%{box-shadow:0 0 0 0 rgba(230,80,80,.55)}}
+.ams-slot-bridge{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  border:1px dashed var(--border);background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));
+  color:var(--txt2);min-height:106px}
+.ams-slot-bridge .bridge-chip{width:58px;height:58px;border:1px solid rgba(255,255,255,.14);border-radius:50%;
+  display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.04);color:var(--txt2);
+  font-size:13px;font-weight:700;letter-spacing:.04em}
 .slot-circle{width:36px;height:36px;border-radius:50%;margin:0 auto 6px;border:2px solid rgba(255,255,255,.15)}
 .slot-label{font-size:11px;color:var(--txt2);font-family:var(--mono)}
 .slot-material{font-size:12px;font-weight:600;margin-bottom:2px}
@@ -1731,8 +2240,8 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
   .temp-pair{grid-template-columns:1fr}
   .temp-card-inner{grid-template-columns:1fr}
 
-  /* AMS: 2 Spalten */
-  .ams-slots{grid-template-columns:repeat(2,1fr)}
+  /* AMS: 2 Spalten auf kleinen Screens */
+  .ams-box-slots{grid-template-columns:repeat(2,1fr)}
 
   /* Joypad etwas kleiner */
   .joypad{grid-template-columns:repeat(3,44px);grid-template-rows:repeat(3,44px);gap:5px}
@@ -1890,6 +2399,7 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
         oninput="highlightMatBtn(this.value)"
         style="margin-top:8px;width:100%;padding:6px 10px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);font-size:13px;box-sizing:border-box">
     </div>
+    <button class="btn" id="btn-slot-edit-feed" style="width:100%;margin-bottom:8px" onclick="slotEditFeed()"></button>
     <button class="modal-save" id="btn-slot-edit-save" onclick="saveSlotEdit()"></button>
   </div>
 </div>
@@ -2086,24 +2596,15 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
           </div>
         </div>
 
+        <div id="d-ace-dry-wrap" style="display:none">
+          <div id="d-ace-dry-grid" style="display:contents"></div>
+        </div>
+
         <!-- AMS -->
         <div class="card" style="grid-column:1/-1" id="d-ams-card">
-          <div class="card-title"><span>◫</span> <span id="d-card-ams">AMS / Filamentbox</span></div>
+          <div class="card-title"><span>◫</span> <span id="d-card-ams">Filament</span></div>
           <div class="ams-slots" id="ams-slots">
             <div style="grid-column:1/-1;text-align:center;color:var(--txt2);padding:20px" id="ams-no-data">Keine AMS-Daten empfangen</div>
-          </div>
-          <div id="ams-controls" style="margin-top:16px;display:flex;flex-direction:column;gap:10px">
-            <div style="font-size:12px;color:var(--txt2);margin-bottom:2px" id="ams-slot-lbl">Slot auswählen</div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <input type="range" id="ams-slot-sel" min="0" max="3" step="1" value="0"
-                class="slider" style="flex:1"
-                oninput="document.getElementById('ams-slot-label').textContent='Slot '+(parseInt(this.value)+1)">
-              <span id="ams-slot-label" style="min-width:48px;font-size:13px;font-weight:600">Slot 1</span>
-            </div>
-            <div style="display:flex;gap:10px">
-              <button class="btn" style="flex:1" onclick="amsFeed(1)">⬇ <span class="lbl-feed">Einziehen</span></button>
-              <button id="btn-unload" class="btn" style="flex:1" onclick="amsFeed(2)">⬆ <span class="lbl-unload">Ausziehen</span></button>
-            </div>
           </div>
         </div>
       </div>
@@ -2199,11 +2700,83 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
 var S={nozzle_temp:0,nozzle_target:0,bed_temp:0,bed_target:0,
   print_state:'standby',filename:'',progress:0,print_duration:0,remain_time:0,
   curr_layer:0,total_layers:0,printer_name:'Kobra X',firmware_version:'–',
-  camera_url:'',fan_speed:0,print_speed_mode:2,light_on:false,light_brightness:80,ams_slots:[]};
+  camera_url:'',fan_speed:0,print_speed_mode:2,light_on:false,light_brightness:80,
+  ams_slots:[],filament_mode:'toolhead',ace_units:[],ace_dry_presets:null,ace_drying:{status:0,target_temp:0,duration:0,remain_time:0,humidity:null,current_temp:null,units:[]}};
 var tempHistory={n:[],b:[]};
 var camOn=false;
 var currentStep=1;
 var currentPanel='dashboard';
+var aceAutoRefillPrefs=(function(){
+  try{return JSON.parse(localStorage.getItem('aceAutoRefillPrefs')||'{}')||{};}catch(_){return {};}
+})();
+var aceDryProfiles=(function(){
+  try{return JSON.parse(localStorage.getItem('aceDryProfiles')||'{}')||{};}catch(_){return {};}
+})();
+var _aceDryDialogAceId=-1;
+var _aceDryDialogPresetKey='';
+var _aceDryDialogPresetOriginals={};
+var ACE_DRY_PRESET_DEFAULTS={
+  pla:{temp:45,duration_sec:4*3600},
+  pla_plus:{temp:45,duration_sec:4*3600},
+  petg:{temp:50,duration_sec:4*3600},
+  tpu:{temp:55,duration_sec:4*3600},
+  abs_asa:{temp:45,duration_sec:8*3600},
+  pa_pc:{temp:55,duration_sec:12*3600}
+};
+var ACE_DRY_PRESETS={
+  pla:{temp:45,duration_sec:4*3600},
+  pla_plus:{temp:45,duration_sec:4*3600},
+  petg:{temp:50,duration_sec:4*3600},
+  tpu:{temp:55,duration_sec:4*3600},
+  abs_asa:{temp:45,duration_sec:8*3600},
+  pa_pc:{temp:55,duration_sec:12*3600},
+  custom_1:{name:'Custom 1',temp:45,duration_sec:4*3600},
+  custom_2:{name:'Custom 2',temp:45,duration_sec:4*3600},
+  custom_3:{name:'Custom 3',temp:45,duration_sec:4*3600}
+};
+
+function _aceAutoRefillGet(aceId){return !!aceAutoRefillPrefs[String(aceId)];}
+function _aceAutoRefillSet(aceId,on){
+  aceAutoRefillPrefs[String(aceId)]=!!on;
+  localStorage.setItem('aceAutoRefillPrefs',JSON.stringify(aceAutoRefillPrefs));
+}
+function _aceDryProfileGet(aceId){
+  var p=aceDryProfiles[String(aceId)]||{};
+  var temp=parseInt(p.temp,10);
+  var dur=parseInt(p.duration_sec,10);
+  if(!Number.isFinite(temp))temp=45;
+  if(!Number.isFinite(dur))dur=4*3600;
+  temp=Math.max(30,Math.min(80,temp));
+  dur=Math.max(10*60,Math.min(24*3600,dur));
+  return {temp:temp,duration_sec:dur,preset:p.preset||''};
+}
+function _aceDryProfileSet(aceId,temp,durationSec,preset){
+  aceDryProfiles[String(aceId)]={
+    temp:Math.max(30,Math.min(80,parseInt(temp,10)||45)),
+    duration_sec:Math.max(10*60,Math.min(24*3600,parseInt(durationSec,10)||4*3600)),
+    preset:preset||''
+  };
+  localStorage.setItem('aceDryProfiles',JSON.stringify(aceDryProfiles));
+}
+function _aceDryDurationMinFromSec(sec){
+  var minutes=Math.round((parseInt(sec,10)||0)/60);
+  return Math.max(10,Math.min(1440,minutes));
+}
+function _syncAceDryPresetsFromServer(raw){
+  if(!raw||typeof raw!=='object')return;
+  Object.keys(ACE_DRY_PRESETS).forEach(function(k){
+    var p=raw[k];
+    if(!p||typeof p!=='object')return;
+    var t=parseInt(p.temp,10);
+    var d=parseInt(p.duration_sec,10);
+    if(Number.isFinite(t))ACE_DRY_PRESETS[k].temp=Math.max(30,Math.min(80,t));
+    if(Number.isFinite(d))ACE_DRY_PRESETS[k].duration_sec=Math.max(10*60,Math.min(24*3600,d));
+    if(/^custom_[123]$/.test(k)&&typeof p.name==='string'){
+      var n=p.name.trim();
+      ACE_DRY_PRESETS[k].name=n||('Custom '+k.slice(-1));
+    }
+  });
+}
 
 // ── Theme ──
 function toggleTheme(){
@@ -2221,6 +2794,7 @@ var LANG_DE={
   card_progress:'Fortschritt',card_temps:'Temperaturen',card_light_fan:'Lüfter',card_speed:'Druckgeschwindigkeit',card_cam:'Kamera',lbl_elapsed:'Verstrichen:',lbl_remaining:'Restzeit:',lbl_slicer_time:'Slicer-Schätzung:',lbl_layers:'Layer',
   speed_silent:'🐢 Leise',speed_normal:'⚡ Normal',speed_sport:'🚀 Sport',
   lbl_light:'💡 Licht',lbl_feed:'Einziehen',lbl_unload:'Ausziehen',
+  card_ace_dry:'ACE Trocknung',ace_dry_dryer:'Trockner',ace_dry_status_off:'Status: Aus',ace_dry_status_on:'Status: Aktiv',ace_dry_status_remaining:'Rest',ace_dry_humidity:'Luftfeuchte',ace_dry_current_temp:'Temperatur',ace_dry_chart:'Verlauf (Temp/Feuchte)',ace_dry_temp:'Temperatur (°C)',ace_dry_duration:'Dauer (Min)',ace_dry_start:'▶ Start',ace_dry_stop:'■ Stop',ace_dry_auto_refill:'Auto Refill',ace_dry_enable:'Enable Drying',ace_dry_temp_line:'Trocknungstemperatur',ace_dry_time_line:'Trocknungszeit',ace_dry_ui_pending:'(nur UI, Backend folgt)',ace_dry_dialog_title:'Dryer Temp/Time Settings',ace_dry_dialog_temp:'Temperature (30-80°C)',ace_dry_dialog_time:'Rem. Time (h:m:s)',ace_dry_dialog_confirm:'Confirm',ace_dry_dialog_cancel:'Cancel',ace_dry_dialog_save_restart:'Speichern & Neustart',ace_dry_dialog_custom_name:'Custom Name',
   cam_placeholder:'📷 Kamera nicht gestartet',btn_cam_start:'▶ Kamera',btn_cam_stop:'◼ Kamera',
   btn_pause:'⏸ Pause',btn_resume:'▶ Weiter',btn_cancel:'✕ Stopp',
   label_nozzle:'Nozzle',label_bed:'Bett',label_fan:'🌀 Lüfter',label_light:'💡 Licht',label_on_off:'Ein / Aus',label_speed:'Geschwindigkeit',
@@ -2228,7 +2802,7 @@ var LANG_DE={
   label_set:'Setzen',label_off:'Aus',
   panel_temps_nozzle:'Nozzle',panel_temps_bed:'Heizbett',panel_temps_chart:'Verlauf (letzte 60 Messungen)',label_target_c:'Ziel:',
   panel_motion_xy:'XY-Achsen',panel_motion_z:'Z-Achse',label_step:'Schrittweite:',btn_home_z:'Home Z',btn_home_xy:'Home XY',btn_home_all:'Home All',btn_disable_motors:'Motoren aus',
-  panel_ams_title:'AMS / Filamentbox',ams_no_data:'Keine AMS-Daten empfangen',label_slot:'Slot',ams_empty:'Leer',
+  panel_ams_title:'Filament',card_ams:'Filament',ams_no_data:'Keine AMS-Daten empfangen',label_slot:'Slot',ams_empty:'Leer',
   panel_extras_light:'Licht',panel_extras_fan:'Lüfter',panel_extras_camera:'Kamera',btn_cam_start2:'▶ Start',btn_cam_stop2:'◼ Stop',
   panel_console_title:'Ereignis-Log',
   log_light_on:'Licht an',log_light_off:'Licht aus',log_fan:'Lüfter →',log_nozzle:'Nozzle →',log_bed:'Bett →',log_axis:'Achse',log_home:'Home',log_home_all:'Home All',log_cam_start:'Kamera gestartet:',log_cam_stop:'Kamera gestoppt',log_poll_error:'Poll-Fehler:',log_error:'Fehler:',
@@ -2242,6 +2816,7 @@ var LANG_DE={
   btn_connect:'⚡ Verbinden',btn_disconnect:'✕ Trennen',
   lbl_conn_error:'Verbindungsfehler:',
   slot_edit_title:'Slot bearbeiten',slot_edit_color:'Farbe',slot_edit_material:'Material',
+  slot_edit_load:'⬇ Einziehen',slot_edit_unload:'⬆ Ausziehen',
   slot_edit_save:'💾 Speichern',slot_edit_custom:'z.B. PLA, PETG, ABS…',
   slot_edit_ok:'AMS Slot',
   log_dir_all:'Alle',
@@ -2282,6 +2857,7 @@ var LANG_EN={
   card_progress:'Progress',card_temps:'Temperatures',card_light_fan:'Fan',card_speed:'Print Speed',card_cam:'Camera',lbl_elapsed:'Elapsed:',lbl_remaining:'Remaining:',lbl_slicer_time:'Slicer estimate:',lbl_layers:'Layer',
   speed_silent:'🐢 Silent',speed_normal:'⚡ Normal',speed_sport:'🚀 Sport',
   lbl_light:'💡 Light',lbl_feed:'Load',lbl_unload:'Unload',
+  card_ace_dry:'ACE Drying',ace_dry_dryer:'Dryer',ace_dry_status_off:'Status: Off',ace_dry_status_on:'Status: Active',ace_dry_status_remaining:'Remaining',ace_dry_humidity:'Humidity',ace_dry_current_temp:'Temperature',ace_dry_chart:'History (Temp/Humidity)',ace_dry_temp:'Temperature (°C)',ace_dry_duration:'Duration (min)',ace_dry_start:'▶ Start',ace_dry_stop:'■ Stop',ace_dry_auto_refill:'Auto Refill',ace_dry_enable:'Enable Drying',ace_dry_temp_line:'Drying Temperature',ace_dry_time_line:'Drying Time',ace_dry_ui_pending:'(UI only, backend next)',ace_dry_dialog_title:'Dryer Temp/Time Settings',ace_dry_dialog_temp:'Temperature (30-80°C)',ace_dry_dialog_time:'Rem. Time (h:m:s)',ace_dry_dialog_confirm:'Confirm',ace_dry_dialog_cancel:'Cancel',ace_dry_dialog_save_restart:'Save & Restart',ace_dry_dialog_custom_name:'Custom Name',
   cam_placeholder:'📷 Camera not started',btn_cam_start:'▶ Camera',btn_cam_stop:'◼ Camera',
   btn_pause:'⏸ Pause',btn_resume:'▶ Resume',btn_cancel:'✕ Stop',
   label_nozzle:'Nozzle',label_bed:'Bed',label_fan:'🌀 Fan',label_light:'💡 Light',label_on_off:'On / Off',label_speed:'Speed',
@@ -2289,7 +2865,7 @@ var LANG_EN={
   label_set:'Set',label_off:'Off',
   panel_temps_nozzle:'Nozzle',panel_temps_bed:'Heated Bed',panel_temps_chart:'History (last 60 readings)',label_target_c:'Target:',
   panel_motion_xy:'XY Axes',panel_motion_z:'Z Axis',label_step:'Step size:',btn_home_z:'Home Z',btn_home_xy:'Home XY',btn_home_all:'Home All',btn_disable_motors:'Motors Off',
-  panel_ams_title:'AMS / Filament Box',ams_no_data:'No AMS data received',label_slot:'Slot',ams_empty:'Empty',
+  panel_ams_title:'Filament',card_ams:'Filament',ams_no_data:'No AMS data received',label_slot:'Slot',ams_empty:'Empty',
   panel_extras_light:'Light',panel_extras_fan:'Fan',panel_extras_camera:'Camera',btn_cam_start2:'▶ Start',btn_cam_stop2:'◼ Stop',
   panel_console_title:'Event Log',
   log_light_on:'Light on',log_light_off:'Light off',log_fan:'Fan →',log_nozzle:'Nozzle →',log_bed:'Bed →',log_axis:'Axis',log_home:'Home',log_home_all:'Home All',log_cam_start:'Camera started:',log_cam_stop:'Camera stopped',log_poll_error:'Poll error:',log_error:'Error:',
@@ -2303,6 +2879,7 @@ var LANG_EN={
   btn_connect:'⚡ Connect',btn_disconnect:'✕ Disconnect',
   lbl_conn_error:'Connection error:',
   slot_edit_title:'Edit Slot',slot_edit_color:'Color',slot_edit_material:'Material',
+  slot_edit_load:'⬇ Load',slot_edit_unload:'⬆ Unload',
   slot_edit_save:'💾 Save',slot_edit_custom:'e.g. PLA, PETG, ABS…',
   slot_edit_ok:'AMS Slot',
   log_dir_all:'All',
@@ -2406,6 +2983,7 @@ function toggleLang(){
   applyLang();
 }
 function applyLang(){
+  ensureAceDryCards();
   // Nav
   var nb=document.getElementById('nb-dashboard');if(nb)nb.querySelector('.nav-text').textContent=T.nav_dashboard;
   nb=document.getElementById('nb-console');if(nb)nb.querySelector('.nav-text').textContent=T.nav_console;
@@ -2492,12 +3070,34 @@ function applyLang(){
   // AMS feed/unload
   document.querySelectorAll('.lbl-feed').forEach(e=>e.textContent=T.lbl_feed);
   document.querySelectorAll('.lbl-unload').forEach(e=>e.textContent=T.lbl_unload);
+  for(var i=0;i<4;i++){
+    setText('d-card-ace-dry-'+i,'ACE '+(i+1)+' - '+(T.ace_dry_dryer||'Dryer'));
+    setText('d-ace-auto-refill-label-'+i,T.ace_dry_auto_refill||'Auto Refill');
+    setText('d-ace-drying-enable-label-'+i,T.ace_dry_enable||'Enable Drying');
+    setText('d-ace-dry-humidity-label-'+i,(T.ace_dry_humidity||'Humidity')+':');
+    setText('d-ace-dry-current-temp-label-'+i,(T.ace_dry_current_temp||'Current Temp')+':');
+    setText('d-ace-dry-target-label-'+i,(T.ace_dry_temp_line||'Drying Temperature')+':');
+    setText('d-ace-dry-time-label-'+i,(T.ace_dry_time_line||'Drying Time')+':');
+    setText('d-ace-dry-chart-label-'+i,T.ace_dry_chart||'History (Temp/Humidity)');
+    var adTemp=document.getElementById('ace-dry-temp-'+i);if(adTemp)adTemp.setAttribute('placeholder',T.ace_dry_temp);
+    var adDur=document.getElementById('ace-dry-duration-'+i);if(adDur)adDur.setAttribute('placeholder',T.ace_dry_duration);
+  }
+  setText('ace-dry-dialog-title',T.ace_dry_dialog_title||'Dryer Temp/Time Settings');
+  setText('ace-dry-dialog-temp-label',T.ace_dry_dialog_temp||'Temperature (30-80°C)');
+  setText('ace-dry-dialog-time-label',T.ace_dry_dialog_time||'Rem. Time (h:m:s)');
+  setText('ace-dry-dialog-custom-name-label',T.ace_dry_dialog_custom_name||'Custom Name');
+  setText('ace-dry-dialog-cancel',T.ace_dry_dialog_cancel||'Cancel');
+  setText('ace-dry-dialog-confirm',T.ace_dry_dialog_confirm||'Confirm');
+  setText('ace-dry-dialog-reset-default',T.ace_dry_dialog_reset_default||'Reset to Default');
+  setText('ace-dry-dialog-save-preset',T.ace_dry_dialog_save_restart||'Save & Restart');
+  aceDryDialogSyncCustomButtonNames();
   // conn-btn text (nur wenn nicht im Übergangszustand)
   updateConnBtn();
   // Slot-Edit-Dialog
   setText('lbl-slot-color',T.slot_edit_color);
   setText('lbl-slot-material',T.slot_edit_material);
   setText('btn-slot-edit-save',T.slot_edit_save);
+  updateSlotEditFeedButton();
   var mi=document.getElementById('slot-edit-mat');if(mi)mi.setAttribute('placeholder',T.slot_edit_custom);
   setText('logdir-all',T.log_dir_all);
   setText('file-ready-btn',T.file_ready_btn);
@@ -2506,6 +3106,48 @@ function applyLang(){
   setText('file-cancel-btn',T.file_cancel_btn);
 }
 function setText(id,txt){var el=document.getElementById(id);if(el)el.textContent=txt;}
+
+function ensureAceDryCards(){
+  var grid=document.getElementById('d-ace-dry-grid');
+  if(!grid||grid.getAttribute('data-init')==='1')return;
+  var html='';
+  for(var i=0;i<4;i++){
+    html+='<div class="card" id="d-ace-dry-card-'+i+'" style="display:none">'
+      +'<div class="card-title"><span>♨</span> <span id="d-card-ace-dry-'+i+'">ACE '+(i+1)+' - Dryer</span></div>'
+      +'<div style="display:flex;justify-content:space-between;gap:10px;font-size:14px;color:var(--txt2);margin-bottom:10px">'
+        +'<span><span id="d-ace-dry-current-temp-label-'+i+'">Temperature:</span> <span id="d-ace-dry-current-temp-'+i+'" style="font-size:30px;font-weight:700;color:#ff8c2f;line-height:1">-</span></span>'
+        +'<span><span id="d-ace-dry-humidity-label-'+i+'">Humidity:</span> <span id="d-ace-dry-humidity-'+i+'" style="font-size:30px;font-weight:700;color:#3aa8ff;line-height:1">-</span></span>'
+      +'</div>'
+      +'<div style="height:1px;background:var(--border);margin-bottom:10px"></div>'
+      +'<div style="display:flex;justify-content:space-between;gap:10px;font-size:14px;color:var(--txt2);margin-bottom:10px">'
+        +'<span><span id="d-ace-dry-target-label-'+i+'">Drying Temperature:</span> <span id="d-ace-dry-target-'+i+'" style="font-size:30px;font-weight:700;color:#ff8c2f;line-height:1">-</span></span>'
+        +'<span><span id="d-ace-dry-time-label-'+i+'">Drying Time:</span> <span id="d-ace-dry-time-'+i+'" style="font-size:30px;font-weight:700;color:#fff;line-height:1">-</span></span>'
+      +'</div>'
+      +'<div style="margin-bottom:10px">'
+        +'<button onclick="openAceDryDialog('+i+')" title="Edit Dryer Temp/Time Settings" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#000;cursor:pointer;font-size:13px;font-weight:600;line-height:1.2">Set Temp/Time</button>'
+      +'</div>'
+      +'<div style="height:1px;background:var(--border);margin-bottom:10px"></div>'
+      +'<div class="toggle-row" style="margin-bottom:10px">'
+        +'<span class="toggle-label" id="d-ace-auto-refill-label-'+i+'">Auto Refill</span>'
+        +'<label class="toggle">'
+          +'<input type="checkbox" id="ace-auto-refill-toggle-'+i+'" onchange="aceAutoRefillToggle('+i+')">'
+          +'<span class="toggle-track"></span>'
+          +'<span class="toggle-thumb"></span>'
+        +'</label>'
+      +'</div>'
+      +'<div class="toggle-row" style="margin-bottom:8px">'
+        +'<span class="toggle-label" id="d-ace-drying-enable-label-'+i+'">Enable Drying</span>'
+        +'<label class="toggle">'
+          +'<input type="checkbox" id="ace-dry-enable-toggle-'+i+'" onchange="aceDryToggle('+i+',this.checked)">'
+          +'<span class="toggle-track"></span>'
+          +'<span class="toggle-thumb"></span>'
+        +'</label>'
+      +'</div>'
+      +'</div>';
+  }
+  grid.innerHTML=html;
+  grid.setAttribute('data-init','1');
+}
 (function(){
   var l=localStorage.getItem('lang')||'de';
   currentLang=l;T=l==='de'?LANG_DE:LANG_EN;
@@ -2630,12 +3272,20 @@ function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(
 
 // ── Helpers ──
 function fmtTime(s){if(!s||s<0)return'–';var m=Math.floor(s/60),h=Math.floor(m/60);m%=60;return h>0?h+'h '+m+'m':m+'m'}
+function fmtHmsFromSec(total){
+  total=Math.max(0,parseInt(total||0,10));
+  var h=Math.floor(total/3600);
+  var mm=Math.floor((total%3600)/60);
+  var ss=total%60;
+  return h+':'+String(mm).padStart(2,'0')+':'+String(ss).padStart(2,'0');
+}
 function post(url,body){return fetch(_apiUrl(url),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}
 function clamp(v,lo,hi){return Math.min(hi,Math.max(lo,v))}
 
 // ── Apply state to DOM ──
 function applyState(){
   var s=S;
+  _syncAceDryPresetsFromServer(s.ace_dry_presets);
   // connection error banner – nur wenn überhaupt ein Drucker konfiguriert ist
   var banner=document.getElementById('conn-error-banner');
   if(banner){if(s.connection_error&&_printers.length>0){banner.textContent='⚠ '+(T.lbl_conn_error||'Connection error:')+' '+s.connection_error;banner.style.display='block';}else{banner.style.display='none';}}
@@ -2721,24 +3371,113 @@ function applyState(){
   var spdBar=document.getElementById('d-spd-bar');
   if(spdBar) spdBar.style.width=(spdWidths[s.print_speed_mode]||55)+'%';
 
+  var amsTitle=document.getElementById('d-card-ams');
+  if(amsTitle){
+    var baseTitle=T.card_ams||'Filament';
+    var modeMap={toolhead:'Toolhead',ace_direct:'ACE Direct',ace_hub:'ACE Hub'};
+    var modeTxt=modeMap[s.filament_mode]||'';
+    amsTitle.textContent=modeTxt?(baseTitle+' - '+modeTxt):baseTitle;
+  }
+
+  ensureAceDryCards();
+  var dry=s.ace_drying||{status:0,target_temp:0,duration:0,remain_time:0,humidity:null,current_temp:null,units:[]};
+  var units=(dry.units||[]);
+  var unitMap={};
+  units.forEach(function(u){var id=Number(u.id);if(id>=0&&id<=3)unitMap[id]=u;});
+  var aceMode=s.filament_mode==='ace_direct'||s.filament_mode==='ace_hub';
+  var detected=(s.ace_units||[]).filter(function(id){return id>=0&&id<=3;});
+  if(!detected.length){
+    Object.keys(unitMap).forEach(function(k){detected.push(Number(k));});
+  }
+  if(!detected.length){
+    (s.ams_slots||[]).forEach(function(sl){var id=Number(sl.box_id);if(id>=0&&id<=3&&detected.indexOf(id)<0)detected.push(id);});
+  }
+  detected.sort(function(a,b){return a-b;});
+  var aceWrap=document.getElementById('d-ace-dry-wrap');
+  if(aceWrap)aceWrap.style.display=(aceMode&&detected.length)?'contents':'none';
+  for(var i=0;i<4;i++){
+    var card=document.getElementById('d-ace-dry-card-'+i);
+    if(!card)continue;
+    var show=aceMode&&detected.indexOf(i)>=0;
+    card.style.display=show?'':'none';
+    if(!show)continue;
+    var ud=unitMap[i]||dry;
+    var refillToggle=document.getElementById('ace-auto-refill-toggle-'+i);
+    var autoFeedMap=s.ace_auto_feed||{};
+    if(refillToggle&&!_aceAutoFeedPending[i]){
+      var afVal=autoFeedMap.hasOwnProperty(String(i))?Number(autoFeedMap[String(i)]):(_aceAutoRefillGet(i)?1:0);
+      refillToggle.checked=afVal===1;
+    }
+    var dryToggle=document.getElementById('ace-dry-enable-toggle-'+i);
+    if(dryToggle)dryToggle.checked=Number(ud.status||0)>0;
+    var hh=document.getElementById('d-ace-dry-humidity-'+i);
+    if(hh){
+      var hv=(ud.humidity===null||ud.humidity===undefined||ud.humidity==='')?null:Number(ud.humidity);
+      hh.textContent=(hv===null||Number.isNaN(hv))?'-':(Math.round(hv)+'%');
+    }
+    var ht=document.getElementById('d-ace-dry-current-temp-'+i);
+    if(ht){
+      var ct=(ud.current_temp===null||ud.current_temp===undefined||ud.current_temp==='')?null:Number(ud.current_temp);
+      ht.textContent=(ct===null||Number.isNaN(ct))?'-':(ct.toFixed(1)+'°C');
+    }
+    var prof=_aceDryProfileGet(i);
+    var useSec=(Number(ud.status||0)>0&&Number(ud.remain_time)>0)
+      ?Number(ud.remain_time||0)*60
+      :prof.duration_sec;
+    var showTemp=(Number(ud.status||0)>0&&Number(ud.target_temp)>0)?Number(ud.target_temp):prof.temp;
+    var dryTempEl=document.getElementById('d-ace-dry-target-'+i);
+    if(dryTempEl)dryTempEl.textContent=showTemp+'°C';
+    var dryTimeEl=document.getElementById('d-ace-dry-time-'+i);
+    if(dryTimeEl)dryTimeEl.textContent=fmtHmsFromSec(useSec);
+  }
+
   // AMS
   if(s.ams_slots&&s.ams_slots.length){
     window._amsSlots=s.ams_slots;
-    var html='';
+    // Group by box_id (-1=Toolhead, 0=ACE 1, 1=ACE 2, ...)
+    var boxMap={};
     s.ams_slots.forEach(function(slot,i){
-      var empty=slot.status!==5;
-      var rgb=empty?[80,80,80]:(Array.isArray(slot.color)?slot.color:[128,128,128]);
-      var col='rgb('+rgb[0]+','+rgb[1]+','+rgb[2]+')';
-      var active=slot.status===1||slot.active;
-      var pct=empty?T.ams_empty:(slot.consumables_percent!=null?slot.consumables_percent+'%':'–');
-      var idx=slot.index!=null?slot.index:i;
-      html+='<div class="ams-slot'+(active?' active':'')+(empty?' empty':'')+ '" style="--slot-color:'+col+';opacity:'+(empty?0.4:1)+';cursor:pointer" onclick="openSlotEdit('+i+')">'
-        +'<div class="slot-circle" style="background:'+col+'"></div>'
-        +'<div class="slot-material">'+(empty?'–':(slot.type||slot.material_type||'–'))+'</div>'
-        +'<div class="slot-label">Slot '+(idx+1)+'</div>'
-        +'<div class="slot-label" style="font-size:10px;color:var(--txt2)">'+pct+'</div>'
-        +'<div style="font-size:9px;color:var(--txt2);margin-top:2px">✏</div>'
-        +'</div>';
+      var bid=slot.box_id!=null?slot.box_id:-1;
+      if(!boxMap[bid])boxMap[bid]=[];
+      boxMap[bid].push({slot:slot,arrIdx:i});
+    });
+    var boxIds=Object.keys(boxMap).map(Number).sort(function(a,b){return a-b});
+    var acePresent=boxIds.some(function(b){return b>=0;});
+    var html='';
+    boxIds.forEach(function(bid){
+      var entries=boxMap[bid];
+      var label=bid===-1
+        ?(acePresent?'Toolhead (Slots 1–3)':'Toolhead')
+        :('ACE '+(bid+1));
+      html+='<div class="ams-box-group">'
+        +'<div class="ams-box-label">'+label+'</div>'
+        +'<div class="ams-box-slots">';
+      entries.forEach(function(e){
+        var slot=e.slot;var i=e.arrIdx;
+        var empty=slot.status!==5;
+        var rgb=empty?[80,80,80]:(Array.isArray(slot.color)?slot.color:[128,128,128]);
+        var col='rgb('+rgb[0]+','+rgb[1]+','+rgb[2]+')';
+        var globalIdx=slot.global_index!=null?slot.global_index:i;
+        var active=slot.status===1||slot.active;
+        var loaded=(s.ams_loaded_slot!=null&&s.ams_loaded_slot>=0&&globalIdx===s.ams_loaded_slot);
+        var activity=(slot.activity||'');
+        var pct=empty?T.ams_empty:(slot.consumables_percent!=null?slot.consumables_percent+'%':'–');
+        var slotLabel='Slot '+(globalIdx+1);
+        html+='<div class="ams-slot'+(active?' active':'')+(loaded?' loaded':'')+(activity?' '+activity:'')+(empty?' empty':'')
+          +'" style="--slot-color:'+col+';opacity:'+(empty?0.4:1)+';cursor:pointer" onclick="openSlotEdit('+i+')">'
+          +'<div class="slot-circle" style="background:'+col+'"></div>'
+          +'<div class="slot-material">'+(empty?'–':(slot.type||slot.material_type||'–'))+'</div>'
+          +'<div class="slot-label">'+slotLabel+'</div>'
+          +'<div class="slot-label" style="font-size:10px;color:var(--txt2)">'+pct+'</div>'
+          +'<div style="font-size:9px;color:var(--txt2);margin-top:2px">✏</div>'
+          +'</div>';
+      });
+      if(bid===-1&&acePresent){
+        html+='<div class="ams-slot ams-slot-bridge" aria-label="Slot 4 connected to ACE">'
+          +'<div class="bridge-chip">ACE</div>'
+          +'</div>';
+      }
+      html+='</div></div>';
     });
     document.getElementById('ams-slots').innerHTML=html;
   }
@@ -2844,12 +3583,24 @@ function closeSettings(){
 
 // ── AMS Slot Edit ──
 var _slotEditIndex=-1;
+var _slotEditLoaded=false;
 var _MAT_PRESETS=['PLA','PETG','ABS','ASA','TPU','PA','PC','HIPS'];
+function updateSlotEditFeedButton(){
+  var btn=document.getElementById('btn-slot-edit-feed');
+  if(!btn)return;
+  if(_slotEditIndex<0){
+    btn.style.display='none';
+    return;
+  }
+  btn.style.display='';
+  btn.textContent=_slotEditLoaded?(T.slot_edit_unload||'⬆ Unload'):(T.slot_edit_load||'⬇ Load');
+}
 function openSlotEdit(i){
   var slot=(window._amsSlots||[])[i]||{};
-  var index=slot.index!=null?slot.index:i;
-  _slotEditIndex=index;
-  document.getElementById('slot-edit-title').textContent=T.slot_edit_title+' '+(index+1);
+  var globalIdx=slot.global_index!=null?slot.global_index:(slot.index!=null?slot.index:i);
+  _slotEditIndex=globalIdx;
+  _slotEditLoaded=(S.ams_loaded_slot!=null&&S.ams_loaded_slot===globalIdx);
+  document.getElementById('slot-edit-title').textContent=T.slot_edit_title+' '+(globalIdx+1);
   var rgb=Array.isArray(slot.color)?slot.color:[128,128,128];
   var hex='#'+rgb.map(function(v){return('0'+Math.min(255,v).toString(16)).slice(-2)}).join('');
   var ci=document.getElementById('slot-edit-color');
@@ -2863,10 +3614,23 @@ function openSlotEdit(i){
       +'style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);cursor:pointer;font-size:12px;'
       +(m===mat?'background:var(--accent);color:#fff':'background:var(--raised);color:var(--txt2)')+'">'+m+'</button>';
   }).join('');
+  updateSlotEditFeedButton();
   document.getElementById('slot-edit-modal').classList.add('open');
 }
 function closeSlotEdit(){
+  _slotEditIndex=-1;
   document.getElementById('slot-edit-modal').classList.remove('open');
+}
+function slotEditFeed(){
+  if(_slotEditIndex<0)return;
+  var type=_slotEditLoaded?2:1;
+  amsFeed(type,_slotEditIndex)
+    .then(function(){
+      _slotEditLoaded=!_slotEditLoaded;
+      updateSlotEditFeedButton();
+      poll();
+    })
+    .catch(function(){});
 }
 function startReadyFile(){
   var btn=document.getElementById('file-ready-btn');
@@ -3102,11 +3866,18 @@ function quickFan(v){
 }
 
 // ── AMS ──
-function amsFeed(type){
-  var slot=parseInt(document.getElementById('ams-slot-sel').value);
-  post('/api/ams/feed',{slot_index:slot,type:type})
-    .then(function(){clog((type===1?T.lbl_feed:T.lbl_unload)+' Slot '+(slot+1),'msg-ok')})
-    .catch(function(e){clog('AMS-Fehler: '+e,'msg-err')});
+function amsFeed(type,slotIndex){
+  var globalIdx;
+  if(typeof slotIndex==='number'&&slotIndex>=0){
+    globalIdx=slotIndex;
+  }else{
+    var i=parseInt(document.getElementById('ams-slot-sel').value);
+    var slot=(window._amsSlots||[])[i]||{};
+    globalIdx=slot.global_index!=null?slot.global_index:i;
+  }
+  return post('/api/ams/feed',{slot_index:globalIdx,type:type})
+    .then(function(){clog((type===1?T.lbl_feed:T.lbl_unload)+' Slot '+(globalIdx+1),'msg-ok')})
+    .catch(function(e){clog('AMS-Fehler: '+e,'msg-err');throw e;});
 }
 
 // ── Camera ──
@@ -3141,22 +3912,276 @@ function camStart(){
     clog((T.log_error||'Fehler:')+' '+e,'msg-err');
   });
 }
+
 function camStop(){
-  post('/api/camera/stop',{}).then(function(){
-    var img=document.getElementById('cam-img');
-    img.src='';
-    img.style.display='none';
-    document.getElementById('cam-spinner').style.display='none';
-    document.getElementById('cam-placeholder').style.display='flex';
-    camOn=false;
-    document.getElementById('cam-toggle-btn').textContent=T.btn_cam_start||'▶ Kamera';
-    clog(T.log_cam_stop||'Kamera gestoppt','msg-ok');
-  }).catch(function(e){clog((T.log_error||'Fehler:')+' '+e,'msg-err')});
+  var img=document.getElementById('cam-img');
+  post('/api/camera/stop',{}).catch(function(){});
+  img.src='';
+  img.style.display='none';
+  document.getElementById('cam-placeholder').style.display='flex';
+  camOn=false;
+  document.getElementById('cam-toggle-btn').textContent=T.btn_cam_start||'▶ Kamera';
+  clog((T.log_cam_stop||'Kamera gestoppt'),'msg-ok');
 }
+
+function aceDryStart(aceId){
+  aceId=(typeof aceId==='number'&&aceId>=0)?aceId:0;
+  var prof=_aceDryProfileGet(aceId);
+  var t=parseInt(prof.temp,10);
+  var d=_aceDryDurationMinFromSec(prof.duration_sec);
+  t=Math.max(30,Math.min(80,t));
+  d=Math.max(10,Math.min(1440,d));
+  return post('/api/ace/dry',{action:'start',target_temp:t,duration:d,ace_id:aceId})
+    .then(function(r){return r.json();})
+    .then(function(r){
+      if(r.error){throw new Error(r.error);}
+      clog('ACE '+(aceId+1)+' - '+(T.ace_dry_dryer||'Dryer')+': '+(T.ace_dry_start||'start')+' ('+t+'°C, '+d+' min)','msg-ok');
+      poll();
+    })
+    .catch(function(e){clog('ACE-Fehler: '+e,'msg-err');});
+}
+
+var _aceAutoFeedPending={};
+function aceAutoRefillToggle(aceId){
+  aceId=(typeof aceId==='number'&&aceId>=0)?aceId:0;
+  var on=!!((document.getElementById('ace-auto-refill-toggle-'+aceId)||{}).checked);
+  _aceAutoFeedPending[aceId]=true;
+  fetch('/api/ace/auto_feed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ace_id:aceId,on:on?1:0})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      delete _aceAutoFeedPending[aceId];
+      if(d.error){clog('Auto Refill error: '+d.error,'msg-err');var t=document.getElementById('ace-auto-refill-toggle-'+aceId);if(t)t.checked=!on;return;}
+      clog('ACE '+(aceId+1)+' - '+(T.ace_dry_auto_refill||'Auto Refill')+': '+(on?'ON':'OFF'),'msg-ok');
+    })
+    .catch(function(e){delete _aceAutoFeedPending[aceId];clog('Auto Refill error: '+e,'msg-err');var t=document.getElementById('ace-auto-refill-toggle-'+aceId);if(t)t.checked=!on;});
+}
+
+function openAceDryDialog(aceId){
+  aceId=(typeof aceId==='number'&&aceId>=0)?aceId:0;
+  _aceDryDialogAceId=aceId;
+  _syncAceDryPresetsFromServer(S.ace_dry_presets);
+  _aceDryDialogPresetOriginals=JSON.parse(JSON.stringify(ACE_DRY_PRESETS));
+  aceDryDialogSyncCustomButtonNames();
+  var hasStored=Object.prototype.hasOwnProperty.call(aceDryProfiles,String(aceId));
+  var prof=_aceDryProfileGet(aceId);
+  if(hasStored&&prof.preset&&ACE_DRY_PRESETS[prof.preset]){
+    aceDryDialogPreset(prof.preset);
+  }else if(hasStored){
+    var sec=prof.duration_sec;
+    document.getElementById('ace-dry-dialog-temp').value=prof.temp;
+    document.getElementById('ace-dry-dialog-h').value=Math.floor(sec/3600);
+    document.getElementById('ace-dry-dialog-m').value=Math.floor((sec%3600)/60);
+    document.getElementById('ace-dry-dialog-s').value=sec%60;
+    aceDryDialogHighlightPreset('');
+  }else{
+    aceDryDialogPreset('pla');
+  }
+  aceDryDialogUpdateSaveButton();
+  aceDryDialogUpdateResetButton();
+  var sb=document.getElementById('ace-dry-dialog-save-preset');
+  if(sb){sb.disabled=false;sb.textContent=T.ace_dry_dialog_save_restart||'Save & Restart';}
+  document.getElementById('ace-dry-dialog').classList.add('open');
+}
+
+function closeAceDryDialog(){
+  _aceDryDialogAceId=-1;
+  _aceDryDialogPresetOriginals={};
+  var sb=document.getElementById('ace-dry-dialog-save-preset');
+  if(sb)sb.style.display='none';
+  var rb=document.getElementById('ace-dry-dialog-reset-default');
+  if(rb)rb.style.display='none';
+  document.getElementById('ace-dry-dialog').classList.remove('open');
+}
+
+function aceDryDialogIsCustomPreset(key){
+  return /^custom_[123]$/.test(String(key||''));
+}
+
+function aceDryDialogSyncCustomButtonNames(){
+  ['custom_1','custom_2','custom_3'].forEach(function(k){
+    var b=document.querySelector('.ace-dry-preset-btn[data-preset="'+k+'"]');
+    if(b)b.textContent=(ACE_DRY_PRESETS[k]&&ACE_DRY_PRESETS[k].name)||('Custom '+k.slice(-1));
+  });
+}
+
+function aceDryDialogUpdateCustomNameUi(){
+  var row=document.getElementById('ace-dry-dialog-custom-name-row');
+  var input=document.getElementById('ace-dry-dialog-custom-name');
+  if(!row||!input)return;
+  if(!aceDryDialogIsCustomPreset(_aceDryDialogPresetKey)){
+    row.style.display='none';
+    return;
+  }
+  row.style.display='flex';
+  input.value=(ACE_DRY_PRESETS[_aceDryDialogPresetKey]&&ACE_DRY_PRESETS[_aceDryDialogPresetKey].name)||'';
+}
+
+function aceDryDialogCurrentValues(){
+  var t=parseInt(document.getElementById('ace-dry-dialog-temp').value||45,10);
+  var h=parseInt(document.getElementById('ace-dry-dialog-h').value||0,10);
+  var m=parseInt(document.getElementById('ace-dry-dialog-m').value||0,10);
+  var s=parseInt(document.getElementById('ace-dry-dialog-s').value||0,10);
+  t=Math.max(30,Math.min(80,t));
+  h=Math.max(0,Math.min(24,h));
+  m=Math.max(0,Math.min(59,m));
+  s=Math.max(0,Math.min(59,s));
+  var totalSec=(h*3600)+(m*60)+s;
+  totalSec=Math.max(10*60,Math.min(24*3600,totalSec));
+  return {temp:t,duration_sec:totalSec};
+}
+
+function aceDryDialogUpdateSaveButton(){
+  var btn=document.getElementById('ace-dry-dialog-save-preset');
+  if(!btn)return;
+  var key=_aceDryDialogPresetKey||'';
+  if(!key||!ACE_DRY_PRESETS[key]){btn.style.display='none';return;}
+  var p=_aceDryDialogPresetOriginals[key]||ACE_DRY_PRESETS[key];
+  var cur=aceDryDialogCurrentValues();
+  var changed=(cur.temp!==Number(p.temp)||cur.duration_sec!==Number(p.duration_sec));
+  if(aceDryDialogIsCustomPreset(key)){
+    var nameInp=document.getElementById('ace-dry-dialog-custom-name');
+    var n=((nameInp&&nameInp.value)||'').trim();
+    var old=(p&&p.name?String(p.name):('Custom '+key.slice(-1))).trim();
+    if((n||old)!==old)changed=true;
+  }
+  btn.style.display=changed?'':'none';
+}
+
+function aceDryDialogUpdateResetButton(){
+  var btn=document.getElementById('ace-dry-dialog-reset-default');
+  if(!btn)return;
+  var key=_aceDryDialogPresetKey||'';
+  var d=ACE_DRY_PRESET_DEFAULTS[key];
+  if(!key||!d){btn.style.display='none';return;}
+  var cur=aceDryDialogCurrentValues();
+  var changed=(cur.temp!==Number(d.temp)||cur.duration_sec!==Number(d.duration_sec));
+  btn.style.display=changed?'':'none';
+}
+
+function aceDryDialogInputsChanged(){
+  if(aceDryDialogIsCustomPreset(_aceDryDialogPresetKey)){
+    var b=document.querySelector('.ace-dry-preset-btn[data-preset="'+_aceDryDialogPresetKey+'"]');
+    var i=document.getElementById('ace-dry-dialog-custom-name');
+    if(b&&i){
+      var t=(i.value||'').trim();
+      b.textContent=t||((ACE_DRY_PRESETS[_aceDryDialogPresetKey]&&ACE_DRY_PRESETS[_aceDryDialogPresetKey].name)||('Custom '+_aceDryDialogPresetKey.slice(-1)));
+    }
+  }
+  aceDryDialogUpdateSaveButton();
+  aceDryDialogUpdateResetButton();
+}
+
+function aceDryDialogHighlightPreset(presetKey){
+  _aceDryDialogPresetKey=presetKey||'';
+  document.querySelectorAll('.ace-dry-preset-btn').forEach(function(btn){
+    var on=(btn.getAttribute('data-preset')===presetKey);
+    btn.style.background=on?'var(--accent)':'var(--raised)';
+    btn.style.color=on?'#fff':'var(--txt2)';
+    btn.style.borderColor=on?'var(--accent)':'var(--border)';
+  });
+  aceDryDialogUpdateCustomNameUi();
+}
+
+function aceDryDialogPreset(presetKey){
+  var p=ACE_DRY_PRESETS[presetKey];
+  if(!p)return;
+  var sec=p.duration_sec;
+  document.getElementById('ace-dry-dialog-temp').value=p.temp;
+  document.getElementById('ace-dry-dialog-h').value=Math.floor(sec/3600);
+  document.getElementById('ace-dry-dialog-m').value=Math.floor((sec%3600)/60);
+  document.getElementById('ace-dry-dialog-s').value=sec%60;
+  aceDryDialogHighlightPreset(presetKey);
+  aceDryDialogSyncCustomButtonNames();
+  aceDryDialogUpdateSaveButton();
+  aceDryDialogUpdateResetButton();
+}
+
+function resetAceDryPresetToDefault(){
+  var key=_aceDryDialogPresetKey||'';
+  var d=ACE_DRY_PRESET_DEFAULTS[key];
+  if(!key||!d)return;
+  var sec=Number(d.duration_sec)||0;
+  document.getElementById('ace-dry-dialog-temp').value=Number(d.temp)||45;
+  document.getElementById('ace-dry-dialog-h').value=Math.floor(sec/3600);
+  document.getElementById('ace-dry-dialog-m').value=Math.floor((sec%3600)/60);
+  document.getElementById('ace-dry-dialog-s').value=sec%60;
+  aceDryDialogInputsChanged();
+}
+
+function saveAceDryPresetAndRestart(){
+  var key=_aceDryDialogPresetKey||'';
+  var btn=document.getElementById('ace-dry-dialog-save-preset');
+  if(!key||!ACE_DRY_PRESETS[key]||!btn)return;
+  var cur=aceDryDialogCurrentValues();
+  if(!ACE_DRY_PRESETS[key])ACE_DRY_PRESETS[key]={};
+  ACE_DRY_PRESETS[key].temp=cur.temp;
+  ACE_DRY_PRESETS[key].duration_sec=cur.duration_sec;
+  if(aceDryDialogIsCustomPreset(key)){
+    var nameInp=document.getElementById('ace-dry-dialog-custom-name');
+    var nm=((nameInp&&nameInp.value)||'').trim();
+    ACE_DRY_PRESETS[key].name=nm||('Custom '+key.slice(-1));
+  }
+  btn.disabled=true;
+  btn.textContent='…';
+  fetch(_apiUrl('/api/settings')).then(function(r){return r.json();}).then(function(d){
+    d.ace_dry_presets={
+      pla:{temp:ACE_DRY_PRESETS.pla.temp,duration_sec:ACE_DRY_PRESETS.pla.duration_sec},
+      pla_plus:{temp:ACE_DRY_PRESETS.pla_plus.temp,duration_sec:ACE_DRY_PRESETS.pla_plus.duration_sec},
+      petg:{temp:ACE_DRY_PRESETS.petg.temp,duration_sec:ACE_DRY_PRESETS.petg.duration_sec},
+      tpu:{temp:ACE_DRY_PRESETS.tpu.temp,duration_sec:ACE_DRY_PRESETS.tpu.duration_sec},
+      abs_asa:{temp:ACE_DRY_PRESETS.abs_asa.temp,duration_sec:ACE_DRY_PRESETS.abs_asa.duration_sec},
+      pa_pc:{temp:ACE_DRY_PRESETS.pa_pc.temp,duration_sec:ACE_DRY_PRESETS.pa_pc.duration_sec},
+      custom_1:{name:ACE_DRY_PRESETS.custom_1.name,temp:ACE_DRY_PRESETS.custom_1.temp,duration_sec:ACE_DRY_PRESETS.custom_1.duration_sec},
+      custom_2:{name:ACE_DRY_PRESETS.custom_2.name,temp:ACE_DRY_PRESETS.custom_2.temp,duration_sec:ACE_DRY_PRESETS.custom_2.duration_sec},
+      custom_3:{name:ACE_DRY_PRESETS.custom_3.name,temp:ACE_DRY_PRESETS.custom_3.temp,duration_sec:ACE_DRY_PRESETS.custom_3.duration_sec}
+    };
+    return post('/api/settings',d);
+  }).then(function(){
+    clog('ACE preset '+key+' '+(T.settings_save||'Save & Restart'),'msg-ok');
+    closeAceDryDialog();
+  }).catch(function(e){
+    btn.disabled=false;
+    btn.textContent=T.ace_dry_dialog_save_restart||'Save & Restart';
+    clog('ACE-Preset Fehler: '+e,'msg-err');
+  });
+}
+
+function confirmAceDryDialog(){
+  if(_aceDryDialogAceId<0)return;
+  var t=parseInt(document.getElementById('ace-dry-dialog-temp').value||45,10);
+  var h=parseInt(document.getElementById('ace-dry-dialog-h').value||0,10);
+  var m=parseInt(document.getElementById('ace-dry-dialog-m').value||0,10);
+  var s=parseInt(document.getElementById('ace-dry-dialog-s').value||0,10);
+  t=Math.max(30,Math.min(80,t));
+  h=Math.max(0,Math.min(24,h));
+  m=Math.max(0,Math.min(59,m));
+  s=Math.max(0,Math.min(59,s));
+  var totalSec=(h*3600)+(m*60)+s;
+  totalSec=Math.max(10*60,Math.min(24*3600,totalSec));
+  var preset=_aceDryDialogPresetKey||'';
+  _aceDryProfileSet(_aceDryDialogAceId,t,totalSec,preset);
+  closeAceDryDialog();
+  applyState();
+}
+
+function aceDryToggle(aceId,on){
+  if(on)return aceDryStart(aceId);
+  return aceDryStop(aceId);
+}
+
 function toggleCam(){if(camOn)camStop();else camStart()}
 
-// ── GCode Store ──
-var storeFiles=[];
+function aceDryStop(aceId){
+  aceId=(typeof aceId==='number'&&aceId>=0)?aceId:0;
+  return post('/api/ace/dry',{action:'stop',ace_id:aceId})
+    .then(function(r){return r.json();})
+    .then(function(r){
+      if(r.error){throw new Error(r.error);}
+      clog('ACE '+(aceId+1)+' - '+(T.ace_dry_dryer||'Dryer')+': '+(T.ace_dry_stop||'stop'),'msg-ok');
+      poll();
+    })
+    .catch(function(e){clog('ACE-Fehler: '+e,'msg-err');});
+}
 
 function loadStore(){
   fetch(_apiUrl('/kx/files')).then(function(r){return r.json()}).then(function(d){
@@ -3253,14 +4278,27 @@ var _filamentDialogMode='store'; // 'store' oder 'banner'
 
 var _gcodeFilaments=[];
 
+function _setGcodeFilamentsFromFileObj(fileObj){
+  try{
+    if(fileObj&&Array.isArray(fileObj.gcode_filaments)){
+      _gcodeFilaments=fileObj.gcode_filaments;
+    }else if(fileObj&&typeof fileObj.gcode_filaments==='string'&&fileObj.gcode_filaments){
+      _gcodeFilaments=JSON.parse(fileObj.gcode_filaments);
+    }else{
+      _gcodeFilaments=[];
+    }
+  }catch(e){
+    _gcodeFilaments=[];
+  }
+}
+
 function storePrint(fileId, filename){
   _storeFileId=fileId;
   _storeFilename=filename;
   _filamentDialogMode='store';
   // GCode-Filamente aus Store-Datei holen (für Vorschau im Dialog)
   var fileObj=storeFiles.find(function(f){return f.id===fileId;});
-  try{ _gcodeFilaments=fileObj&&fileObj.gcode_filaments?JSON.parse(fileObj.gcode_filaments):[]; }
-  catch(e){ _gcodeFilaments=[]; }
+  _setGcodeFilamentsFromFileObj(fileObj);
   fetch(_apiUrl('/kx/filament/slots')).then(function(r){return r.json()}).then(function(d){
     openFilamentDialog(d.result||[]);
   }).catch(function(){openFilamentDialog([]);});
@@ -3269,9 +4307,36 @@ function storePrint(fileId, filename){
 function startReadyFileWithSlots(){
   _filamentDialogMode='banner';
   _storeFilename=S.file_ready||'';
-  fetch(_apiUrl('/kx/filament/slots')).then(function(r){return r.json()}).then(function(d){
-    openFilamentDialog(d.result||[]);
-  }).catch(function(){openFilamentDialog([]);});
+  // Banner must never reuse stale store-file context.
+  _storeFileId=null;
+  _gcodeFilaments=[];
+
+  function openWithSlots(){
+    fetch(_apiUrl('/kx/filament/slots')).then(function(r){return r.json()}).then(function(d){
+      openFilamentDialog(d.result||[]);
+    }).catch(function(){openFilamentDialog([]);});
+  }
+
+  var fileObj=(storeFiles||[]).find(function(f){return f.filename===_storeFilename;});
+  if(fileObj){
+    _storeFileId=fileObj.id;
+    _setGcodeFilamentsFromFileObj(fileObj);
+    openWithSlots();
+    return;
+  }
+
+  // Fallback: refresh file list, then resolve current file by filename.
+  fetch(_apiUrl('/kx/files')).then(function(r){return r.json()}).then(function(d){
+    storeFiles=d.result||[];
+    var refreshed=(storeFiles||[]).find(function(f){return f.filename===_storeFilename;});
+    if(refreshed){
+      _storeFileId=refreshed.id;
+      _setGcodeFilamentsFromFileObj(refreshed);
+    }
+    openWithSlots();
+  }).catch(function(){
+    openWithSlots();
+  });
 }
 
 var _amsSlots=[];
@@ -3289,6 +4354,15 @@ function _contrastText(hex){
   var y=(r*299 + g*587 + b*114)/1000;
   return y>=140?'#111':'#fff';
 }
+function _normalizeMaterialKey(material){
+  var key=(material||'').toUpperCase().replace(/[^A-Z0-9+]/g,'');
+  // Orca often uses PLA for PLA+, while AMS may report PLA+.
+  if(key==='PLA+'||key==='PLAPLUS') return 'PLA';
+  return key;
+}
+function _materialsCompatible(a,b){
+  return _normalizeMaterialKey(a)===_normalizeMaterialKey(b);
+}
 function _updateSlotMarker(sel){
   var opt=sel.options[sel.selectedIndex];
   var color=opt&&opt.dataset.color?opt.dataset.color:'#888';
@@ -3303,7 +4377,9 @@ function _updateSlotMarker(sel){
 }
 
 function openFilamentDialog(slots){
-  _amsSlots=slots.filter(function(s){return s.status==='loaded';});
+  _amsSlots=slots
+    .filter(function(s){return s.status==='loaded';})
+    .sort(function(a,b){return (a.slot_index||0)-(b.slot_index||0);});
   var dlg=document.getElementById('filament-dialog');
   var title=document.getElementById('fd-title');
   var body=document.getElementById('fd-slots');
@@ -3313,7 +4389,7 @@ function openFilamentDialog(slots){
   _printObjectsSvg='';
   var objSection=document.getElementById('fd-objects-section');
   if(objSection)objSection.style.display='none';
-  if(_storeFileId){
+  if(_filamentDialogMode==='store'&&_storeFileId){
     fetch(_apiUrl('/kx/files/'+encodeURIComponent(_storeFileId)+'/objects'))
       .then(function(r){return r.json()})
       .then(function(d){
@@ -3332,30 +4408,79 @@ function openFilamentDialog(slots){
     return {slot_index:i,color_hex:s.color_hex,material:s.material};
   });
 
+  // Default mapping strategy:
+  // 1) keep order where possible (row i -> nearest compatible slot i)
+  // 2) keep defaults unique while compatible slots are available
+  // 3) use color proximity as tie-breaker
+  function _hexToRgb(hex){
+    var c=(hex||'').replace('#','');
+    if(c.length===3)c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+    if(c.length<6)return [255,255,255];
+    return [parseInt(c.slice(0,2),16),parseInt(c.slice(2,4),16),parseInt(c.slice(4,6),16)];
+  }
+  function _colorDist(a,b){
+    var ar=_hexToRgb(a), br=_hexToRgb(b);
+    var dr=ar[0]-br[0], dg=ar[1]-br[1], db=ar[2]-br[2];
+    return (dr*dr + dg*dg + db*db);
+  }
+  var defaultSlotByPaint={};
+  var usedDefaultSlot={};
+  channels.forEach(function(gc,i){
+    var compatible=_amsSlots.filter(function(s){
+      return _materialsCompatible(gc.material, s.material);
+    });
+    if(!compatible.length){
+      defaultSlotByPaint[i]=-1;
+      return;
+    }
+
+    var ranked=compatible.slice().sort(function(a,b){
+      var da=Math.abs((a.slot_index||0)-i), db=Math.abs((b.slot_index||0)-i);
+      if(da!==db)return da-db;
+      var ca=_colorDist(gc.color_hex, a.color_hex), cb=_colorDist(gc.color_hex, b.color_hex);
+      if(ca!==cb)return ca-cb;
+      return (a.slot_index||0)-(b.slot_index||0);
+    });
+
+    var chosen=ranked.find(function(s){return !usedDefaultSlot[s.slot_index];}) || ranked[0];
+    defaultSlotByPaint[i]=chosen?chosen.slot_index:-1;
+    if(chosen) usedDefaultSlot[chosen.slot_index]=1;
+  });
+
   if(!_amsSlots.length){
     body.innerHTML='<p style="color:var(--txt2);font-size:13px;text-align:center;padding:16px 0">Keine belegten AMS-Slots.<br>Druck trotzdem starten?</p>';
   } else {
     body.innerHTML=channels.map(function(gc,i){
-      // Passende Slots: gleicher Materialtyp
-      var compatible=_amsSlots.filter(function(s){return s.material.toUpperCase()===gc.material.toUpperCase();});
-      if(!compatible.length) compatible=_amsSlots; // Fallback: alle
-      // Standard-Auswahl: Slot mit gleichem Index oder erster kompatibler
-      var defaultSlot=compatible.find(function(s){return s.slot_index===gc.slot_index;})||compatible[0];
+      var isUsed=(gc&&gc.is_used!==false);
+      // Only allow material-compatible slots.
+      var compatible=_amsSlots.filter(function(s){
+        return _materialsCompatible(gc.material, s.material);
+      });
+
+      var defaultSlotIndex=(defaultSlotByPaint.hasOwnProperty(i)?defaultSlotByPaint[i]:-1);
+      var defaultSlot=compatible.find(function(s){return s.slot_index===defaultSlotIndex;})||null;
       var opts=compatible.map(function(s){
-        var sel=(s.slot_index===defaultSlot.slot_index)?'selected':'';
+        var sel=(defaultSlot&&s.slot_index===defaultSlot.slot_index)?'selected':'';
         return '<option value="'+s.slot_index+'" data-color="'+s.color_hex+'" data-material="'+s.material+'" '+sel+'>'+
           '● Slot '+(s.slot_index+1)+' · '+s.material+'</option>';
       }).join('');
+      if(!compatible.length){
+        opts='<option value="-1" data-color="#888888" data-material="" selected>⚠ No matching material</option>';
+      }
       // Kanal-Box (links): farbige Box mit Nummer + auto Kontrast-Text
       var txt=_contrastText(gc.color_hex);
       var slotColor=defaultSlot?defaultSlot.color_hex:'#888';
       var slotTxt=_contrastText(slotColor);
+      var usedBadge=isUsed
+        ? '<span style="font-size:10px;color:var(--ok);font-weight:700;min-width:32px">USED</span>'
+        : '<span style="font-size:10px;color:var(--txt2);font-weight:700;min-width:32px;opacity:.75">USED</span>';
       return '<div style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:6px;background:var(--raised);border:1px solid var(--border)">'+
         '<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;background:'+gc.color_hex+';color:'+txt+';font-weight:700;font-size:13px;border:1px solid var(--border);flex-shrink:0">'+(i+1)+'</span>'+
         '<span style="font-size:11px;color:var(--txt2);min-width:36px">'+gc.material+'</span>'+
+        usedBadge+
         '<span style="font-size:16px;color:var(--txt2)">→</span>'+
         '<span class="fd-slot-marker" data-for-paint="'+i+'" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:5px;background:'+slotColor+';color:'+slotTxt+';font-weight:700;font-size:12px;border:1px solid var(--border);flex-shrink:0">'+(defaultSlot?defaultSlot.slot_index+1:'?')+'</span>'+
-        '<select data-paint="'+i+'" data-paint-color="'+gc.color_hex+'" onchange="_updateSlotMarker(this)" style="flex:1;min-width:0;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:var(--raised);color:var(--txt);font-size:12px">'+
+        '<select data-paint="'+i+'" data-paint-color="'+gc.color_hex+'" data-is-used="'+(isUsed?'1':'0')+'" data-has-compatible="'+(compatible.length?'1':'0')+'" '+(compatible.length?'':'disabled')+' onchange="_updateSlotMarker(this)" style="flex:1;min-width:0;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:var(--raised);color:var(--txt);font-size:12px">'+
         opts+'</select>'+
       '</div>';
     }).join('');
@@ -3371,11 +4496,18 @@ function closeFilamentDialog(){
 function confirmFilamentPrint(){
   var selects=document.querySelectorAll('#fd-slots select');
   var assignments=[];
+  var missingCompatible=0;
   selects.forEach(function(sel){
     var paintIdx=parseInt(sel.dataset.paint);
     var paintColor=sel.dataset.paintColor;
+    var isUsed=(sel.dataset.isUsed==='1');
+    var hasCompatible=(sel.dataset.hasCompatible==='1');
     var opt=sel.options[sel.selectedIndex];
-    var amsIdx=parseInt(opt.value);
+    var amsIdx=parseInt(opt&&opt.value);
+    if(!hasCompatible || Number.isNaN(amsIdx) || amsIdx < 0){
+      if(isUsed) missingCompatible += 1;
+      amsIdx = -1;
+    }
     var amsSlot=_amsSlots.find(function(s){return s.slot_index===amsIdx;})||{};
     // Farbe als [R,G,B,255]
     function hexToRgba(h){
@@ -3385,12 +4517,17 @@ function confirmFilamentPrint(){
     }
     assignments.push({
       paint_index:  paintIdx,
+      is_used:      isUsed,
       slot_index:   amsIdx,
       material:     opt.dataset.material||'PLA',
       paint_color:  hexToRgba(paintColor||'#ffffff'),
       ams_color:    hexToRgba(amsSlot.color_hex||'#ffffff'),
     });
   });
+  if(missingCompatible>0){
+    clog('Cannot start print: '+missingCompatible+' used paint(s) have no matching material slot','msg-err');
+    return;
+  }
   // Pre-Print Skip: Namen der abgehakten Objekte sammeln
   var excludedObjects=_printObjects.filter(function(o){return o.skip;}).map(function(o){return o.name;});
   closeFilamentDialog();
@@ -3748,6 +4885,60 @@ function loadPrinterTab(){
   </div>
 </div>
 
+<!-- ACE Dryer Temp/Time Settings Dialog -->
+<div class="modal-overlay" id="ace-dry-dialog" onclick="if(event.target===this)closeAceDryDialog()">
+  <div class="modal-box" style="max-width:560px;width:100%">
+    <div class="modal-header" style="margin-bottom:10px">
+      <span class="modal-title" id="ace-dry-dialog-title">Dryer Temp/Time Settings</span>
+      <button onclick="closeAceDryDialog()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--txt2)">✕</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+      <label id="ace-dry-dialog-temp-label" style="min-width:190px;font-size:12px;color:var(--txt)">Temperature (30-80°C)</label>
+      <input id="ace-dry-dialog-temp" type="number" min="30" max="80" step="1"
+        oninput="aceDryDialogInputsChanged()"
+        style="width:130px;padding:8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);text-align:center" value="45">
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <label id="ace-dry-dialog-time-label" style="min-width:190px;font-size:12px;color:var(--txt)">Rem. Time (h:m:s)</label>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input id="ace-dry-dialog-h" type="number" min="0" max="24" step="1" value="4"
+          oninput="aceDryDialogInputsChanged()"
+          style="width:70px;padding:8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);text-align:center">
+        <span style="color:var(--txt2)">:</span>
+        <input id="ace-dry-dialog-m" type="number" min="0" max="59" step="1" value="0"
+          oninput="aceDryDialogInputsChanged()"
+          style="width:70px;padding:8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);text-align:center">
+        <span style="color:var(--txt2)">:</span>
+        <input id="ace-dry-dialog-s" type="number" min="0" max="59" step="1" value="0"
+          oninput="aceDryDialogInputsChanged()"
+          style="width:70px;padding:8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);text-align:center">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
+      <button class="ace-dry-preset-btn" data-preset="pla" onclick="aceDryDialogPreset('pla')" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--raised);color:var(--txt2);cursor:pointer">PLA</button>
+      <button class="ace-dry-preset-btn" data-preset="pla_plus" onclick="aceDryDialogPreset('pla_plus')" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--raised);color:var(--txt2);cursor:pointer">PLA+</button>
+      <button class="ace-dry-preset-btn" data-preset="petg" onclick="aceDryDialogPreset('petg')" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--raised);color:var(--txt2);cursor:pointer">PETG</button>
+      <button class="ace-dry-preset-btn" data-preset="tpu" onclick="aceDryDialogPreset('tpu')" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--raised);color:var(--txt2);cursor:pointer">TPU</button>
+      <button class="ace-dry-preset-btn" data-preset="abs_asa" onclick="aceDryDialogPreset('abs_asa')" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--raised);color:var(--txt2);cursor:pointer">ABS / ASA</button>
+      <button class="ace-dry-preset-btn" data-preset="pa_pc" onclick="aceDryDialogPreset('pa_pc')" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--raised);color:var(--txt2);cursor:pointer">PA / PC</button>
+      <button class="ace-dry-preset-btn" data-preset="custom_1" onclick="aceDryDialogPreset('custom_1')" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--raised);color:var(--txt2);cursor:pointer">Custom 1</button>
+      <button class="ace-dry-preset-btn" data-preset="custom_2" onclick="aceDryDialogPreset('custom_2')" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--raised);color:var(--txt2);cursor:pointer">Custom 2</button>
+      <button class="ace-dry-preset-btn" data-preset="custom_3" onclick="aceDryDialogPreset('custom_3')" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--raised);color:var(--txt2);cursor:pointer">Custom 3</button>
+    </div>
+    <div id="ace-dry-dialog-custom-name-row" style="display:none;align-items:center;gap:12px;margin-bottom:14px">
+      <label id="ace-dry-dialog-custom-name-label" style="min-width:190px;font-size:12px;color:var(--txt)">Custom Name</label>
+      <input id="ace-dry-dialog-custom-name" type="text" maxlength="32" oninput="aceDryDialogInputsChanged()"
+        style="width:220px;padding:8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt)">
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button id="ace-dry-dialog-reset-default" onclick="resetAceDryPresetToDefault()" style="display:none;padding:8px 14px;background:var(--raised);border:1px solid var(--border);border-radius:8px;color:var(--txt);cursor:pointer">Reset to Default</button>
+      <button id="ace-dry-dialog-save-preset" onclick="saveAceDryPresetAndRestart()" style="display:none;padding:8px 14px;background:var(--warn);border:1px solid transparent;border-radius:8px;color:#fff;cursor:pointer">Save & Restart</button>
+      <button id="ace-dry-dialog-cancel" onclick="closeAceDryDialog()" style="padding:8px 14px;background:var(--raised);border:1px solid var(--border);border-radius:8px;color:var(--txt);cursor:pointer">Cancel</button>
+      <button id="ace-dry-dialog-confirm" onclick="confirmAceDryDialog()" style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <footer style="text-align:center;padding:12px;font-size:11px;color:var(--txt2);border-top:1px solid var(--border);margin-top:auto">
   &copy; ViewIT 2026
 </footer>
@@ -3830,25 +5021,26 @@ function loadPrinterTab(){
             body = await request.json()
         except Exception:
             body = {}
-        index  = int(body.get("index", 0))
+        index  = int(body.get("index", 0))   # global slot index
         mat    = str(body.get("type", "PLA")).upper()
         color  = body.get("color", [255, 255, 255])
         if not (isinstance(color, list) and len(color) == 3):
             return web.json_response({"error": "color must be [r,g,b]"}, status=400)
+        box_id, local_slot = self._global_to_box_slot(index)
         loop = asyncio.get_event_loop()
         def _send():
             resp = self.client.publish(
                 "multiColorBox", "setInfo",
-                {"multi_color_box": [{"id": -1, "slots": [{"index": index, "type": mat, "color": color}]}]},
+                {"multi_color_box": [{"id": box_id, "slots": [{"index": local_slot, "type": mat, "color": color}]}]},
                 timeout=5
             )
-            log.info(f"setInfo slot={index} type={mat} color={color} → {resp}")
+            log.info(f"setInfo global={index} box={box_id} local_slot={local_slot} type={mat} color={color} → {resp}")
             return resp
         resp = await loop.run_in_executor(None, _send)
         if resp and resp.get("code") == 200:
             # Update cached slot immediately
             for s in self._ams_slots:
-                if s.get("index") == index:
+                if s.get("global_index") == index:
                     s["type"]  = mat
                     s["color"] = color
                     break
@@ -3861,18 +5053,139 @@ function loadPrinterTab(){
             body = {}
         slot_index = int(body.get("slot_index", 0))
         feed_type  = int(body.get("type", 1))
+        if feed_type == 1:
+          self._pending_load_slot = slot_index
         # Ausziehen (type=2): wenn kein Slot explizit gewählt, den zuletzt geladenen nehmen
         if feed_type == 2 and self._ams_loaded_slot >= 0:
             slot_index = self._ams_loaded_slot
+        box_id, local_slot = self._global_to_box_slot(slot_index)
         loop = asyncio.get_event_loop()
         def _send():
             resp = self.client.publish(
                 "multiColorBox", "feedFilament",
-                {"multi_color_box": [{"id": -1, "feed_status": {"slot_index": slot_index, "type": feed_type}}]},
+                {"multi_color_box": [{"id": box_id, "feed_status": {"slot_index": local_slot, "type": feed_type}}]},
                 timeout=5
             )
-            log.info(f"feedFilament type={feed_type} slot={slot_index} loaded_slot={self._ams_loaded_slot} → {resp}")
+            log.info(f"feedFilament type={feed_type} global_slot={slot_index} box={box_id} local_slot={local_slot} loaded_slot={self._ams_loaded_slot} → {resp}")
         await loop.run_in_executor(None, _send)
+        return web.json_response({"result": "ok"})
+
+    async def handle_api_ace_auto_feed(self, request):
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+
+        ace_id_raw = body.get("ace_id", None)
+        on_raw = body.get("on", None)
+        if ace_id_raw is None or on_raw is None:
+            return web.json_response({"error": "ace_id and on are required"}, status=400)
+        try:
+            ace_id = int(ace_id_raw)
+            on = int(bool(on_raw))
+        except Exception:
+            return web.json_response({"error": "invalid parameters"}, status=400)
+        if not (0 <= ace_id <= 3):
+            return web.json_response({"error": "ace_id must be 0-3"}, status=400)
+
+        payload = {"multi_color_box": [{"id": ace_id, "auto_feed": on}]}
+        loop = asyncio.get_event_loop()
+        # Fire-and-forget: setAutoFeed ACK arrives via multiColorBox/report callback.
+        # Waiting for a response on that busy push topic causes false "code:0" rejections.
+        await loop.run_in_executor(
+            None,
+            lambda: self.client.publish("multiColorBox", "setAutoFeed", payload, timeout=0)
+        )
+        self._ace_auto_feed[ace_id] = on
+        self._state_dirty = True
+        return web.json_response({"result": "ok", "ace_id": ace_id, "auto_feed": on})
+
+    async def handle_api_ace_dry(self, request):
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+
+        action = str(body.get("action", "start")).lower()
+        if action not in ("start", "stop"):
+            return web.json_response({"error": "action must be 'start' or 'stop'"}, status=400)
+
+        ace_ids = [i for i in self._ace_box_ids if 0 <= i <= 3]
+        if not ace_ids:
+            ace_ids = sorted({
+                int(s.get("box_id", -1))
+                for s in self._ams_slots
+                if 0 <= int(s.get("box_id", -1)) <= 3
+            })
+        if not ace_ids and self._state.get("filament_mode") != "toolhead":
+            ace_ids = [0]
+        if not ace_ids:
+            return web.json_response({"error": "ACE not detected"}, status=400)
+
+        ace_id_raw = body.get("ace_id", None)
+        if ace_id_raw is not None:
+          try:
+            ace_id = int(ace_id_raw)
+          except Exception:
+            return web.json_response({"error": "ace_id must be an integer"}, status=400)
+          if ace_id not in ace_ids:
+            return web.json_response({"error": f"ACE {ace_id + 1} not detected"}, status=400)
+          ace_ids = [ace_id]
+
+        if action == "start":
+            target_temp = int(body.get("target_temp", 45))
+            duration = int(body.get("duration", 240))
+            target_temp = max(30, min(80, target_temp))
+            duration = max(10, min(24 * 60, duration))
+            humidity = (self._state.get("ace_drying") or {}).get("humidity")
+            current_temp = (self._state.get("ace_drying") or {}).get("current_temp")
+            drying_status = {
+                "status": 1,
+                "target_temp": target_temp,
+                "duration": duration,
+                "remain_time": duration,
+            }
+            ui_state = {
+                "status": 1,
+                "target_temp": target_temp,
+                "duration": duration,
+                "remain_time": duration,
+                "humidity": humidity,
+                "current_temp": current_temp,
+            }
+        else:
+            drying_status = {"status": 0}
+            humidity = (self._state.get("ace_drying") or {}).get("humidity")
+            current_temp = (self._state.get("ace_drying") or {}).get("current_temp")
+            ui_state = {
+                "status": 0,
+                "target_temp": 0,
+                "duration": 0,
+                "remain_time": 0,
+                "humidity": humidity,
+                "current_temp": current_temp,
+            }
+
+        payload = {
+            "multi_color_box": [
+                {"id": bid, "drying_status": dict(drying_status)}
+                for bid in ace_ids
+            ]
+        }
+
+        loop = asyncio.get_event_loop()
+
+        def _send():
+            return self.client.publish("multiColorBox", "setDry", payload, timeout=5)
+
+        resp = await loop.run_in_executor(None, _send)
+        if resp is None:
+            return web.json_response({"error": "No response from printer"}, status=504)
+        if int(resp.get("code", 200)) != 200:
+            return web.json_response({"error": f"Printer rejected command: {resp}"}, status=502)
+
+        self._state["ace_drying"] = ui_state
+        self._state_dirty = True
         return web.json_response({"result": "ok"})
 
     async def handle_api_axis(self, request):
@@ -3880,21 +5193,24 @@ function loadPrinterTab(){
             body = await request.json()
         except Exception:
             body = {}
-        action = body.get("action", "move")
+
         loop = asyncio.get_event_loop()
-        if action == "turnOff":
+        action = str(body.get("action", "")).lower()
+
+        if action == "turnoff":
             await loop.run_in_executor(None, lambda: self.client.publish(
                 "axis", "turnOff", None, timeout=0
             ))
         else:
-            axis      = int(body.get("axis", 4))
+            axis = int(body.get("axis", 4))
             move_type = int(body.get("move_type", 2))
-            distance  = float(body.get("distance", 0))
+            distance = float(body.get("distance", 0))
             await loop.run_in_executor(None, lambda: self.client.publish(
                 "axis", "move",
                 {"axis": axis, "move_type": move_type, "distance": distance},
                 timeout=0
             ))
+
         return web.json_response({"result": "ok"})
 
     async def handle_api_temperature(self, request):
@@ -4104,6 +5420,11 @@ function loadPrinterTab(){
             "light_brightness": s["light_brightness"],
             "ams_slots":        self._ams_slots,
             "ams_loaded_slot":  self._ams_loaded_slot,
+            "filament_mode":    s.get("filament_mode", self._filament_mode),
+            "ace_drying":       s.get("ace_drying", {"status": 0, "target_temp": 0, "duration": 0, "remain_time": 0, "humidity": None, "current_temp": None}),
+            "ace_units":        list(self._ace_box_ids),
+            "ace_auto_feed":    dict(self._ace_auto_feed),
+            "ace_dry_presets":  self._ace_dry_presets,
             "thumbnail":        self._thumbnail_b64,
             "connection_error": s["connection_error"],
             "file_ready":       s["file_ready"],
@@ -4145,11 +5466,20 @@ function loadPrinterTab(){
         """Frische Slot-Daten per getInfo holen, Fallback auf gecachte."""
         resp = self.client.publish("multiColorBox", "getInfo", None, timeout=5)
         if resp and resp.get("data"):
-            boxes = resp["data"].get("multi_color_box") or []
+            data = resp["data"]
+            self._head_tools_model = int(data.get("head_tools_model", self._head_tools_model))
+            boxes = data.get("multi_color_box") or []
             if boxes:
-                slots = boxes[0].get("slots") or []
-                if slots:
-                    self._ams_slots = slots
+                self._update_ace_drying_state(data, boxes)
+                self._filament_mode = self._detect_filament_mode(boxes, self._head_tools_model)
+                self._state["filament_mode"] = self._filament_mode
+                global_slots, global_loaded = self._aggregate_slots(boxes, self._filament_mode)
+                activity_map = self._slot_activity_map(boxes, global_loaded)
+                for s in global_slots:
+                    s["activity"] = activity_map.get(s.get("global_index"), "")
+                if global_slots:
+                    self._ams_slots = global_slots
+                self._ams_loaded_slot = global_loaded
         return self._ams_slots
 
     # ─── Settings ────────────────────────────────────────────────────────────
@@ -4177,6 +5507,7 @@ function loadPrinterTab(){
             "device_id":        self._args.device_id,
             "default_ams_slot": getattr(self._args, "default_ams_slot", "auto"),
             "auto_leveling":    getattr(self._args, "auto_leveling", 1),
+        "ace_dry_presets":  self._ace_dry_presets,
         })
 
     async def handle_api_settings_post(self, request):
@@ -4191,7 +5522,7 @@ function loadPrinterTab(){
             cfg.read(config_path, encoding="utf-8")
 
         # Sections sicherstellen
-        for section in ("connection", "print", "bridge"):
+        for section in ("connection", "print", "bridge", "ace_dry_presets"):
             if not cfg.has_section(section):
                 cfg.add_section(section)
 
@@ -4211,6 +5542,15 @@ function loadPrinterTab(){
             cfg.set("bridge", "printer_name", printer_name)
         elif cfg.has_option("bridge", "printer_name"):
             cfg.remove_option("bridge", "printer_name")
+
+        incoming_presets = data.get("ace_dry_presets") if isinstance(data, dict) else None
+        presets = self._sanitize_ace_dry_presets(incoming_presets if isinstance(incoming_presets, dict) else self._ace_dry_presets)
+        for key, val in presets.items():
+          cfg.set("ace_dry_presets", f"{key}_temp", str(val["temp"]))
+          cfg.set("ace_dry_presets", f"{key}_duration_sec", str(val["duration_sec"]))
+          if key.startswith("custom_"):
+            cfg.set("ace_dry_presets", f"{key}_name", str(val.get("name", key.replace("_", " ").title())))
+        self._ace_dry_presets = presets
 
         with open(config_path, "w", encoding="utf-8") as f:
             f.write("# KX-Bridge Konfigurationsdatei\n\n")
@@ -4726,10 +6066,20 @@ function loadPrinterTab(){
                         self._on_print(print_r)
                 box = self.client.query_multicolor_box()
                 if box:
-                    boxes = (box.get("data") or {}).get("multi_color_box") or []
-                    slots = boxes[0].get("slots") or [] if boxes else []
-                    if slots:
-                        self._ams_slots = slots
+                    data = box.get("data") or {}
+                    self._head_tools_model = int(data.get("head_tools_model", self._head_tools_model))
+                    boxes = data.get("multi_color_box") or []
+                    if boxes:
+                        self._update_ace_drying_state(data, boxes)
+                        self._filament_mode = self._detect_filament_mode(boxes, self._head_tools_model)
+                        self._state["filament_mode"] = self._filament_mode
+                        global_slots, global_loaded = self._aggregate_slots(boxes, self._filament_mode)
+                        activity_map = self._slot_activity_map(boxes, global_loaded)
+                        for s in global_slots:
+                            s["activity"] = activity_map.get(s.get("global_index"), "")
+                        if global_slots:
+                            self._ams_slots = global_slots
+                        self._ams_loaded_slot = global_loaded
             except Exception as e:
                 log.warning(f"Poll-Fehler: {e}")
                 # Prüfen ob Drucker wirklich weg ist
@@ -4809,6 +6159,8 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_post("/api/speed",               bridge.handle_api_speed)
     r.add_post("/api/ams/feed",            bridge.handle_api_ams_feed)
     r.add_post("/api/ams/set_slot",        bridge.handle_api_ams_set_slot)
+    r.add_post("/api/ace/auto_feed",        bridge.handle_api_ace_auto_feed)
+    r.add_post("/api/ace/dry",             bridge.handle_api_ace_dry)
     r.add_post("/api/axis",                bridge.handle_api_axis)
     r.add_post("/api/temperature",         bridge.handle_api_temperature)
     r.add_get("/api/camera",               bridge.handle_api_camera)
@@ -4842,7 +6194,7 @@ def build_app(bridge: KobraXBridge) -> web.Application:
 
     # Root + Printer-Routen (Single-Page, JS liest Pathname)
     r.add_get("/",                           bridge.handle_index)
-    r.add_get("/printer{num:\d+}",          bridge.handle_index)
+    r.add_get(r"/printer{num:\d+}",          bridge.handle_index)
     r.add_get("/favicon.ico",               bridge.handle_favicon)
 
     # WebSocket

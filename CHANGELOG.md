@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.9.11] – 2026-05-20
+
+### New
+- **ACE Pro 2 support (experimental, community contribution by @gangoke, PR #26):** the bridge now auto-detects the filament hardware and adapts:
+  - **Modes:** `toolhead` (no ACE, stock 4-slot box), `ace_direct` (one ACE Pro 2 directly on the toolhead), `ace_hub` (up to 4 ACE units on the slot-4 hub) — up to **19 slots** total.
+  - **AMS auto-refill** toggle.
+  - **Dryer:** temperature/humidity monitor, start/stop/temp/duration control, with material presets configurable in a new `[ace_dry_presets]` config section (PLA, PLA+, PETG, TPU, ABS/ASA, PA/PC + 3 custom).
+  - **UI:** filament section scales to 19 slots, mode label, loaded slot is green-outlined with a load/unload pulse animation, unload/load straight from the slot-edit dialog.
+  - **GCode color mapping:** ACE2-aware, color-from-GCode fix, inconsistency notifier when the mapping doesn't match the objects, better default mapping.
+
+> **⚠️ Experimental:** the ACE Pro 2 hardware paths were developed and tested by the contributor with a single ACE2 unit; the 2–4 unit hub configurations are theoretical and untested on real hardware. We don't have ACE2 hardware to verify against either. The standard `toolhead` (no-ACE) path was verified live against a real Kobra X here. If you run a multi-ACE setup, please report back via Issues.
+
+### Fixes
+- **Happy Hare MMU emulation:** only populated slots are now synced — no placeholder for empty slots (aligns with OrcaSlicer PR #13372).
+- **GCode color dialog** no longer shows the previously-uploaded file's data after a new upload.
+
+---
+
 ## [0.9.10] – 2026-05-17
 
 > **Heads-up:** with this release the focus shifts from new features to

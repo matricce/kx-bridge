@@ -14,6 +14,13 @@ Verwendung:
   info = client.query_info()
   print(info["data"]["temp"])
   client.disconnect()
+
+────────────────────────────────────────────────────────────────────────────
+Copyright (C) 2026 viewit (KX-Bridge contributors)
+
+Licensed under GPLv3 — see LICENSE in the project root.
+Protocol reverse-engineered for interoperability (§69e UrhG / EU Software
+Directive Art. 6). Not affiliated with Anycubic. See NOTICE.md.
 """
 
 import hashlib
