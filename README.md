@@ -16,6 +16,8 @@ A Moonraker-compatible bridge that talks directly to the printer.
 &nbsp;
 [![Releases](https://img.shields.io/badge/Download-Releases-2EA043?style=for-the-badge&logo=gitea&logoColor=white)](https://gitea.it-drui.de/viewit/KX-Bridge-Release/releases)
 &nbsp;
+[![Downloads](https://img.shields.io/badge/Downloads-800%2B-8957E5?style=for-the-badge&logo=gitea&logoColor=white)](https://gitea.it-drui.de/viewit/KX-Bridge-Release/releases)
+&nbsp;
 [![Video](https://img.shields.io/badge/YouTube-Tutorial-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=1Ql4wfH27fM)
 
 <sub>Like KX-Bridge? A coffee on <a href="https://ko-fi.com/viewitde">Ko-fi</a> keeps the project alive. ☕</sub>
@@ -96,6 +98,17 @@ Printer → Connection type **Moonraker** → Host: `http://BRIDGE-IP:7125`
 ## 📺 Video Tutorial
 
 [![KX-Bridge Setup & Usage](https://img.youtube.com/vi/1Ql4wfH27fM/hqdefault.jpg)](https://www.youtube.com/watch?v=1Ql4wfH27fM)
+
+---
+
+## 🏠 Community & Integrations
+
+- **[Home Assistant integration](https://github.com/gangoke/kobrax-lan-hass-component)**
+  by [@gangoke](https://github.com/gangoke) — exposes sensors, print controls,
+  light, camera and the GCode thumbnail as native Home Assistant entities.
+
+> These are **community projects**, not maintained or supported by KX-Bridge.
+> For questions or issues, please use the linked repository.
 
 ---
 

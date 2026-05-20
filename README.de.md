@@ -16,6 +16,8 @@ Eine Moonraker-kompatible Bridge, die direkt mit dem Drucker spricht.
 &nbsp;
 [![Releases](https://img.shields.io/badge/Download-Releases-2EA043?style=for-the-badge&logo=gitea&logoColor=white)](https://gitea.it-drui.de/viewit/KX-Bridge-Release/releases)
 &nbsp;
+[![Downloads](https://img.shields.io/badge/Downloads-800%2B-8957E5?style=for-the-badge&logo=gitea&logoColor=white)](https://gitea.it-drui.de/viewit/KX-Bridge-Release/releases)
+&nbsp;
 [![Video](https://img.shields.io/badge/YouTube-Tutorial-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=1Ql4wfH27fM)
 
 <sub>Gefällt dir KX-Bridge? Ein Kaffee auf <a href="https://ko-fi.com/viewitde">Ko-fi</a> hält das Projekt am Leben. ☕</sub>
@@ -96,6 +98,17 @@ Drucker → Verbindungstyp **Moonraker** → Host: `http://BRIDGE-IP:7125`
 ## 📺 Video-Tutorial
 
 [![KX-Bridge Setup & Usage](https://img.youtube.com/vi/1Ql4wfH27fM/hqdefault.jpg)](https://www.youtube.com/watch?v=1Ql4wfH27fM)
+
+---
+
+## 🏠 Community & Integrationen
+
+- **[Home-Assistant-Integration](https://github.com/gangoke/kobrax-lan-hass-component)**
+  von [@gangoke](https://github.com/gangoke) — bindet Sensoren, Drucksteuerung,
+  Licht, Kamera und das GCode-Vorschaubild als native Home-Assistant-Entitäten ein.
+
+> Dies sind **Community-Projekte**, die nicht von KX-Bridge betreut oder
+> supportet werden. Bei Fragen oder Problemen bitte das verlinkte Repository nutzen.
 
 ---
 

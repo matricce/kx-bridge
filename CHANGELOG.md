@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.9.12] – 2026-05-20
+
+### Fixes
+- **Pause state** is now read correctly: the bridge was looking at the device-level
+  state instead of the nested print-job state, so a paused print sometimes still
+  showed as printing. Layer/progress/remaining-time are now also taken from the
+  job report.
+
+### Internal
+- Frontend (HTML/CSS/JS) extracted from the Python file into `web/index.html`,
+  bundled back in at build time — easier to maintain, no change for users.
+
+### Docs
+- Linked the community **Home Assistant integration** by @gangoke.
+
 ## [0.9.11] – 2026-05-20
 
 ### New

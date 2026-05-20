@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.9.12] – 2026-05-20
+
+### Fixes
+- **Pause-Status** wird jetzt korrekt erkannt: Die Bridge las den Geräte-State
+  statt des verschachtelten Druckauftrags-States, dadurch wurde ein pausierter
+  Druck teils noch als „druckend" angezeigt. Layer/Fortschritt/Restzeit kommen
+  jetzt ebenfalls aus dem Auftrags-Report.
+
+### Intern
+- Frontend (HTML/CSS/JS) aus der Python-Datei nach `web/index.html` ausgelagert,
+  zur Build-Zeit wieder eingebettet — besser wartbar, für Nutzer keine Änderung.
+
+### Doku
+- Community-**Home-Assistant-Integration** von @gangoke verlinkt.
+
 ## [0.9.11] – 2026-05-20
 
 ### Neu
