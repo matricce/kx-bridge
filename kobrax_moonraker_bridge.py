@@ -2877,26 +2877,51 @@ class KobraXBridge:
         except Exception as e:
             return web.json_response({"error": str(e)}, status=502)
 
+    # Bridge-Python-Module, die das Self-Update mitziehen muss. Die Hauptdatei
+    # importiert _web_assets (gebündeltes Frontend) etc. – wird nur die Hauptdatei
+    # ersetzt, crasht die neue Version mit ModuleNotFoundError. Daher alle laden.
+    _UPDATE_FILES = [
+        "kobrax_moonraker_bridge.py",
+        "_web_assets.py",
+        "kobrax_client.py",
+        "config_loader.py",
+        "env_loader.py",
+    ]
+
     async def handle_api_update_apply(self, request):
         data = await request.json()
-        download_url = data.get("download_url", "")
-        new_tag      = data.get("tag", "")
-        if not download_url:
-            return web.json_response({"error": "download_url fehlt"}, status=400)
-        script_path = pathlib.Path(sys.executable if getattr(sys, "frozen", False) else __file__).resolve()
+        new_tag = data.get("tag", "")
+        if getattr(sys, "frozen", False):
+            return web.json_response(
+                {"error": "Self-Update wird im Binary-Modus nicht unterstützt – "
+                          "bitte neue Binary/Docker-Image laden."}, status=400)
+        if not new_tag:
+            return web.json_response({"error": "tag fehlt"}, status=400)
+
+        app_dir = pathlib.Path(__file__).resolve().parent
         try:
+            # Phase 1: ALLE Dateien herunterladen (in .new), nichts ersetzen.
+            downloaded: list[tuple[pathlib.Path, bytes]] = []
             async with aiohttp.ClientSession() as session:
-                async with session.get(download_url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                    if resp.status != 200:
-                        return web.json_response({"error": f"Download HTTP {resp.status}"}, status=502)
-                    content = await resp.read()
-            # Atomisch ersetzen
-            tmp = script_path.with_suffix(".py.new")
-            tmp.write_bytes(content)
-            os.replace(tmp, script_path)
-            if new_tag:
-                self._write_version(new_tag.lstrip("v"))
-            log.info(f"Update auf {new_tag} installiert, starte neu …")
+                for fname in self._UPDATE_FILES:
+                    url = f"{self.GITEA_RAW_BASE}/{new_tag}/{fname}"
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                        if resp.status != 200:
+                            # _web_assets.py o.ä. existiert evtl. in älteren Tags nicht –
+                            # Hauptdatei ist Pflicht, optionale dürfen fehlen.
+                            if fname == "kobrax_moonraker_bridge.py":
+                                return web.json_response(
+                                    {"error": f"Download {fname}: HTTP {resp.status}"}, status=502)
+                            log.warning(f"Update: {fname} nicht im Release ({resp.status}) – übersprungen")
+                            continue
+                        downloaded.append((app_dir / fname, await resp.read()))
+            # Phase 2: atomar ersetzen (erst nach komplettem, erfolgreichem Download)
+            for path, content in downloaded:
+                tmp = path.with_suffix(path.suffix + ".new")
+                tmp.write_bytes(content)
+                os.replace(tmp, path)
+            self._write_version(new_tag.lstrip("v"))
+            log.info(f"Update auf {new_tag} installiert ({len(downloaded)} Dateien), starte neu …")
         except Exception as e:
             return web.json_response({"error": str(e)}, status=502)
         response = web.json_response({"status": "updating"})

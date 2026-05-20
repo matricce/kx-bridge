@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.9.13] – 2026-05-20
+
+### Fixes
+- **Self-update was broken for 0.9.12 (important):** the in-app updater only
+  replaced `kobrax_moonraker_bridge.py`, but since 0.9.12 that file imports the
+  extracted `_web_assets.py` (bundled frontend). Updating to 0.9.12 therefore
+  crashed with `ModuleNotFoundError: No module named '_web_assets'` and the
+  bridge wouldn't come back up. The updater now downloads **all** bridge modules
+  (main file + `_web_assets.py` + client + loaders), fully, then swaps them
+  atomically — and refuses to self-update in binary mode (use the new
+  binary/Docker image instead).
+
+> If you got stuck on 0.9.12 after pressing update: rebuild/redeploy the Docker
+> image or grab the 0.9.13 binary once, then self-update works again.
+
 ## [0.9.12] – 2026-05-20
 
 ### Fixes
