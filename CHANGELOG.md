@@ -2,18 +2,45 @@
 
 ## [0.9.13] – 2026-05-20
 
-### Fixes
-- **Self-update was broken for 0.9.12 (important):** the in-app updater only
-  replaced `kobrax_moonraker_bridge.py`, but since 0.9.12 that file imports the
-  extracted `_web_assets.py` (bundled frontend). Updating to 0.9.12 therefore
-  crashed with `ModuleNotFoundError: No module named '_web_assets'` and the
-  bridge wouldn't come back up. The updater now downloads **all** bridge modules
-  (main file + `_web_assets.py` + client + loaders), fully, then swaps them
-  atomically — and refuses to self-update in binary mode (use the new
-  binary/Docker image instead).
+============================================================
+  STOP — READ THIS BEFORE PRESSING "UPDATE"
+============================================================
 
-> If you got stuck on 0.9.12 after pressing update: rebuild/redeploy the Docker
-> image or grab the 0.9.13 binary once, then self-update works again.
+The in-app "Update" button is BROKEN in 0.9.11 and 0.9.12.
+Do NOT use it. Update manually instead (one time), then it
+works again from 0.9.13 onward.
+
+>> WINDOWS .EXE / LINUX BINARY users — DANGER:
+   Pressing Update OVERWRITES your kx-bridge.exe / kx-bridge
+   with a text file. The program will NOT start anymore.
+   It cannot repair itself.
+   --> Update manually: download the 0.9.13
+       kx-bridge-windows.zip / kx-bridge-linux.zip from the
+       Releases page and replace your old file.
+       Your config/ and data/ folders are kept.
+
+>> DOCKER users:
+   Pressing Update makes the container crash-loop
+   (ModuleNotFoundError: No module named '_web_assets').
+   --> Update manually:
+       docker compose pull  (or  docker compose up -d --build)
+       Your config + data volumes are kept.
+
+From 0.9.13 on, the in-app updater is fixed and safe again.
+============================================================
+
+### Fixes
+- **Self-update was broken in 0.9.11 and 0.9.12 (critical):** the in-app updater
+  only replaced `kobrax_moonraker_bridge.py`. Two problems:
+  - **Binary/EXE mode:** it overwrote the running executable (`sys.executable`)
+    with a Python text file, leaving an unstartable program that can't recover
+    itself — manual re-download required.
+  - **Python/Docker mode:** since 0.9.12 the main file imports the extracted
+    `_web_assets.py` (bundled frontend), which the updater didn't fetch →
+    `ModuleNotFoundError: No module named '_web_assets'` → crash loop.
+  The updater now downloads **all** bridge modules (main file + `_web_assets.py`
+  + client + loaders) fully, then swaps them atomically, and **refuses to
+  self-update in binary mode** (pointing you to the manual download instead).
 
 ## [0.9.12] – 2026-05-20
 

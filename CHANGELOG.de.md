@@ -2,19 +2,47 @@
 
 ## [0.9.13] – 2026-05-20
 
-### Fixes
-- **Self-Update war in 0.9.12 kaputt (wichtig):** Der In-App-Updater ersetzte
-  nur `kobrax_moonraker_bridge.py`, aber seit 0.9.12 importiert diese Datei das
-  ausgelagerte `_web_assets.py` (gebündeltes Frontend). Ein Update auf 0.9.12
-  crashte daher mit `ModuleNotFoundError: No module named '_web_assets'` und die
-  Bridge kam nicht wieder hoch. Der Updater lädt jetzt **alle** Bridge-Module
-  (Hauptdatei + `_web_assets.py` + Client + Loader) erst vollständig herunter
-  und ersetzt sie dann atomar — und verweigert das Self-Update im Binary-Modus
-  (stattdessen neue Binary/neues Docker-Image laden).
+============================================================
+  STOPP — VOR DEM DRÜCKEN VON "UPDATE" LESEN
+============================================================
 
-> Falls du nach dem Update auf 0.9.12 hängengeblieben bist: einmalig das
-> Docker-Image neu bauen/deployen oder die 0.9.13-Binary holen, danach
-> funktioniert das Self-Update wieder.
+Der "Update"-Button ist in 0.9.11 und 0.9.12 KAPUTT.
+NICHT benutzen. Stattdessen einmalig manuell updaten —
+ab 0.9.13 funktioniert er wieder.
+
+>> WINDOWS-.EXE / LINUX-BINARY-Nutzer — GEFAHR:
+   Update ÜBERSCHREIBT deine kx-bridge.exe / kx-bridge mit
+   einer Textdatei. Das Programm STARTET DANN NICHT MEHR
+   und kann sich nicht selbst reparieren.
+   --> Manuell updaten: die 0.9.13
+       kx-bridge-windows.zip / kx-bridge-linux.zip von der
+       Releases-Seite laden und die alte Datei ersetzen.
+       Deine config/- und data/-Ordner bleiben erhalten.
+
+>> DOCKER-Nutzer:
+   Update führt zur Crash-Loop des Containers
+   (ModuleNotFoundError: No module named '_web_assets').
+   --> Manuell updaten:
+       docker compose pull  (oder  docker compose up -d --build)
+       config- + data-Volumes bleiben erhalten.
+
+Ab 0.9.13 ist der In-App-Updater repariert und wieder sicher.
+============================================================
+
+### Fixes
+- **Self-Update war in 0.9.11 und 0.9.12 kaputt (kritisch):** Der In-App-Updater
+  ersetzte nur `kobrax_moonraker_bridge.py`. Zwei Probleme:
+  - **Binary/EXE-Modus:** Er überschrieb die laufende Programmdatei
+    (`sys.executable`) mit einer Python-Textdatei — übrig blieb ein nicht mehr
+    startbares Programm, das sich nicht selbst reparieren kann (manueller
+    Re-Download nötig).
+  - **Python/Docker-Modus:** Seit 0.9.12 importiert die Hauptdatei das
+    ausgelagerte `_web_assets.py` (gebündeltes Frontend), das der Updater nicht
+    mitlud → `ModuleNotFoundError: No module named '_web_assets'` → Crash-Loop.
+  Der Updater lädt jetzt **alle** Bridge-Module (Hauptdatei + `_web_assets.py` +
+  Client + Loader) erst vollständig herunter, ersetzt sie dann atomar und
+  **verweigert das Self-Update im Binary-Modus** (mit Verweis auf den manuellen
+  Download).
 
 ## [0.9.12] – 2026-05-20
 
