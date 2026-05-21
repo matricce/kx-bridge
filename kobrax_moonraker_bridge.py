@@ -44,12 +44,15 @@ import sys
 import tempfile
 import time
 import threading
+import html
 
 # Bei PyInstaller-Binary liegt alles neben sys.executable, sonst neben __file__
 _BASE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _BASE)
+# Read-Only Web-Assets (Themes) werden im Onefile-Binary via --add-data unter
+# sys._MEIPASS entpackt; im Script-/Docker-Modus liegen sie neben dieser Datei.
+_WEB_BASE = getattr(sys, "_MEIPASS", _BASE)
 from kobrax_client import KobraXClient
-from _web_assets import INDEX_HTML
 
 
 try:
@@ -129,6 +132,14 @@ logging.basicConfig(level=logging.INFO,
                     format="[%(asctime)s] %(levelname)-5s %(name)s: %(message)s",
                     datefmt="%H:%M:%S")
 log = logging.getLogger("bridge")
+
+# Web-UI: Unterverzeichnis unter web/themes/<name>/index.html
+_UI_THEME_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
+# Erlaubte statische Theme-Dateien unter /kx/ui/<name>
+_KX_UI_ASSETS: dict[str, str] = {
+    "style.css": "text/css",
+    "app.js":    "application/javascript",
+}
 
 # Ring-Buffer für Browser-Log-Stream (letzte 200 Einträge)
 import collections as _collections
@@ -549,6 +560,15 @@ class KobraXBridge:
 
         # Part-Skip: zuletzt vom Drucker gemeldete Skip-Liste (v0.9.10)
         self._skip_state: dict = {"objects": [], "skipped": [], "ts": 0}
+
+        # Theme-Name prüfen (keine Sonderzeichen oder Umlaute)
+        raw_theme = (getattr(args, "ui_theme", None) or "default").strip()
+        if not _UI_THEME_NAME_RE.match(raw_theme):
+            log.warning("Ungültiger UI-Theme-Name %r – nutze default", raw_theme)
+            raw_theme = "default"
+        self._ui_theme = raw_theme
+        self._index_tpl_cache: str | None = None
+        self._index_tpl_cache_key: tuple[str, float] | None = None
 
         # Register MQTT push callbacks
         client.callbacks["tempature/report"]      = self._on_temp
@@ -1867,6 +1887,30 @@ class KobraXBridge:
         else:
             log.warning("Druckstart: keine Antwort vom Drucker")
 
+    def _theme_index_path(self) -> str:
+        return os.path.join(_WEB_BASE, "web", "themes", self._ui_theme, "index.html")
+
+    def _load_index_template_cached(self) -> str:
+        path = self._theme_index_path()
+        mtime = os.path.getmtime(path)
+        key = (path, mtime)
+        if self._index_tpl_cache is not None and self._index_tpl_cache_key == key:
+            return self._index_tpl_cache
+        with open(path, "r", encoding="utf-8") as f:
+            self._index_tpl_cache = f.read()
+        self._index_tpl_cache_key = key
+        return self._index_tpl_cache
+
+    def _ui_asset_cache_buster(self) -> str:
+        base = os.path.join(_WEB_BASE, "web", "themes", self._ui_theme)
+        mt = 0.0
+        for fn in ("index.html", "style.css", "app.js"):
+            try:
+                mt = max(mt, os.path.getmtime(os.path.join(base, fn)))
+            except OSError:
+                pass
+        return str(int(mt)) if mt else "0"
+
     async def handle_print_start(self, request):
         try:
             body = await request.json()
@@ -1974,10 +2018,39 @@ class KobraXBridge:
             "text":    "OctoPrint (Kobra X Bridge)",
         })
 
+    async def handle_kx_ui_asset(self, request):
+        name = request.match_info.get("name", "")
+        ctype = _KX_UI_ASSETS.get(name)
+        if ctype is None:
+            raise web.HTTPNotFound()
+        path = os.path.join(_WEB_BASE, "web", "themes", self._ui_theme, name)
+        try:
+            raw = pathlib.Path(path).read_text(encoding="utf-8")
+        except OSError:
+            raise web.HTTPNotFound()
+        if name == "app.js":
+            raw = raw.replace("'__VERSION__'", f"'{self._read_version()}'")
+        return web.Response(
+            text=raw,
+            content_type=ctype,
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
     async def handle_index(self, request):
-        html = INDEX_HTML
-        version = self._read_version()
-        html = html.replace("'__VERSION__'", f"'{version}'")
+        try:
+            tpl = self._load_index_template_cached()
+        except OSError:
+            p = self._theme_index_path()
+            log.error("Web-UI Theme-Datei fehlt oder nicht lesbar: %s (Theme: %s)", p, self._ui_theme)
+            return web.Response(
+                text="<pre>KX-Bridge: index.html nicht gefunden.\nErwartet:\n"
+                + html.escape(p, quote=True)
+                + "</pre>",
+                status=500,
+                content_type="text/html; charset=utf-8",
+            )
+        html = tpl.replace("__UI_ASSETS_VER__", self._ui_asset_cache_buster())
+        
         return web.Response(text=html, content_type="text/html",
                             headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
 
@@ -2032,6 +2105,12 @@ class KobraXBridge:
         self._state["kobra_state"] = "offline"
         log.info("Manuell getrennt")
         return web.json_response({"result": "disconnected"})
+
+    async def handle_api_restart(self, request):
+        log.info("Neustart über API angefordert")
+        response = web.json_response({"status": "restarting"})
+        asyncio.get_event_loop().call_later(0.3, self._restart_bridge)
+        return response
 
     async def handle_api_speed(self, request):
         try:
@@ -2877,12 +2956,13 @@ class KobraXBridge:
         except Exception as e:
             return web.json_response({"error": str(e)}, status=502)
 
-    # Bridge-Python-Module, die das Self-Update mitziehen muss. Die Hauptdatei
-    # importiert _web_assets (gebündeltes Frontend) etc. – wird nur die Hauptdatei
-    # ersetzt, crasht die neue Version mit ModuleNotFoundError. Daher alle laden.
+    # Bridge-Python-Module, die das Self-Update mitziehen muss. Wird nur die
+    # Hauptdatei ersetzt, crasht die neue Version ggf. mit ModuleNotFoundError.
+    # Hinweis: das Frontend liegt seit dem Theme-System unter web/themes/<name>/
+    # (keine flache .py mehr); Theme-Dateien werden vom Self-Update derzeit NICHT
+    # mitgeladen – Theme-Änderungen kommen über Docker-Image/Binary-Update.
     _UPDATE_FILES = [
         "kobrax_moonraker_bridge.py",
-        "_web_assets.py",
         "kobrax_client.py",
         "config_loader.py",
         "env_loader.py",
@@ -3213,6 +3293,7 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_post("/api/fan",                 bridge.handle_api_fan)
     r.add_post("/api/connect",             bridge.handle_api_connect)
     r.add_post("/api/disconnect",          bridge.handle_api_disconnect)
+    r.add_post("/api/restart",             bridge.handle_api_restart)
     r.add_post("/api/speed",               bridge.handle_api_speed)
     r.add_post("/api/ams/feed",            bridge.handle_api_ams_feed)
     r.add_post("/api/ams/set_slot",        bridge.handle_api_ams_set_slot)
@@ -3243,6 +3324,7 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_delete("/kx/files/{file_id}",    bridge.handle_kx_file_delete)
     r.add_get("/kx/filament/slots",        bridge.handle_kx_filament_slots)
     r.add_get("/kx/history",               bridge.handle_kx_history)
+    r.add_get("/kx/ui/{name}",             bridge.handle_kx_ui_asset)
     r.add_get("/kx/files/{id}/objects",    bridge.handle_kx_file_objects)
     r.add_post("/kx/skip",                 bridge.handle_kx_skip)
     r.add_post("/kx/skip/query",           bridge.handle_kx_skip_query)
@@ -3412,6 +3494,13 @@ def main():
                         help="HTTP/WS-Port (Moonraker-Standard: 7125)")
     parser.add_argument("--data-dir",    default=_default_data_dir(),
                         help="Persistenz-Verzeichnis für GCode-Store und DB")
+    parser.add_argument(
+        "--ui-theme",
+        default=os.environ.get("KX_UI_THEME", "default"),
+        metavar="NAME",
+        help="Web-UI-Theme (Ordner web/themes/NAME/, Standard: default). "
+        "Alternativ: Umgebungsvariable KX_UI_THEME.",
+    )
     args = parser.parse_args()
     if args.printer_ip and ":" in args.printer_ip:
         args.printer_ip = args.printer_ip.split(":")[0]

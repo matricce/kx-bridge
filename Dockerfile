@@ -6,7 +6,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY kobrax_moonraker_bridge.py .
-COPY _web_assets.py .
+COPY web/ ./web/
 COPY config_loader.py .
 COPY env_loader.py .
 COPY kobrax_client.py .

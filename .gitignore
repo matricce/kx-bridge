@@ -7,3 +7,5 @@ dist/
 releases/*/kx-bridge
 releases/*/extract_credentials
 releases/*/extract_credentials.exe
+
+!kx-bridge.spec

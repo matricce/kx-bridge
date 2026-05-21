@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.9.14] – 2026-05-21
+
+### New
+- **Theme system (community contribution by @hirnwunde, PR #27):** the web UI now
+  lives in real files under `web/themes/<name>/` (`index.html` + `style.css` +
+  `app.js`) instead of being embedded in the Python source. Switch themes with
+  `--ui-theme <name>`. Theme authors get a documented hook reference
+  (`web/DOC/THEME-CSS-HOOKS.md`, `THEME-JS-ID-HOOKS.md`). The default theme
+  carries the full current UI (ACE2, skip objects, filament dialog). No change
+  for users — the bundled binaries/Docker image ship the theme embedded.
+- **Restart over API (community contribution by @gangoke, PR #28):** new
+  `POST /api/restart` endpoint to restart the bridge remotely — e.g. a restart
+  button in the Home Assistant integration.
+
+### Internal
+- Unified PyInstaller build (`kx-bridge.spec`) for Linux, Windows and Docker —
+  embeds `web/` (themes) into the one-file binary, read at runtime from
+  `sys._MEIPASS`. Verified the theme ships in the Linux binary and the Windows EXE.
+- `data/` added to `.gitignore`.
+
 ## [0.9.13] – 2026-05-20
 
 ============================================================
