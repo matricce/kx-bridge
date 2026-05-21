@@ -687,6 +687,11 @@ class KobraXBridge:
             log.info(f"Job abgebrochen: {self._current_job_id}")
             self._current_job_id = ""
 
+        # Nach Druckende das Upload-Banner verschwinden lassen (Issue #29): der
+        # Drucker meldet "finished" nach erfolgreichem Druck — file_ready wurde
+        # bisher nur bei stoped/canceled geleert, dadurch kam das Banner zurück.
+        if kobra_state == "finished":
+            self._state["file_ready"] = ""
         if kobra_state in ("stoped", "canceled"):
             self._state["progress"] = 0.0
             self._state["filename"] = ""
@@ -728,6 +733,10 @@ class KobraXBridge:
         if kobra_state:
             self._state["print_state"] = KOBRA_TO_KLIPPER_STATE.get(kobra_state, "standby")
             self._state["kobra_state"] = kobra_state
+            # Upload-Banner nach Druckende ausblenden (Issue #29) – der State kommt
+            # je nach Drucker auch über info/report (project.state), nicht nur print/report.
+            if kobra_state in ("finished", "stoped", "canceled"):
+                self._state["file_ready"] = ""
         if project:
             if "filename" in project:
                 self._state["filename"] = project["filename"]
@@ -2049,9 +2058,30 @@ class KobraXBridge:
                 status=500,
                 content_type="text/html; charset=utf-8",
             )
-        html = tpl.replace("__UI_ASSETS_VER__", self._ui_asset_cache_buster())
-        
-        return web.Response(text=html, content_type="text/html",
+        page = tpl.replace("__UI_ASSETS_VER__", self._ui_asset_cache_buster())
+
+        # CSS + JS INLINE einbetten statt nur zu verlinken. OrcaSlicers
+        # eingebetteter Device-Tab-Webview lädt externe <link>/<script src>
+        # NICHT (nur das nackte HTML) → ohne Inlining funktioniert dort kein
+        # einziger Button (Issue #29). Im normalen Browser ist es ebenso korrekt.
+        base = os.path.join(_WEB_BASE, "web", "themes", self._ui_theme)
+        try:
+            css = pathlib.Path(os.path.join(base, "style.css")).read_text(encoding="utf-8")
+            page = page.replace(
+                '<link rel="stylesheet" href="/kx/ui/style.css">',
+                "<style>\n" + css + "\n</style>")
+        except OSError:
+            pass
+        try:
+            js = pathlib.Path(os.path.join(base, "app.js")).read_text(encoding="utf-8")
+            js = js.replace("'__VERSION__'", f"'{self._read_version()}'")
+            page = page.replace(
+                '<script src="/kx/ui/app.js"></script>',
+                "<script>\n" + js + "\n</script>")
+        except OSError:
+            pass
+
+        return web.Response(text=page, content_type="text/html",
                             headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
 
     async def handle_api_light(self, request):

@@ -1,4 +1,5 @@
 :root{
+  color-scheme:dark; /* native Form-Controls (select) im Webview dunkel rendern */
   --bg:#1a1a1f;--card:#24242c;--raised:#2e2e3a;--border:#3a3a4a;
   --txt:#f0f0f5;--txt2:#8888aa;--accent:#00c8ff;--accent2:#ff6b35;
   --ok:#4cde80;--err:#ff4d6d;--warn:#ffb020;
@@ -6,12 +7,17 @@
   --mono:"JetBrains Mono","Fira Code",monospace;
 }
 [data-theme=light]{
+  color-scheme:light;
   --bg:#f0f0f5;--card:#fff;--raised:#e8e8f0;--border:#d0d0e0;
   --txt:#1a1a2e;--txt2:#666680;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--txt);font-family:var(--font);font-size:14px;min-height:100vh;display:flex;flex-direction:column}
 a{color:var(--accent);text-decoration:none}
+/* select/option-Farben explizit setzen — OrcaSlicers Device-Tab-Webview erbt
+   sie sonst nicht und rendert weiße Schrift auf weißem Grund (Issue #29). */
+select{background:var(--raised)!important;color:var(--txt)!important}
+select option{background:var(--card)!important;color:var(--txt)!important}
 
 /* ── HEADER ── */
 header{background:var(--card);border-bottom:1px solid var(--border);

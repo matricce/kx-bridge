@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.9.15] – 2026-05-21
+
+### Fixes (Issue #29)
+- **UI in the OrcaSlicer device tab was broken:** OrcaSlicer's embedded webview
+  only loads the bare HTML and ignores external `<script>`/`<link>` tags, so after
+  the v0.9.14 theme split none of the buttons worked in the device tab. The
+  bridge now inlines CSS + JS into the page — works in both the browser and the
+  OrcaSlicer webview.
+- **Dropdowns unreadable (white-on-white) in the OrcaSlicer webview:** added
+  `color-scheme` + explicit `select`/`option` colors so the native dropdowns
+  render correctly in dark and light theme.
+- **"Select slots" button did nothing right after an upload:** a missing variable
+  declaration (`storeFiles`) threw a `ReferenceError` when clicked before the
+  Browser tab had loaded. Fixed.
+- **Upload banner came back after a finished print:** the "file ready" state was
+  only cleared on stop/cancel, not on `finished`. Now cleared on completion too.
+
 ## [0.9.14] – 2026-05-21
 
 ### New

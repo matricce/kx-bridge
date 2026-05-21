@@ -1577,6 +1577,10 @@ function formatDur(sec){
 var _storeFileId=null;
 var _storeFilename=null;
 var _filamentDialogMode='store'; // 'store' oder 'banner'
+// GCode-Store-Dateiliste. MUSS deklariert sein – sonst ReferenceError, wenn
+// "Slots wählen" im Banner geklickt wird, bevor der Browser-Tab je geladen
+// wurde (Issue #29 / Theme-Auslagerung PR #27).
+var storeFiles=[];
 
 var _gcodeFilaments=[];
 
