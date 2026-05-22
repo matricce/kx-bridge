@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.9.16] – 2026-05-22
+
+### New
+- **Auto-start camera on print:** new setting "Turn camera on at print start" —
+  when enabled, the bridge starts the camera stream automatically when a print
+  begins (works for both OrcaSlicer and the Bridge UI).
+
+### Fixes
+- **Single-color print blocked by an empty AMS slot:** OrcaSlicer writes all
+  configured filaments into the GCode header even when the model uses only one,
+  so the bridge told the printer it needed every color — and an empty unused slot
+  aborted the print. The bridge now maps only the filaments actually used by the
+  GCode.
+- **Filament sync now position-accurate:** with an empty slot in the middle
+  (e.g. slot 1 yellow, 2 empty, 3 red, 4 white) OrcaSlicer showed the colors
+  shifted onto the wrong slots. Fixed — empty slots keep their position, and the
+  sync color format follows the Happy Hare convention (RRGGBB without `#`).
+- **Slicer time + thumbnail missing after a browser reload** (or when a print was
+  started directly from OrcaSlicer): both are now restored from the GCode store
+  by filename instead of relying on volatile state.
+- **German translation gaps** in the ACE dryer dialog fixed.
+
+### Logging
+- Repeated log lines are collapsed into a counter ("×N") instead of spamming the
+  console; status-poll traffic is no longer logged at INFO.
+- New log level filter (All / Errors / Warnings), a toast on new errors, full
+  tracebacks forwarded to the browser log, and a timestamped download filename.
+
 ## [0.9.15] – 2026-05-21
 
 ### Fixes (Issue #29)

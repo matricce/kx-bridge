@@ -371,9 +371,12 @@ class KobraXClient:
             report_registered = True
 
         topic = self._pub_topic(msg_type)
-        log.info("TX %-25s  action=%-12s  data=%s",
-                 f"{msg_type}/request", action,
-                 json.dumps(data, ensure_ascii=False) if data else "null")
+        # Status-Poll-TX (query/getInfo) ist reines Rauschen (alle paar Sekunden) →
+        # auf DEBUG. Aktions-TX (start/set/control/move/…) bleibt INFO sichtbar.
+        _tx_level = logging.DEBUG if action in ("query", "getInfo") else logging.INFO
+        log.log(_tx_level, "TX %-25s  action=%-12s  data=%s",
+                f"{msg_type}/request", action,
+                json.dumps(data, ensure_ascii=False) if data else "null")
         try:
             with self._lock:
                 self._sock.sendall(_build_publish(topic, payload))

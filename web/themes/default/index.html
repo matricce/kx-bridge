@@ -94,6 +94,10 @@
         <input type="checkbox" id="s-auto-leveling" style="width:auto;margin:0">
         <label id="lbl-auto-leveling" style="margin:0;cursor:pointer" for="s-auto-leveling">Auto-Leveling vor Druck</label>
       </div>
+      <div class="modal-field" style="flex-direction:row;align-items:center;gap:10px">
+        <input type="checkbox" id="s-camera-on-print" style="width:auto;margin:0">
+        <label id="lbl-camera-on-print" style="margin:0;cursor:pointer" for="s-camera-on-print">Kamera bei Druckstart einschalten</label>
+      </div>
     </div>
 
     <div>
@@ -406,7 +410,7 @@
       <div class="card">
         <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
           <span><span>≡</span> <span id="ptitle-console">Ereignis-Log</span></span>
-          <a id="btn-log-dl" href="/api/log/download" download="kx-bridge.log"
+          <a id="btn-log-dl" href="/api/log/download" download
              style="font-size:12px;padding:4px 10px;background:var(--raised);border-radius:6px;color:var(--txt2);text-decoration:none">⬇ Download</a>
         </div>
         <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;align-items:center">
@@ -423,6 +427,10 @@
           <button class="log-dir-btn active" id="logdir-all"  onclick="setLogDir('all')"  style="font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--border);cursor:pointer"></button>
           <button class="log-dir-btn"        id="logdir-rx"   onclick="setLogDir('rx')"   style="font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--border);cursor:pointer">RX</button>
           <button class="log-dir-btn"        id="logdir-tx"   onclick="setLogDir('tx')"   style="font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--border);cursor:pointer">TX</button>
+          <span style="font-size:11px;color:var(--txt2);align-self:center;margin-left:6px;margin-right:2px" id="log-lbl-level">Level:</span>
+          <button class="log-lvl-btn active" id="loglvl-all"  onclick="setLogLevel('all')"  style="font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--border);cursor:pointer"></button>
+          <button class="log-lvl-btn"        id="loglvl-err"  onclick="setLogLevel('err')"  style="font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--border);cursor:pointer">⛔ Errors</button>
+          <button class="log-lvl-btn"        id="loglvl-warn" onclick="setLogLevel('warn')" style="font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--border);cursor:pointer">⚠ Warn</button>
           <span style="font-size:11px;color:var(--txt2);align-self:center;margin-left:6px;margin-right:2px">Topic:</span>
           <button class="log-topic-btn" data-topic="multiColorBox" onclick="setLogTopic('multiColorBox')" style="font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--border);cursor:pointer">AMS</button>
           <button class="log-topic-btn" data-topic="print"         onclick="setLogTopic('print')"         style="font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--border);cursor:pointer">print</button>

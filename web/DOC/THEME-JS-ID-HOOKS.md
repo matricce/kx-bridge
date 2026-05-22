@@ -54,6 +54,10 @@ Referenzliste für JavaScript-/DOM-Hooks.
 | `#logdir-all` | Hook / Selektor |
 | `#logdir-rx` | Hook / Selektor |
 | `#logdir-tx` | Hook / Selektor |
+| `#log-lbl-level` | i18n-Label "Level:" |
+| `#loglvl-all` | onclick `setLogLevel('all')` |
+| `#loglvl-err` | onclick `setLogLevel('err')` — nur Fehler |
+| `#loglvl-warn` | onclick `setLogLevel('warn')` — Fehler + Warnungen |
 | `#nb-console` | Hook / Selektor |
 | `#nb-dashboard` | Hook / Selektor |
 | `#nb-printers` | Hook / Selektor |

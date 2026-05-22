@@ -151,11 +151,19 @@ class _BrowserLogHandler(logging.Handler):
     _fmt = logging.Formatter(datefmt="%H:%M:%S")
 
     def emit(self, record: logging.LogRecord):
+        msg = record.getMessage()
+        # Exceptions mit Traceback in den Browser durchreichen (sonst sieht der
+        # Nutzer nur "Fehler: X" ohne Kontext).
+        if record.exc_info:
+            try:
+                msg += "\n" + self._fmt.formatException(record.exc_info)
+            except Exception:
+                pass
         entry = {
             "ts":    self._fmt.formatTime(record, "%H:%M:%S"),
             "lvl":   record.levelname,
             "name":  record.name,
-            "msg":   record.getMessage(),
+            "msg":   msg,
         }
         _log_buffer.append(entry)
         for q in list(_log_sse_queues):
@@ -554,6 +562,7 @@ class KobraXBridge:
         self._store = store if store is not None else GCodeStore(args.data_dir)
         self._serve_dir_path: str = self._store._gcode_dir
         self._current_job_id: str = ""
+        self._camera_autostarted: bool = False
 
         self._thumbnail_b64: str = ""
         self._ace_dry_presets: dict[str, dict] = self._load_ace_dry_presets_config()
@@ -665,6 +674,20 @@ class KobraXBridge:
         if kobra_state:
             self._state["kobra_state"] = kobra_state
 
+        # Kamera bei Druckstart automatisch einschalten (Settings-Option).
+        # Zentral hier, damit es alle Druck-Startwege abdeckt (OrcaSlicer + UI).
+        # _camera_autostarted verhindert Mehrfach-Trigger pro Druck.
+        if kobra_state == "printing":
+            if getattr(self._args, "camera_on_print", 0) and not getattr(self, "_camera_autostarted", False):
+                self._camera_autostarted = True
+                try:
+                    self.client.start_camera()
+                    log.info("Kamera bei Druckstart automatisch eingeschaltet")
+                except Exception as e:
+                    log.warning(f"Kamera-Autostart fehlgeschlagen: {e}")
+        elif kobra_state in ("free", "finished", "stoped", "canceled"):
+            self._camera_autostarted = False
+
         # Job-History: Druckstart erkennen
         if kobra_state == "printing" and not self._current_job_id:
             filename = d.get("filename", self._state.get("filename", ""))
@@ -737,6 +760,18 @@ class KobraXBridge:
             # je nach Drucker auch über info/report (project.state), nicht nur print/report.
             if kobra_state in ("finished", "stoped", "canceled"):
                 self._state["file_ready"] = ""
+            # Kamera-Autostart auch hier (OrcaSlicer meldet Start oft via info/report).
+            # _camera_autostarted-Guard verhindert Doppel-Start mit _on_print.
+            if kobra_state == "printing":
+                if getattr(self._args, "camera_on_print", 0) and not getattr(self, "_camera_autostarted", False):
+                    self._camera_autostarted = True
+                    try:
+                        self.client.start_camera()
+                        log.info("Kamera bei Druckstart automatisch eingeschaltet")
+                    except Exception as e:
+                        log.warning(f"Kamera-Autostart fehlgeschlagen: {e}")
+            elif kobra_state in ("free", "finished", "stoped", "canceled"):
+                self._camera_autostarted = False
         if project:
             if "filename" in project:
                 self._state["filename"] = project["filename"]
@@ -1229,49 +1264,61 @@ class KobraXBridge:
     }
 
     def _build_lane_data(self) -> dict:
-      """Build lane_data for filament sync from loaded, printable slots only.
+      """Baut BBL-AMS-JSON für OrcaSlicer DevFilaSystemParser::ParseV1_0.
 
-      Slots are compacted in sync order (installed slots first) so Orca/Happy
-      Hare does not infer empty gaps between tray ids.
+      POSITIONSTREU: jeder physische Slot behält seine Position (tray id =
+      Slot-Position). Leere Slots werden als Platzhalter-Tray gemeldet, NICHT
+      weggefiltert/komprimiert — sonst rutschen die Farben auf falsche Positionen
+      (z.B. Slot 1=gelb, 2=leer, 3=rot → rot dürfte nicht auf Position 2 landen).
       """
-      loaded_slots = self._loaded_slots_for_print()
-      if not loaded_slots:
+      slots = self._ams_slots
+      total = len(slots)
+      if total == 0:
         return {"ams": [], "ams_exist_bits": "0", "tray_exist_bits": "0"}
 
-      ams_buckets: dict[int, list[tuple[int, dict]]] = {}
-      tray_exist_bits = 0
-
-      for sync_index, (_global_index, slot) in enumerate(sorted(loaded_slots, key=lambda item: item[0])):
-        ams_id = sync_index // 4
-        slot_id = sync_index % 4
-        tray_exist_bits |= (1 << sync_index)
-        ams_buckets.setdefault(ams_id, []).append((slot_id, slot))
-
+      ams_count = (total + 3) // 4
       ams_exist_bits = 0
+      tray_exist_bits = 0
       ams_array = []
-      for ams_id in sorted(ams_buckets.keys()):
+
+      for ams_id in range(ams_count):
         ams_exist_bits |= (1 << ams_id)
         tray_array = []
-        for slot_id, slot in sorted(ams_buckets[ams_id], key=lambda item: item[0]):
-          color_raw = slot.get("color", [255, 255, 255])
-          if isinstance(color_raw, list) and len(color_raw) >= 3:
-            color_hex = "{:02X}{:02X}{:02X}FF".format(
-              int(color_raw[0]), int(color_raw[1]), int(color_raw[2])
-            )
-          elif isinstance(color_raw, str) and len(color_raw) >= 6:
-            color_hex = color_raw[:6].upper() + "FF"
-          else:
-            color_hex = "FFFFFFFF"
+        max_slot = min(3, total - ams_id * 4 - 1)
+        for slot_id in range(max_slot + 1):
+          slot_index = ams_id * 4 + slot_id
+          slot = slots[slot_index] if slot_index < total else {}
+          occupied = slot.get("status") == 5
 
-          material = slot.get("type", "PLA").upper()
-          tray_info_idx = self._TRAY_INFO_IDX.get(material, "OGFL99")
-          tray_array.append({
-            "id": str(slot_id),
-            "tag_uid": "0000000000000000",
-            "tray_info_idx": tray_info_idx,
-            "tray_type": material,
-            "tray_color": color_hex,
-          })
+          if occupied:
+            tray_exist_bits |= (1 << slot_index)
+            color_raw = slot.get("color", [255, 255, 255])
+            if isinstance(color_raw, list) and len(color_raw) >= 3:
+              color_hex = "{:02X}{:02X}{:02X}FF".format(
+                int(color_raw[0]), int(color_raw[1]), int(color_raw[2])
+              )
+            elif isinstance(color_raw, str) and len(color_raw) >= 6:
+              color_hex = color_raw[:6].upper() + "FF"
+            else:
+              color_hex = "FFFFFFFF"
+            material = slot.get("type", "PLA").upper()
+            tray_info_idx = self._TRAY_INFO_IDX.get(material, "OGFL99")
+            tray_array.append({
+              "id": str(slot_id),
+              "tag_uid": "0000000000000000",
+              "tray_info_idx": tray_info_idx,
+              "tray_type": material,
+              "tray_color": color_hex,
+            })
+          else:
+            tray_array.append({
+              "id": str(slot_id),
+              "tag_uid": "0000000000000000",
+              "tray_info_idx": "",
+              "tray_type": "",
+              "tray_color": "00000000",
+              "tray_slot_placeholder": "1",
+            })
 
         ams_array.append({"id": str(ams_id), "info": "0002", "tray": tray_array})
 
@@ -1303,24 +1350,34 @@ class KobraXBridge:
         self.ws_clients -= dead
 
     def _build_mmu_object(self) -> dict:
-      loaded_slots = sorted(self._loaded_slots_for_print(), key=lambda item: item[0])
-      if not loaded_slots:
+      # POSITIONSTREU: ein Gate je physischem Slot, in Reihenfolge. Leere Slots
+      # bekommen gate_status=0 (statt weggelassen zu werden) – sonst rutschen die
+      # Farben in OrcaSlicer auf falsche Gates (Slot 1=gelb, 2=leer, 3=rot →
+      # rot darf nicht auf Gate 1 landen). gate_status 0=leer, 1=verfügbar.
+      slots = sorted(
+        ((int(s.get("global_index", i)), s) for i, s in enumerate(self._ams_slots)),
+        key=lambda item: item[0],
+      )
+      if not slots:
         return {}
 
       _TEMP = {"PLA": 210, "PETG": 230, "ABS": 240, "ASA": 250,
            "TPU": 220, "PA": 260, "PC": 270, "HIPS": 220}
-      num_gates = len(loaded_slots)
+      num_gates = len(slots)
       gate_status, gate_material, gate_color, gate_temperature, gate_color_rgb = [], [], [], [], []
-      for _global_index, slot in loaded_slots:
-        gate_status.append(1)
-        material = slot.get("type", "PLA").upper()
+      for _global_index, slot in slots:
+        occupied = slot.get("status") == 5
+        gate_status.append(1 if occupied else 0)
+        material = (slot.get("type") or "PLA").upper() if occupied else ""
         gate_material.append(material)
-        c = slot.get("color", [0, 0, 0])
-        gate_color.append("#{:02X}{:02X}{:02X}".format(*c[:3]))
-        gate_color_rgb.append([round(c[0]/255, 3), round(c[1]/255, 3), round(c[2]/255, 3)])
-        gate_temperature.append(_TEMP.get(material, 210))
+        c = slot.get("color", [0, 0, 0]) if occupied else [0, 0, 0]
+        # Happy Hare erwartet gate_color als RRGGBB OHNE '#' (Klipper-Limitation).
+        # Leerer Gate: leerer String + RGB [0,0,0].
+        gate_color.append("{:02X}{:02X}{:02X}".format(*c[:3]) if occupied else "")
+        gate_color_rgb.append([round(c[0]/255, 3), round(c[1]/255, 3), round(c[2]/255, 3)] if occupied else [0.0, 0.0, 0.0])
+        gate_temperature.append(_TEMP.get(material, 210) if occupied else 0)
 
-      loaded_index_map = {global_index: idx for idx, (global_index, _) in enumerate(loaded_slots)}
+      loaded_index_map = {global_index: idx for idx, (global_index, _) in enumerate(slots)}
       active_gate = loaded_index_map.get(int(self._ams_loaded_slot), -1)
       return {
         "num_gates":          num_gates,
@@ -1833,7 +1890,7 @@ class KobraXBridge:
             log.info(f"Upload+Print (print=true): {remote_filename}")
             self._state["file_ready"] = ""
             loop = asyncio.get_event_loop()
-            loop.run_in_executor(None, lambda: self._start_print(remote_filename, serve_url, file_md5, file_size))
+            loop.run_in_executor(None, lambda: self._start_print(remote_filename, serve_url, file_md5, file_size, gcode_filaments=gcode_filaments))
         else:
             log.info(f"Nur hochgeladen (print=false): {remote_filename}")
             self._state["file_ready"] = remote_filename
@@ -1858,12 +1915,32 @@ class KobraXBridge:
             }
         }, status=201)
 
-    def _start_print(self, filename: str, url: str = "", md5: str = "", filesize: int = 0):
+    def _start_print(self, filename: str, url: str = "", md5: str = "", filesize: int = 0,
+                     gcode_filaments: list | None = None):
         self._state["file_ready"] = ""
         loaded = self._select_loaded_slots_for_print(warn_on_empty_default=True)
+
+        # Nur die im GCode TATSÄCHLICH genutzten Paints auf Slots mappen. OrcaSlicer
+        # schreibt im Header alle konfigurierten Filamente (filament_colour=…;…;…;…),
+        # nutzt aber oft nur eines (z.B. einfarbig → nur T3). Würden wir alle
+        # belegten Slots mappen, erwartet der Drucker alle Farben und blockiert,
+        # wenn ein anderer (ungenutzter) Slot leer ist. Die genutzten Paint-Indizes
+        # liefert _extract_filament_info via is_used (echte T<n>-Tool-Changes).
+        used_paint_indices = None
+        if gcode_filaments:
+            used = [int(f["slot_index"]) for f in gcode_filaments
+                    if f.get("is_used") and "slot_index" in f]
+            if used:
+                used_paint_indices = set(used)
+
+        if used_paint_indices is not None:
+            # GCode-Paint-Index N entspricht AMS-Slot N (global_index). Nur belegte
+            # genutzte Slots mappen; nicht-belegte genutzte → später Warnung möglich.
+            loaded = [(gidx, s) for (gidx, s) in loaded if gidx in used_paint_indices]
+
         use_ams = len(loaded) > 0
         ams_box_mapping = self._build_auto_ams_box_mapping(loaded_slots=loaded)
-        log.debug(f"AMS-Slots: {len(loaded)}/{len(self._ams_slots)} belegt → {[i for i, _ in loaded]}")
+        log.debug(f"AMS-Slots: {len(loaded)} gemappt (genutzte Paints: {used_paint_indices}) → {[i for i, _ in loaded]}")
         auto_leveling = getattr(self._args, "auto_leveling", 1)
         payload = {
             "taskid":       "-1",
@@ -2538,6 +2615,23 @@ class KobraXBridge:
 
     async def handle_api_state(self, request):
         s = self._state
+        # Slicer-Zeit + Thumbnail sind nur flüchtig im State (werden beim Upload
+        # gesetzt). Nach Browser-Reload oder bei OrcaSlicer-Direktdruck (Datei kam
+        # nicht über den UI-Upload) fehlen sie → aus dem GCode-Store anhand des
+        # laufenden Dateinamens nachladen.
+        slicer_time = s["slicer_time"]
+        thumbnail = self._thumbnail_b64
+        fname = s.get("filename", "")
+        if fname and (not slicer_time or not thumbnail):
+            try:
+                gf = self._store.get_file_by_name(fname)
+                if gf:
+                    if not slicer_time and gf.get("est_print_time_sec"):
+                        slicer_time = int(gf["est_print_time_sec"])
+                    if not thumbnail and gf.get("thumbnail_b64"):
+                        thumbnail = gf["thumbnail_b64"]
+            except Exception:
+                pass
         return web.json_response({
             "printer_name":     s["printer_name"],
             "firmware_version": s["firmware_version"],
@@ -2553,7 +2647,7 @@ class KobraXBridge:
             "curr_layer":       s["curr_layer"],
             "total_layers":     s["total_layers"],
             "filename":         s["filename"],
-            "slicer_time":      s["slicer_time"],
+            "slicer_time":      slicer_time,
             "camera_url":       s["camera_url"],
             "fan_speed":        s["fan_speed"],
             "print_speed_mode": s["print_speed_mode"],
@@ -2566,7 +2660,7 @@ class KobraXBridge:
             "ace_units":        list(self._ace_box_ids),
             "ace_auto_feed":    dict(self._ace_auto_feed),
             "ace_dry_presets":  self._ace_dry_presets,
-            "thumbnail":        self._thumbnail_b64,
+            "thumbnail":        thumbnail,
             "connection_error": s["connection_error"],
             "file_ready":       s["file_ready"],
             "version":          self._read_version(),
@@ -2648,6 +2742,7 @@ class KobraXBridge:
             "device_id":        self._args.device_id,
             "default_ams_slot": getattr(self._args, "default_ams_slot", "auto"),
             "auto_leveling":    getattr(self._args, "auto_leveling", 1),
+            "camera_on_print":  getattr(self._args, "camera_on_print", 0),
         "ace_dry_presets":  self._ace_dry_presets,
         })
 
@@ -2676,6 +2771,7 @@ class KobraXBridge:
         cfg.set("connection", "device_id",  str(data.get("device_id",  self._args.device_id or "")))
         cfg.set("print",      "default_ams_slot", str(data.get("default_ams_slot", getattr(self._args, "default_ams_slot", "auto"))))
         cfg.set("print",      "auto_leveling",    str(data.get("auto_leveling",    getattr(self._args, "auto_leveling",    1))))
+        cfg.set("print",      "camera_on_print",  str(int(bool(data.get("camera_on_print", getattr(self._args, "camera_on_print", 0))))))
         if not cfg.has_option("bridge", "poll_interval"):
             cfg.set("bridge", "poll_interval", "3")
         printer_name = str(data.get("printer_name", "")).strip()
@@ -2940,12 +3036,15 @@ class KobraXBridge:
 
     async def handle_api_log_download(self, request):
         """Gibt alle gepufferten Log-Einträge als Plaintext zum Download."""
-        lines = [f"[{e['ts']}] {e['lvl']:<5} {e['name']}: {e['msg']}" for e in _log_buffer]
-        text = "\n".join(lines)
+        header = (f"# KX-Bridge Log  |  Version {self._read_version()}  |  "
+                  f"{time.strftime('%Y-%m-%d %H:%M:%S')}  |  {len(_log_buffer)} Einträge\n")
+        lines = [f"[{e['ts']}] {e['lvl']:<7} {e['name']}: {e['msg']}" for e in _log_buffer]
+        text = header + "\n".join(lines) + "\n"
+        fname = f"kx-bridge-log_{time.strftime('%Y%m%d-%H%M%S')}.txt"
         return web.Response(
             body=text.encode("utf-8"),
             content_type="text/plain",
-            headers={"Content-Disposition": 'attachment; filename="kx-bridge.log"'},
+            headers={"Content-Disposition": f'attachment; filename="{fname}"'},
         )
 
     async def handle_api_update_check(self, request):
@@ -3517,6 +3616,7 @@ def main():
     parser.add_argument("--device-id",       default=env_loader.DEVICE_ID)
     parser.add_argument("--default-ams-slot",default=env_loader.DEFAULT_AMS_SLOT)
     parser.add_argument("--auto-leveling",   type=int, default=env_loader.AUTO_LEVELING)
+    parser.add_argument("--camera-on-print", type=int, default=env_loader.CAMERA_ON_PRINT)
 
     parser.add_argument("--host",            default="0.0.0.0",
                         help="Bind-Adresse für den Bridge-Server")

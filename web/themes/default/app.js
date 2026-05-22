@@ -96,7 +96,7 @@ var LANG_DE={
   card_progress:'Fortschritt',card_temps:'Temperaturen',card_light_fan:'Lüfter',card_speed:'Druckgeschwindigkeit',card_cam:'Kamera',lbl_elapsed:'Verstrichen:',lbl_remaining:'Restzeit:',lbl_slicer_time:'Slicer-Schätzung:',lbl_layers:'Layer',
   speed_silent:'🐢 Leise',speed_normal:'⚡ Normal',speed_sport:'🚀 Sport',
   lbl_light:'💡 Licht',lbl_feed:'Einziehen',lbl_unload:'Ausziehen',
-  card_ace_dry:'ACE Trocknung',ace_dry_dryer:'Trockner',ace_dry_status_off:'Status: Aus',ace_dry_status_on:'Status: Aktiv',ace_dry_status_remaining:'Rest',ace_dry_humidity:'Luftfeuchte',ace_dry_current_temp:'Temperatur',ace_dry_chart:'Verlauf (Temp/Feuchte)',ace_dry_temp:'Temperatur (°C)',ace_dry_duration:'Dauer (Min)',ace_dry_start:'▶ Start',ace_dry_stop:'■ Stop',ace_dry_auto_refill:'Auto Refill',ace_dry_enable:'Enable Drying',ace_dry_temp_line:'Trocknungstemperatur',ace_dry_time_line:'Trocknungszeit',ace_dry_ui_pending:'(nur UI, Backend folgt)',ace_dry_dialog_title:'Dryer Temp/Time Settings',ace_dry_dialog_temp:'Temperature (30-80°C)',ace_dry_dialog_time:'Rem. Time (h:m:s)',ace_dry_dialog_confirm:'Confirm',ace_dry_dialog_cancel:'Cancel',ace_dry_dialog_save_restart:'Speichern & Neustart',ace_dry_dialog_custom_name:'Custom Name',
+  card_ace_dry:'ACE Trocknung',ace_dry_dryer:'Trockner',ace_dry_status_off:'Status: Aus',ace_dry_status_on:'Status: Aktiv',ace_dry_status_remaining:'Rest',ace_dry_humidity:'Luftfeuchte',ace_dry_current_temp:'Temperatur',ace_dry_chart:'Verlauf (Temp/Feuchte)',ace_dry_temp:'Temperatur (°C)',ace_dry_duration:'Dauer (Min)',ace_dry_start:'▶ Start',ace_dry_stop:'■ Stop',ace_dry_auto_refill:'Auto-Nachschub',ace_dry_enable:'Trocknung aktivieren',ace_dry_temp_line:'Trocknungstemperatur',ace_dry_time_line:'Trocknungszeit',ace_dry_ui_pending:'(nur UI, Backend folgt)',ace_dry_dialog_title:'Trockner Temp/Zeit-Einstellungen',ace_dry_dialog_temp:'Temperatur (30-80°C)',ace_dry_dialog_time:'Restzeit (h:m:s)',ace_dry_dialog_confirm:'Bestätigen',ace_dry_dialog_cancel:'Abbrechen',ace_dry_dialog_save_restart:'Speichern & Neustart',ace_dry_dialog_custom_name:'Eigener Name',ace_dry_dialog_reset_default:'Auf Standard zurücksetzen',
   cam_placeholder:'📷 Kamera nicht gestartet',btn_cam_start:'▶ Kamera',btn_cam_stop:'◼ Kamera',
   btn_pause:'⏸ Pause',btn_resume:'▶ Weiter',btn_cancel:'✕ Stopp',
   label_nozzle:'Nozzle',label_bed:'Bett',label_fan:'🌀 Lüfter',label_light:'💡 Licht',label_on_off:'Ein / Aus',label_speed:'Geschwindigkeit',
@@ -112,7 +112,7 @@ var LANG_DE={
   settings_title:'Einstellungen',settings_connection:'Verbindung',settings_print:'Druckeinstellungen',settings_poll:'Poll-Intervall',settings_version:'Version',
   settings_save:'Speichern & Neustart',settings_printer_name:'Drucker-Name',settings_printer_ip:'Drucker-IP',settings_mqtt_port:'MQTT-Port',
   settings_username:'MQTT-Benutzername',settings_password:'MQTT-Passwort',settings_device_id:'Device-ID',settings_mode_id:'Mode-ID',hint_ip_no_port:'Nur IP-Adresse, kein Port (z.B. 192.168.1.102)',
-  settings_default_slot:'Standard-Slot (Einfarbdruck)',settings_slot_auto:'Auto (alle belegten Slots)',settings_auto_leveling:'Auto-Leveling vor Druck',
+  settings_default_slot:'Standard-Slot (Einfarbdruck)',settings_slot_auto:'Auto (alle belegten Slots)',settings_auto_leveling:'Auto-Leveling vor Druck',settings_camera_on_print:'Kamera bei Druckstart einschalten',
   update_check:'Auf Updates prüfen',update_checking:'Prüfe...',update_available:'verfügbar',update_none:'Bereits aktuell',
   update_apply:'Jetzt installieren',update_applying:'Lade herunter...',update_restarting:'Starte neu...',update_error:'Fehler',
   btn_connect:'⚡ Verbinden',btn_disconnect:'✕ Trennen',
@@ -121,7 +121,7 @@ var LANG_DE={
   slot_edit_load:'⬇ Einziehen',slot_edit_unload:'⬆ Ausziehen',
   slot_edit_save:'💾 Speichern',slot_edit_custom:'z.B. PLA, PETG, ABS…',
   slot_edit_ok:'AMS Slot',
-  log_dir_all:'Alle',
+  log_dir_all:'Alle',log_lvl_label:'Level:',
   file_ready_btn:'▶ Druck starten',
   file_slots_btn:'🎨 Slots wählen',
   file_cancel_btn:'✕ Abbrechen',
@@ -159,7 +159,7 @@ var LANG_EN={
   card_progress:'Progress',card_temps:'Temperatures',card_light_fan:'Fan',card_speed:'Print Speed',card_cam:'Camera',lbl_elapsed:'Elapsed:',lbl_remaining:'Remaining:',lbl_slicer_time:'Slicer estimate:',lbl_layers:'Layer',
   speed_silent:'🐢 Silent',speed_normal:'⚡ Normal',speed_sport:'🚀 Sport',
   lbl_light:'💡 Light',lbl_feed:'Load',lbl_unload:'Unload',
-  card_ace_dry:'ACE Drying',ace_dry_dryer:'Dryer',ace_dry_status_off:'Status: Off',ace_dry_status_on:'Status: Active',ace_dry_status_remaining:'Remaining',ace_dry_humidity:'Humidity',ace_dry_current_temp:'Temperature',ace_dry_chart:'History (Temp/Humidity)',ace_dry_temp:'Temperature (°C)',ace_dry_duration:'Duration (min)',ace_dry_start:'▶ Start',ace_dry_stop:'■ Stop',ace_dry_auto_refill:'Auto Refill',ace_dry_enable:'Enable Drying',ace_dry_temp_line:'Drying Temperature',ace_dry_time_line:'Drying Time',ace_dry_ui_pending:'(UI only, backend next)',ace_dry_dialog_title:'Dryer Temp/Time Settings',ace_dry_dialog_temp:'Temperature (30-80°C)',ace_dry_dialog_time:'Rem. Time (h:m:s)',ace_dry_dialog_confirm:'Confirm',ace_dry_dialog_cancel:'Cancel',ace_dry_dialog_save_restart:'Save & Restart',ace_dry_dialog_custom_name:'Custom Name',
+  card_ace_dry:'ACE Drying',ace_dry_dryer:'Dryer',ace_dry_status_off:'Status: Off',ace_dry_status_on:'Status: Active',ace_dry_status_remaining:'Remaining',ace_dry_humidity:'Humidity',ace_dry_current_temp:'Temperature',ace_dry_chart:'History (Temp/Humidity)',ace_dry_temp:'Temperature (°C)',ace_dry_duration:'Duration (min)',ace_dry_start:'▶ Start',ace_dry_stop:'■ Stop',ace_dry_auto_refill:'Auto Refill',ace_dry_enable:'Enable Drying',ace_dry_temp_line:'Drying Temperature',ace_dry_time_line:'Drying Time',ace_dry_ui_pending:'(UI only, backend next)',ace_dry_dialog_title:'Dryer Temp/Time Settings',ace_dry_dialog_temp:'Temperature (30-80°C)',ace_dry_dialog_time:'Rem. Time (h:m:s)',ace_dry_dialog_confirm:'Confirm',ace_dry_dialog_cancel:'Cancel',ace_dry_dialog_save_restart:'Save & Restart',ace_dry_dialog_custom_name:'Custom Name',ace_dry_dialog_reset_default:'Reset to Default',
   cam_placeholder:'📷 Camera not started',btn_cam_start:'▶ Camera',btn_cam_stop:'◼ Camera',
   btn_pause:'⏸ Pause',btn_resume:'▶ Resume',btn_cancel:'✕ Stop',
   label_nozzle:'Nozzle',label_bed:'Bed',label_fan:'🌀 Fan',label_light:'💡 Light',label_on_off:'On / Off',label_speed:'Speed',
@@ -175,7 +175,7 @@ var LANG_EN={
   settings_title:'Settings',settings_connection:'Connection',settings_print:'Print Settings',settings_poll:'Poll Interval',settings_version:'Version',
   settings_save:'Save & Restart',settings_printer_name:'Printer Name',settings_printer_ip:'Printer IP',settings_mqtt_port:'MQTT Port',
   settings_username:'MQTT Username',settings_password:'MQTT Password',settings_device_id:'Device ID',settings_mode_id:'Mode ID',hint_ip_no_port:'IP address only, no port (e.g. 192.168.1.102)',
-  settings_default_slot:'Default Slot (single color)',settings_slot_auto:'Auto (all loaded slots)',settings_auto_leveling:'Auto-Leveling before print',
+  settings_default_slot:'Default Slot (single color)',settings_slot_auto:'Auto (all loaded slots)',settings_auto_leveling:'Auto-Leveling before print',settings_camera_on_print:'Turn camera on at print start',
   update_check:'Check for Updates',update_checking:'Checking...',update_available:'available',update_none:'Already up to date',
   update_apply:'Install Now',update_applying:'Downloading...',update_restarting:'Restarting...',update_error:'Error',
   btn_connect:'⚡ Connect',btn_disconnect:'✕ Disconnect',
@@ -184,7 +184,7 @@ var LANG_EN={
   slot_edit_load:'⬇ Load',slot_edit_unload:'⬆ Unload',
   slot_edit_save:'💾 Save',slot_edit_custom:'e.g. PLA, PETG, ABS…',
   slot_edit_ok:'AMS Slot',
-  log_dir_all:'All',
+  log_dir_all:'All',log_lvl_label:'Level:',
   file_ready_btn:'▶ Start Print',
   file_slots_btn:'🎨 Select Slots',
   file_cancel_btn:'✕ Cancel',
@@ -362,6 +362,7 @@ function applyLang(){
   setText('lbl-default-slot',T.settings_default_slot);
   setText('opt-slot-auto',T.settings_slot_auto);
   setText('lbl-auto-leveling',T.settings_auto_leveling);
+  setText('lbl-camera-on-print',T.settings_camera_on_print);
 
   setText('lbl-update-check',T.update_check);
   setText('lbl-update-apply',T.update_apply);
@@ -402,6 +403,8 @@ function applyLang(){
   updateSlotEditFeedButton();
   var mi=document.getElementById('slot-edit-mat');if(mi)mi.setAttribute('placeholder',T.slot_edit_custom);
   setText('logdir-all',T.log_dir_all);
+  setText('loglvl-all',T.log_dir_all);
+  setText('log-lbl-level',T.log_lvl_label);
   setText('file-ready-btn',T.file_ready_btn);
   setText('file-slots-btn',T.file_slots_btn);
   setText('file-cancel-btn',T.file_cancel_btn);
@@ -480,6 +483,7 @@ var consoleLogs=[];
 var logAutoScroll=true;
 var logBadgeCount=0;
 var logDirFilter='all';   // 'all'|'rx'|'tx'
+var logLevelFilter='all'; // 'all'|'err'|'warn'
 var logTopicFilter='';    // '' = no topic filter
 
 function clog(msg,cls){
@@ -496,21 +500,54 @@ function _lvlCls(lvl){
 function _appendLog(entry,forceCls){
   var cls=forceCls||_lvlCls(entry.lvl);
   var label=entry.name?'['+entry.name+'] ':'';
-  consoleLogs.push({ts:entry.ts,msg:label+entry.msg,cls:cls});
+  var fullMsg=label+entry.msg;
+  // Wiederholungen als Zähler zusammenfassen (×N) statt N identische Zeilen.
+  var last=consoleLogs[consoleLogs.length-1];
+  if(last&&last.msg===fullMsg&&last.cls===cls){
+    last.count=(last.count||1)+1;
+    last.ts=entry.ts; // letzte Sichtung
+    renderLog();
+    return;
+  }
+  consoleLogs.push({ts:entry.ts,msg:fullMsg,cls:cls,count:1});
   if(consoleLogs.length>500)consoleLogs.shift();
-  // Badge wenn Tab nicht aktiv und Fehler/Warnungen
+  // Badge + Toast wenn Tab nicht aktiv und Fehler/Warnungen
   if(currentPanel!=='console'&&(cls==='msg-err'||cls==='msg-warn')){
     logBadgeCount++;
     var bc=logBadgeCount>99?'99+':logBadgeCount;
     ['log-badge','log-badge-bot'].forEach(function(id){var b=document.getElementById(id);if(b){b.style.display='inline';b.textContent=bc;}});
   }
+  if(cls==='msg-err')showToast(entry.msg.split('\n')[0]);
   renderLog();
+}
+// Kurze rote Snackbar bei Fehlern (auch wenn Konsole-Tab nicht offen).
+var _toastTimer=null;
+function showToast(msg){
+  var t=document.getElementById('kx-toast');
+  if(!t){
+    t=document.createElement('div'); t.id='kx-toast';
+    t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--err);color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;z-index:9999;max-width:90vw;box-shadow:0 4px 16px rgba(0,0,0,.4);cursor:pointer';
+    t.onclick=function(){showPanel('console');t.style.display='none';};
+    document.body.appendChild(t);
+  }
+  t.textContent='⚠ '+msg;
+  t.style.display='block';
+  clearTimeout(_toastTimer);
+  _toastTimer=setTimeout(function(){t.style.display='none';},6000);
 }
 function setLogDir(dir){
   logDirFilter=dir;
   document.querySelectorAll('.log-dir-btn').forEach(function(b){
     b.style.background=b.id==='logdir-'+dir?'var(--accent)':'var(--raised)';
     b.style.color=b.id==='logdir-'+dir?'#fff':'var(--txt2)';
+  });
+  renderLog();
+}
+function setLogLevel(lvl){
+  logLevelFilter=lvl;
+  document.querySelectorAll('.log-lvl-btn').forEach(function(b){
+    b.style.background=b.id==='loglvl-'+lvl?'var(--accent)':'var(--raised)';
+    b.style.color=b.id==='loglvl-'+lvl?'#fff':'var(--txt2)';
   });
   renderLog();
 }
@@ -534,11 +571,16 @@ function renderLog(){
     var m=l.msg;
     if(logDirFilter==='rx'&&!/ RX[ (]/.test(m))return false;
     if(logDirFilter==='tx'&&!/ TX[ (]/.test(m))return false;
+    if(logLevelFilter==='err'&&l.cls!=='msg-err')return false;
+    if(logLevelFilter==='warn'&&l.cls!=='msg-err'&&l.cls!=='msg-warn')return false;
     if(fl&&!m.toLowerCase().includes(fl))return false;
     return true;
   });
   var savedScroll=logAutoScroll?null:el.scrollTop;
-  el.innerHTML=rows.map(l=>`<div><span class="ts">${l.ts}</span><span class="${l.cls}">${escHtml(l.msg)}</span></div>`).join('');
+  el.innerHTML=rows.map(function(l){
+    var cnt=(l.count&&l.count>1)?' <span style="opacity:.7">(×'+l.count+')</span>':'';
+    return '<div><span class="ts">'+l.ts+'</span><span class="'+l.cls+'">'+escHtml(l.msg)+'</span>'+cnt+'</div>';
+  }).join('');
   if(logAutoScroll)el.scrollTop=el.scrollHeight;
   else if(savedScroll!==null)el.scrollTop=savedScroll;
 }
@@ -867,6 +909,7 @@ function openSettings(){
     document.getElementById('s-mode-id').value=d.mode_id||'';
     document.getElementById('s-default-slot').value=d.default_ams_slot||'auto';
     document.getElementById('s-auto-leveling').checked=(d.auto_leveling===undefined?true:!!d.auto_leveling);
+    var cop=document.getElementById('s-camera-on-print');if(cop)cop.checked=!!d.camera_on_print;
   });
   var v=localStorage.getItem('pollInterval')||'2000';
   document.querySelectorAll('.poll-btn').forEach(function(b){b.classList.remove('active')});
@@ -1007,6 +1050,7 @@ function saveSettings(){
     mode_id:          document.getElementById('s-mode-id').value,
     default_ams_slot: document.getElementById('s-default-slot').value,
     auto_leveling:    document.getElementById('s-auto-leveling').checked?1:0,
+    camera_on_print:  (document.getElementById('s-camera-on-print')||{}).checked?1:0,
   }).then(function(){
     btn.textContent=T.update_restarting;
     setTimeout(function(){
