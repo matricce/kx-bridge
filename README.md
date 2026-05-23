@@ -101,6 +101,21 @@ Printer → Connection type **Moonraker** → Host: `http://BRIDGE-IP:7125`
 
 ---
 
+## 🎨 Recommended Slicer
+
+For the best KX-Bridge experience we offer a **patched OrcaSlicer build** that
+bundles three open SoftFever/OrcaSlicer PRs: the Anycubic Kobra X printer
+profile, a multicolor G-code fix and — most importantly — a Moonraker/Happy-Hare
+filament-sync fix that keeps AMS slot positions intact even with an empty slot.
+
+→ **[OrcaSlicer-KX releases](https://gitea.it-drui.de/viewit/OrcaSlicer-KX/releases/latest)** (Linux AppImage + Windows ZIP)
+
+Standard OrcaSlicer also works; the patched build mainly improves AMS handling.
+It's a build of [OrcaSlicer](https://github.com/SoftFever/OrcaSlicer) (AGPL-3.0);
+source is available via the linked PRs.
+
+---
+
 ## 🏠 Community & Integrations
 
 - **[Home Assistant integration](https://github.com/gangoke/kobrax-lan-hass-component)**
