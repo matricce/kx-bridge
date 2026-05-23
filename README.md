@@ -147,9 +147,10 @@ Alternatively (if the IP is unknown): open AnycubicSlicerNext, connect the print
 ## ⚙️ Useful commands
 
 ```bash
-docker compose logs -f       # show logs
-docker compose down          # stop the bridge
-docker compose up -d --build # rebuild & start (after an update)
+docker compose logs -f                 # show logs
+docker compose down                    # stop the bridge
+docker compose pull && docker compose up -d   # update to the latest published image
+docker compose up -d --build           # rebuild locally (instead of pulling)
 ```
 
 ---

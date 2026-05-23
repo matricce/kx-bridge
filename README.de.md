@@ -149,9 +149,10 @@ dann `extract_credentials` ausführen → gibt Username, Passwort, Device-ID und
 ## ⚙️ Nützliche Befehle
 
 ```bash
-docker compose logs -f      # Logs anzeigen
-docker compose down         # Bridge stoppen
-docker compose up -d --build # Bridge neu bauen & starten (nach Update)
+docker compose logs -f                 # Logs anzeigen
+docker compose down                    # Bridge stoppen
+docker compose pull && docker compose up -d   # auf neueste veröffentlichte Version updaten
+docker compose up -d --build           # lokal selber bauen (statt zu pullen)
 ```
 
 ---
