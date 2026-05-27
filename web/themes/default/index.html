@@ -465,18 +465,18 @@
 </nav>
 
 
-<!-- Filament-Slot-Dialog -->
+<!-- Web-Upload-Verify-Dialog -->
 <div class="modal-overlay" id="store-web-verify-dialog" onclick="if(event.target===this)closeStoreWebVerifyDialog()">
   <div class="modal-box" style="max-width:420px;width:100%">
     <div class="modal-header" style="margin-bottom:14px">
       <span class="modal-title" id="store-web-verify-title">Datei verifizieren</span>
       <button onclick="closeStoreWebVerifyDialog()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--txt2)">✕</button>
     </div>
-    <p id="store-web-verify-msg" style="font-size:13px;color:var(--txt);margin-bottom:12px">Please verify this file was made for Anycubic Kobra X.</p>
+    <p id="store-web-verify-msg" style="font-size:13px;color:var(--txt);margin-bottom:12px">Bitte bestätige, dass diese Datei für den Anycubic Kobra X erstellt wurde.</p>
     <div id="store-web-verify-status" style="font-size:12px;color:var(--txt2);min-height:16px;margin-bottom:8px"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button id="store-web-verify-abort" onclick="closeStoreWebVerifyDialog()" style="padding:8px 16px;background:var(--raised);border:1px solid var(--border);border-radius:8px;color:var(--txt);cursor:pointer">Abort</button>
-      <button id="store-web-verify-confirm" onclick="confirmStoreWebVerify()" style="padding:8px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">Confirm</button>
+      <button id="store-web-verify-abort" onclick="closeStoreWebVerifyDialog()" style="padding:8px 16px;background:var(--raised);border:1px solid var(--border);border-radius:8px;color:var(--txt);cursor:pointer">Abbrechen</button>
+      <button id="store-web-verify-confirm" onclick="confirmStoreWebVerify()" style="padding:8px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">Bestätigen</button>
     </div>
   </div>
 </div>

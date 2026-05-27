@@ -45,6 +45,7 @@ import tempfile
 import time
 import threading
 import html
+from urllib.parse import quote
 
 # Bei PyInstaller-Binary liegt alles neben sys.executable, sonst neben __file__
 _BASE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
@@ -1523,9 +1524,13 @@ class KobraXBridge:
         if not path or not os.path.isfile(path):
             return self._json_cors({"error": "not found"}, status=404)
         filename = os.path.basename(f.get("filename") or path)
-        return web.FileResponse(path, headers={
-            "Content-Disposition": f'attachment; filename="{filename}"'
-        })
+        # RFC 5987: filename* mit URL-encoding für Sonderzeichen/UTF-8,
+        # plus ASCII-fallback (alle " und \ aus filename strippen für den
+        # quoted-string-Part).
+        ascii_fallback = filename.encode("ascii", "replace").decode("ascii").replace('"', "").replace("\\", "")
+        encoded = quote(filename, safe="")
+        disposition = f'attachment; filename="{ascii_fallback}"; filename*=UTF-8\'\'{encoded}'
+        return web.FileResponse(path, headers={"Content-Disposition": disposition})
 
     async def handle_kx_file_verify(self, request):
         file_id = request.match_info["file_id"]
