@@ -362,7 +362,8 @@ class GCodeStore:
                     layer_count INTEGER,
                     gcode_filaments TEXT,
                     objects_skip_parts TEXT,
-                    svg_image TEXT
+                    svg_image TEXT,
+                    web_unverified INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS print_jobs (
                     id TEXT PRIMARY KEY,
@@ -389,10 +390,17 @@ class GCodeStore:
                     self._conn.commit()
                 except Exception:
                     pass
+            # Migration: Flag für Web-Uploads (Warnhinweis vor Druck)
+            try:
+                self._conn.execute("ALTER TABLE gcode_files ADD COLUMN web_unverified INTEGER NOT NULL DEFAULT 0")
+                self._conn.commit()
+            except Exception:
+                pass
 
     def save_file(self, file_id: str, filename: str, data: bytes,
                   est_time_sec: int = 0, thumbnail_b64: str = "",
-                  gcode_filaments: list | None = None) -> str:
+                  gcode_filaments: list | None = None,
+                  web_unverified: bool = False) -> str:
         """Speichert GCode-Datei auf Disk und in DB. Gibt Pfad zurück."""
         safe_name = os.path.basename(filename)
         path = os.path.join(self._gcode_dir, safe_name)
@@ -403,9 +411,9 @@ class GCodeStore:
             filaments_json = json.dumps(gcode_filaments) if gcode_filaments else None
             self._conn.execute(
                 """INSERT OR REPLACE INTO gcode_files
-                   (id, filename, path, size_bytes, uploaded_at, thumbnail_b64, est_print_time_sec, gcode_filaments)
-                   VALUES (?,?,?,?,?,?,?,?)""",
-                (file_id, filename, path, len(data), now, thumbnail_b64 or None, est_time_sec or None, filaments_json)
+                   (id, filename, path, size_bytes, uploaded_at, thumbnail_b64, est_print_time_sec, gcode_filaments, web_unverified)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                (file_id, filename, path, len(data), now, thumbnail_b64 or None, est_time_sec or None, filaments_json, 1 if web_unverified else 0)
             )
             self._conn.commit()
         return path
@@ -452,6 +460,15 @@ class GCodeStore:
           (json.dumps(gcode_filaments) if gcode_filaments else None, file_id),
         )
         self._conn.commit()
+
+    def clear_web_unverified(self, file_id: str) -> bool:
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE gcode_files SET web_unverified=0 WHERE id=?",
+                (file_id,),
+            )
+            self._conn.commit()
+        return cur.rowcount > 0
 
     def delete_file(self, file_id: str) -> bool:
         row = self.get_file(file_id)
@@ -1484,6 +1501,7 @@ class KobraXBridge:
         for j in reversed(jobs):
             last_job[j["gcode_file_id"]] = j
         for f in files:
+            f["web_unverified"] = bool(f.get("web_unverified"))
             lj = last_job.get(f["id"])
             f["last_print_status"]   = lj["status"]       if lj else None
             f["last_print_duration"] = lj["duration_sec"] if lj else None
@@ -1493,6 +1511,25 @@ class KobraXBridge:
     async def handle_kx_file_delete(self, request):
         file_id = request.match_info["file_id"]
         if self._store.delete_file(file_id):
+            return self._json_cors({"result": "ok"})
+        return self._json_cors({"error": "not found"}, status=404)
+
+    async def handle_kx_file_download(self, request):
+        file_id = request.match_info["file_id"]
+        f = self._store.get_file(file_id)
+        if not f:
+            return self._json_cors({"error": "not found"}, status=404)
+        path = f.get("path") or ""
+        if not path or not os.path.isfile(path):
+            return self._json_cors({"error": "not found"}, status=404)
+        filename = os.path.basename(f.get("filename") or path)
+        return web.FileResponse(path, headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        })
+
+    async def handle_kx_file_verify(self, request):
+        file_id = request.match_info["file_id"]
+        if self._store.clear_web_unverified(file_id):
             return self._json_cors({"result": "ok"})
         return self._json_cors({"error": "not found"}, status=404)
 
@@ -1811,6 +1848,7 @@ class KobraXBridge:
         if "multipart" not in ct:
             return web.json_response({"error": "expected multipart"}, status=400)
         auto_print = False
+        web_upload = False
         reader = await request.multipart()
         file_data = None
         remote_filename = self._last_uploaded_file or "upload.gcode"
@@ -1827,6 +1865,9 @@ class KobraXBridge:
             elif part.name == "print":
                 val = (await part.read()).decode("utf-8", errors="replace").strip().lower()
                 auto_print = val == "true"
+            elif part.name == "web_upload":
+                val = (await part.read()).decode("utf-8", errors="replace").strip().lower()
+                web_upload = val == "true"
             else:
                 log.debug(f"Unbekanntes Multipart-Feld: {part.name}")
 
@@ -1850,6 +1891,7 @@ class KobraXBridge:
             est_time_sec=est_time,
             thumbnail_b64=thumbnail_b64,
             gcode_filaments=gcode_filaments or None,
+            web_unverified=web_upload,
         )
         serve_path = os.path.join(self._serve_dir_path, os.path.basename(remote_filename))
         del file_data  # RAM freigeben
@@ -2651,6 +2693,7 @@ class KobraXBridge:
             "camera_url":       s["camera_url"],
             "fan_speed":        s["fan_speed"],
             "print_speed_mode": s["print_speed_mode"],
+            "web_upload_warning": getattr(self._args, "web_upload_warning", 1),
             "light_on":         s["light_on"],
             "light_brightness": s["light_brightness"],
             "ams_slots":        self._ams_slots,
@@ -2743,7 +2786,8 @@ class KobraXBridge:
             "default_ams_slot": getattr(self._args, "default_ams_slot", "auto"),
             "auto_leveling":    getattr(self._args, "auto_leveling", 1),
             "camera_on_print":  getattr(self._args, "camera_on_print", 0),
-        "ace_dry_presets":  self._ace_dry_presets,
+            "web_upload_warning": getattr(self._args, "web_upload_warning", 1),
+            "ace_dry_presets":  self._ace_dry_presets,
         })
 
     async def handle_api_settings_post(self, request):
@@ -2772,6 +2816,7 @@ class KobraXBridge:
         cfg.set("print",      "default_ams_slot", str(data.get("default_ams_slot", getattr(self._args, "default_ams_slot", "auto"))))
         cfg.set("print",      "auto_leveling",    str(data.get("auto_leveling",    getattr(self._args, "auto_leveling",    1))))
         cfg.set("print",      "camera_on_print",  str(int(bool(data.get("camera_on_print", getattr(self._args, "camera_on_print", 0))))))
+        cfg.set("print",      "web_upload_warning", str(int(bool(data.get("web_upload_warning", getattr(self._args, "web_upload_warning", 1))))))
         if not cfg.has_option("bridge", "poll_interval"):
             cfg.set("bridge", "poll_interval", "3")
         printer_name = str(data.get("printer_name", "")).strip()
@@ -3451,6 +3496,8 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_post("/kx/print",               bridge.handle_kx_print)
     r.add_get("/kx/files",                bridge.handle_kx_files)
     r.add_delete("/kx/files/{file_id}",    bridge.handle_kx_file_delete)
+    r.add_get("/kx/files/{file_id}/download", bridge.handle_kx_file_download)
+    r.add_post("/kx/files/{file_id}/verify", bridge.handle_kx_file_verify)
     r.add_get("/kx/filament/slots",        bridge.handle_kx_filament_slots)
     r.add_get("/kx/history",               bridge.handle_kx_history)
     r.add_get("/kx/ui/{name}",             bridge.handle_kx_ui_asset)
@@ -3617,6 +3664,7 @@ def main():
     parser.add_argument("--default-ams-slot",default=env_loader.DEFAULT_AMS_SLOT)
     parser.add_argument("--auto-leveling",   type=int, default=env_loader.AUTO_LEVELING)
     parser.add_argument("--camera-on-print", type=int, default=env_loader.CAMERA_ON_PRINT)
+    parser.add_argument("--web-upload-warning", type=int, default=env_loader.WEB_UPLOAD_WARNING)
 
     parser.add_argument("--host",            default="0.0.0.0",
                         help="Bind-Adresse für den Bridge-Server")

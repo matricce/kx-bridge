@@ -29,6 +29,9 @@ default_ams_slot = auto
 # Auto-Leveling vor jedem Druck (1 = an, 0 = aus)
 auto_leveling    = 1
 
+# Warnung vor Druck von Web-Uploads (1 = an, 0 = aus)
+web_upload_warning = 1
+
 [bridge]
 # Poll-Intervall in Sekunden
 poll_interval    = 3

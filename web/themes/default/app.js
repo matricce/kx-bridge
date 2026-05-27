@@ -3,7 +3,7 @@ var S={nozzle_temp:0,nozzle_target:0,bed_temp:0,bed_target:0,
   print_state:'standby',filename:'',progress:0,print_duration:0,remain_time:0,
   curr_layer:0,total_layers:0,printer_name:'Kobra X',firmware_version:'–',
   camera_url:'',fan_speed:0,print_speed_mode:2,light_on:false,light_brightness:80,
-  ams_slots:[],filament_mode:'toolhead',ace_units:[],ace_dry_presets:null,ace_drying:{status:0,target_temp:0,duration:0,remain_time:0,humidity:null,current_temp:null,units:[]}};
+  ams_slots:[],filament_mode:'toolhead',ace_units:[],ace_dry_presets:null,ace_drying:{status:0,target_temp:0,duration:0,remain_time:0,humidity:null,current_temp:null,units:[]},web_upload_warning:1};
 var tempHistory={n:[],b:[]};
 var camOn=false;
 var currentStep=1;
@@ -113,6 +113,7 @@ var LANG_DE={
   settings_save:'Speichern & Neustart',settings_printer_name:'Drucker-Name',settings_printer_ip:'Drucker-IP',settings_mqtt_port:'MQTT-Port',
   settings_username:'MQTT-Benutzername',settings_password:'MQTT-Passwort',settings_device_id:'Device-ID',settings_mode_id:'Mode-ID',hint_ip_no_port:'Nur IP-Adresse, kein Port (z.B. 192.168.1.102)',
   settings_default_slot:'Standard-Slot (Einfarbdruck)',settings_slot_auto:'Auto (alle belegten Slots)',settings_auto_leveling:'Auto-Leveling vor Druck',settings_camera_on_print:'Kamera bei Druckstart einschalten',
+  settings_web_upload_warning:'Warnung bei Web-Upload-Druck anzeigen',
   update_check:'Auf Updates prüfen',update_checking:'Prüfe...',update_available:'verfügbar',update_none:'Bereits aktuell',
   update_apply:'Jetzt installieren',update_applying:'Lade herunter...',update_restarting:'Starte neu...',update_error:'Fehler',
   btn_connect:'⚡ Verbinden',btn_disconnect:'✕ Trennen',
@@ -145,8 +146,13 @@ var LANG_DE={
   store_empty:'Noch keine Dateien hochgeladen.',
   store_refresh:'↻ Aktualisieren',
   store_print:'▶ Drucken',
+  store_download:'⬇ Download',
   store_delete_confirm:'Datei löschen?',
   store_print_confirm:'Datei drucken?',
+  store_web_verify_title:'Datei verifizieren',
+  store_web_verify_msg:'Please verify this file was made for Anycubic Kobra X.',
+  store_web_verify_confirm:'Confirm',
+  store_web_verify_abort:'Abort',
   store_no_results:'Keine Dateien gefunden.',
   store_never:'noch nicht gedruckt',
   sf_all:'Alle',sf_ok:'✓ Erfolgreich',sf_err:'✗ Fehler',sf_new:'Neu',
@@ -176,6 +182,7 @@ var LANG_EN={
   settings_save:'Save & Restart',settings_printer_name:'Printer Name',settings_printer_ip:'Printer IP',settings_mqtt_port:'MQTT Port',
   settings_username:'MQTT Username',settings_password:'MQTT Password',settings_device_id:'Device ID',settings_mode_id:'Mode ID',hint_ip_no_port:'IP address only, no port (e.g. 192.168.1.102)',
   settings_default_slot:'Default Slot (single color)',settings_slot_auto:'Auto (all loaded slots)',settings_auto_leveling:'Auto-Leveling before print',settings_camera_on_print:'Turn camera on at print start',
+  settings_web_upload_warning:'Show warning when printing web uploads',
   update_check:'Check for Updates',update_checking:'Checking...',update_available:'available',update_none:'Already up to date',
   update_apply:'Install Now',update_applying:'Downloading...',update_restarting:'Restarting...',update_error:'Error',
   btn_connect:'⚡ Connect',btn_disconnect:'✕ Disconnect',
@@ -208,8 +215,13 @@ var LANG_EN={
   store_empty:'No files uploaded yet.',
   store_refresh:'↻ Refresh',
   store_print:'▶ Print',
+  store_download:'⬇ Download',
   store_delete_confirm:'Delete file?',
   store_print_confirm:'Print file?',
+  store_web_verify_title:'Verify file',
+  store_web_verify_msg:'Please verify this file was made for Anycubic Kobra X.',
+  store_web_verify_confirm:'Confirm',
+  store_web_verify_abort:'Abort',
   store_no_results:'No files found.',
   store_never:'never printed',
   sf_all:'All',sf_ok:'✓ Completed',sf_err:'✗ Failed',sf_new:'New',
@@ -311,6 +323,10 @@ function applyLang(){
   setText('store-empty',T.store_empty);
   setText('sf-all',T.sf_all);setText('sf-ok',T.sf_ok);setText('sf-err',T.sf_err);setText('sf-new',T.sf_new);
   setText('ss-date',T.ss_date);setText('ss-name',T.ss_name);setText('ss-dur',T.ss_dur);
+  setText('store-web-verify-title',T.store_web_verify_title);
+  setText('store-web-verify-msg',T.store_web_verify_msg);
+  setText('store-web-verify-confirm',T.store_web_verify_confirm);
+  setText('store-web-verify-abort',T.store_web_verify_abort);
   // Dashboard card titles
   setText('d-card-progress',T.card_progress);
   setText('d-card-temps',T.card_temps);
@@ -363,6 +379,7 @@ function applyLang(){
   setText('opt-slot-auto',T.settings_slot_auto);
   setText('lbl-auto-leveling',T.settings_auto_leveling);
   setText('lbl-camera-on-print',T.settings_camera_on_print);
+  setText('lbl-web-upload-warning',T.settings_web_upload_warning);
 
   setText('lbl-update-check',T.update_check);
   setText('lbl-update-apply',T.update_apply);
@@ -910,6 +927,7 @@ function openSettings(){
     document.getElementById('s-default-slot').value=d.default_ams_slot||'auto';
     document.getElementById('s-auto-leveling').checked=(d.auto_leveling===undefined?true:!!d.auto_leveling);
     var cop=document.getElementById('s-camera-on-print');if(cop)cop.checked=!!d.camera_on_print;
+    var wuw=document.getElementById('s-web-upload-warning');if(wuw)wuw.checked=(d.web_upload_warning===undefined?true:!!d.web_upload_warning);
   });
   var v=localStorage.getItem('pollInterval')||'2000';
   document.querySelectorAll('.poll-btn').forEach(function(b){b.classList.remove('active')});
@@ -978,6 +996,11 @@ function slotEditFeed(){
     .catch(function(){});
 }
 function startReadyFile(){
+  var currentFile=(storeFiles||[]).find(function(f){return f.filename===S.file_ready;});
+  if(currentFile && currentFile.web_unverified && webUploadWarningEnabled()){
+    maybeGateWebUpload(currentFile, function(){ startReadyFile(); });
+    return;
+  }
   var btn=document.getElementById('file-ready-btn');
   if(btn){btn.disabled=true;btn.textContent='…';}
   post('/printer/print/start',{filename:S.file_ready})
@@ -1040,6 +1063,8 @@ function setPoll(ms){
 function saveSettings(){
   var btn=document.getElementById('btn-save-settings');
   btn.disabled=true;btn.textContent='…';
+  var webUploadWarning=(document.getElementById('s-web-upload-warning')||{}).checked?1:0;
+  S.web_upload_warning=webUploadWarning;
   post('/api/settings',{
     printer_name:     document.getElementById('s-printer-name').value,
     printer_ip:       document.getElementById('s-printer-ip').value,
@@ -1051,6 +1076,7 @@ function saveSettings(){
     default_ams_slot: document.getElementById('s-default-slot').value,
     auto_leveling:    document.getElementById('s-auto-leveling').checked?1:0,
     camera_on_print:  (document.getElementById('s-camera-on-print')||{}).checked?1:0,
+    web_upload_warning:webUploadWarning,
   }).then(function(){
     btn.textContent=T.update_restarting;
     setTimeout(function(){
@@ -1536,6 +1562,39 @@ function loadStore(){
   }).catch(function(e){clog('Store-Fehler: '+e,'msg-err')});
 }
 
+function uploadGcode(file){
+  if(!file) return;
+  var zone=document.getElementById('store-upload-zone');
+  var status=document.getElementById('store-upload-status');
+  var label=document.getElementById('store-upload-label');
+  if(status) { status.textContent='⏳ Hochladen…'; status.style.display=''; status.className='upload-status-busy'; }
+  if(label) label.style.display='none';
+  if(zone) zone.style.pointerEvents='none';
+  var fd=new FormData();
+  fd.append('file', file);
+  fd.append('web_upload', 'true');
+  fetch(_apiUrl('/api/files/local'),{method:'POST',body:fd})
+    .then(function(r){
+      if(!r.ok) return r.text().then(function(t){throw new Error(r.status+': '+t);});
+      return r.json();
+    })
+    .then(function(){
+      if(status){ status.textContent='✓ '+file.name; status.className='upload-status-ok'; }
+      loadStore();
+      setTimeout(function(){
+        if(status){status.style.display='none'; status.className='';}
+        if(label) label.style.display='';
+        if(zone) zone.style.pointerEvents='';
+      }, 3000);
+    })
+    .catch(function(e){
+      if(status){ status.textContent='✗ '+e.message; status.className='upload-status-err'; }
+      if(label) label.style.display='';
+      if(zone) zone.style.pointerEvents='';
+      clog('Upload-Fehler: '+e,'msg-err');
+    });
+}
+
 function renderStore(){
   var grid=document.getElementById('store-grid');
   var empty=document.getElementById('store-empty');
@@ -1606,6 +1665,8 @@ function renderStore(){
       '<div style="display:flex;gap:6px;margin-top:auto">'+
         '<button onclick="storePrint(\''+f.id+'\',\''+f.filename.replace(/'/g,"\\'")+'\')" '+
           'style="flex:1;font-size:12px;padding:5px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer">'+T.store_print+'</button>'+
+        '<button onclick="storeDownload(\''+f.id+'\')" title="'+T.store_download+'" '+
+          'style="font-size:12px;padding:5px 8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt2);cursor:pointer">⬇</button>'+
         '<button onclick="storeDelete(\''+f.id+'\')" '+
           'style="font-size:12px;padding:5px 8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt2);cursor:pointer">🗑</button>'+
       '</div>'+
@@ -1621,6 +1682,9 @@ function formatDur(sec){
 var _storeFileId=null;
 var _storeFilename=null;
 var _filamentDialogMode='store'; // 'store' oder 'banner'
+var _pendingWebVerifyFileId=null;
+var _pendingWebVerifyFilename='';
+var _pendingWebVerifyAction=null;
 // GCode-Store-Dateiliste. MUSS deklariert sein – sonst ReferenceError, wenn
 // "Slots wählen" im Banner geklickt wird, bevor der Browser-Tab je geladen
 // wurde (Issue #29 / Theme-Auslagerung PR #27).
@@ -1646,15 +1710,120 @@ function storePrint(fileId, filename){
   _storeFileId=fileId;
   _storeFilename=filename;
   _filamentDialogMode='store';
-  // GCode-Filamente aus Store-Datei holen (für Vorschau im Dialog)
   var fileObj=storeFiles.find(function(f){return f.id===fileId;});
-  _setGcodeFilamentsFromFileObj(fileObj);
-  fetch(_apiUrl('/kx/filament/slots')).then(function(r){return r.json()}).then(function(d){
-    openFilamentDialog(d.result||[]);
-  }).catch(function(){openFilamentDialog([]);});
+  openStorePrintDialog(fileId, filename, fileObj);
+}
+
+function openStorePrintDialog(fileId, filename, fileObj){
+  _storeFileId=fileId;
+  _storeFilename=filename;
+  _filamentDialogMode='store';
+  maybeGateWebUpload(fileObj, function(){
+    // GCode-Filamente aus Store-Datei holen (für Vorschau im Dialog)
+    _setGcodeFilamentsFromFileObj(fileObj);
+    fetch(_apiUrl('/kx/filament/slots')).then(function(r){return r.json()}).then(function(d){
+      openFilamentDialog(d.result||[]);
+    }).catch(function(){openFilamentDialog([]);});
+  });
+}
+
+function webUploadWarningEnabled(){
+  return S.web_upload_warning===undefined ? true : !!S.web_upload_warning;
+}
+
+function clearWebUploadWarningFlag(fileId, onDone){
+  if(!fileId){
+    if(onDone) onDone();
+    return;
+  }
+  fetch(_apiUrl('/kx/files/'+encodeURIComponent(fileId)+'/verify'), {method:'POST'})
+    .then(function(r){
+      if(!r.ok) return r.text().then(function(t){throw new Error(r.status+': '+t);});
+      return r.json();
+    })
+    .then(function(){
+      var fileObj=(storeFiles||[]).find(function(f){return f.id===fileId;});
+      if(fileObj){fileObj.web_unverified=false;}
+      if(onDone) onDone();
+      loadStore();
+    })
+    .catch(function(e){
+      clog('Verifizierungs-Fehler: '+e,'msg-err');
+    });
+}
+
+function maybeGateWebUpload(fileObj, onContinue){
+  if(!fileObj || !fileObj.web_unverified){
+    if(onContinue) onContinue();
+    return;
+  }
+  if(!webUploadWarningEnabled()){
+    if(onContinue) onContinue();
+    return;
+  }
+  openWebVerifyDialog(fileObj.id, fileObj.filename, function(){
+    clearWebUploadWarningFlag(fileObj.id, onContinue);
+  });
+}
+
+function openWebVerifyDialog(fileId, filename, onConfirm){
+  _pendingWebVerifyFileId=fileId;
+  _pendingWebVerifyFilename=filename;
+  _pendingWebVerifyAction=onConfirm||null;
+  var status=document.getElementById('store-web-verify-status');
+  if(status){status.textContent='';}
+  openStoreWebVerifyDialog();
+}
+
+function openStoreWebVerifyDialog(){
+  var modal=document.getElementById('store-web-verify-dialog');
+  if(modal){modal.classList.add('open');}
+}
+
+function closeStoreWebVerifyDialog(){
+  var modal=document.getElementById('store-web-verify-dialog');
+  if(modal){modal.classList.remove('open');}
+  _pendingWebVerifyFileId=null;
+  _pendingWebVerifyFilename='';
+  _pendingWebVerifyAction=null;
+}
+
+function confirmStoreWebVerify(){
+  if(!_pendingWebVerifyFileId||!_pendingWebVerifyFilename){
+    closeStoreWebVerifyDialog();
+    return;
+  }
+  var fileId=_pendingWebVerifyFileId;
+  var action=_pendingWebVerifyAction;
+  var status=document.getElementById('store-web-verify-status');
+  if(status){status.textContent='…';}
+  fetch(_apiUrl('/kx/files/'+encodeURIComponent(fileId)+'/verify'), {method:'POST'})
+    .then(function(r){
+      if(!r.ok) return r.text().then(function(t){throw new Error(r.status+': '+t);});
+      return r.json();
+    })
+    .then(function(){
+      var fileObj=(storeFiles||[]).find(function(f){return f.id===fileId;});
+      if(fileObj){fileObj.web_unverified=false;}
+      _pendingWebVerifyFileId=null;
+      _pendingWebVerifyFilename='';
+      _pendingWebVerifyAction=null;
+      closeStoreWebVerifyDialog();
+      loadStore();
+      if(typeof action==='function') action();
+    })
+    .catch(function(e){
+      if(status){status.textContent='✗ '+e.message;}
+      clog('Verifizierungs-Fehler: '+e,'msg-err');
+    });
 }
 
 function startReadyFileWithSlots(){
+  var currentFile=(storeFiles||[]).find(function(f){return f.filename===S.file_ready;});
+  if(currentFile && currentFile.web_unverified && webUploadWarningEnabled()){
+    maybeGateWebUpload(currentFile, function(){ startReadyFileWithSlots(); });
+    return;
+  }
   _filamentDialogMode='banner';
   _storeFilename=S.file_ready||'';
   // Banner must never reuse stale store-file context.
@@ -2072,6 +2241,15 @@ function storeDelete(fileId){
     if(r.ok){loadStore();}
     else{clog('Löschen fehlgeschlagen','msg-err');}
   });
+}
+
+function storeDownload(fileId){
+  var a=document.createElement('a');
+  a.href=_apiUrl('/kx/files/'+encodeURIComponent(fileId)+'/download');
+  a.style.display='none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 // ── Drucker hinzufügen ──

@@ -98,6 +98,10 @@
         <input type="checkbox" id="s-camera-on-print" style="width:auto;margin:0">
         <label id="lbl-camera-on-print" style="margin:0;cursor:pointer" for="s-camera-on-print">Kamera bei Druckstart einschalten</label>
       </div>
+      <div class="modal-field" style="flex-direction:row;align-items:center;gap:10px">
+        <input type="checkbox" id="s-web-upload-warning" style="width:auto;margin:0">
+        <label id="lbl-web-upload-warning" style="margin:0;cursor:pointer" for="s-web-upload-warning">Warnung bei Web-Upload-Druck anzeigen</label>
+      </div>
     </div>
 
     <div>
@@ -400,6 +404,16 @@
             <option value="duration_asc" id="ss-dur">⏱ Druckzeit</option>
           </select>
         </div>
+        <div id="store-upload-zone" onclick="document.getElementById('store-upload-input').click()"
+          ondragover="event.preventDefault();this.classList.add('drag-over')"
+          ondragleave="this.classList.remove('drag-over')"
+          ondrop="event.preventDefault();this.classList.remove('drag-over');uploadGcode(event.dataTransfer.files[0])">
+          <input type="file" id="store-upload-input" accept=".gcode,.bgcode"
+            style="display:none" onchange="uploadGcode(this.files[0]);this.value=''">
+          <span id="store-upload-icon">⬆</span>
+          <span id="store-upload-label">GCode hierher ziehen oder <u>durchsuchen</u></span>
+          <span id="store-upload-status" style="display:none"></span>
+        </div>
         <div id="store-empty" style="display:none;color:var(--txt2);text-align:center;padding:40px 0;font-size:14px">
         </div>
         <div id="store-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px"></div>
@@ -450,6 +464,22 @@
   <button class="bnav-btn" onclick="showPanel('console');clearLogBadge()" id="bnb-console"><span class="bnav-icon">≡</span>Log<span id="log-badge-bot" style="display:none;margin-left:3px;background:var(--err);color:#fff;border-radius:10px;font-size:10px;padding:1px 4px;font-weight:700"></span></button>
 </nav>
 
+
+<!-- Filament-Slot-Dialog -->
+<div class="modal-overlay" id="store-web-verify-dialog" onclick="if(event.target===this)closeStoreWebVerifyDialog()">
+  <div class="modal-box" style="max-width:420px;width:100%">
+    <div class="modal-header" style="margin-bottom:14px">
+      <span class="modal-title" id="store-web-verify-title">Datei verifizieren</span>
+      <button onclick="closeStoreWebVerifyDialog()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--txt2)">✕</button>
+    </div>
+    <p id="store-web-verify-msg" style="font-size:13px;color:var(--txt);margin-bottom:12px">Please verify this file was made for Anycubic Kobra X.</p>
+    <div id="store-web-verify-status" style="font-size:12px;color:var(--txt2);min-height:16px;margin-bottom:8px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button id="store-web-verify-abort" onclick="closeStoreWebVerifyDialog()" style="padding:8px 16px;background:var(--raised);border:1px solid var(--border);border-radius:8px;color:var(--txt);cursor:pointer">Abort</button>
+      <button id="store-web-verify-confirm" onclick="confirmStoreWebVerify()" style="padding:8px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">Confirm</button>
+    </div>
+  </div>
+</div>
 
 <!-- Filament-Slot-Dialog -->
 <div class="modal-overlay" id="filament-dialog" onclick="if(event.target===this)closeFilamentDialog()">
