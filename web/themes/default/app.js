@@ -253,8 +253,17 @@ function applyLang(){
   setText('fd-objects-hint',T.fd_objects_hint);
   setText('apd-lbl-ip',T.apd_lbl_ip);
   setText('apd-lbl-name',T.apd_lbl_name);
+  var apn=document.getElementById('apd-name');if(apn)apn.setAttribute('placeholder',T.apd_placeholder_name);
+  setText('apd-cancel',T.apd_cancel);
+  setText('apd-confirm',T.apd_confirm);
+  setText('fd-slots-hint',T.fd_slots_hint);
+  setText('fd-cancel',T.fd_cancel);
+  setText('fd-print',T.fd_print);
   setText('store-panel-title','🗂 '+T.panel_browser_title);
   var srb=document.getElementById('store-refresh-btn');if(srb)srb.textContent=T.store_refresh;
+  var ssp=document.getElementById('store-search');if(ssp)ssp.setAttribute('placeholder',T.store_search_placeholder);
+  setText('store-upload-label-prefix',T.store_upload_label_prefix);
+  setText('store-upload-label-browse',T.store_upload_label_browse);
   setText('store-empty',T.store_empty);
   setText('sf-all',T.sf_all);setText('sf-ok',T.sf_ok);setText('sf-err',T.sf_err);setText('sf-new',T.sf_new);
   setText('ss-date',T.ss_date);setText('ss-name',T.ss_name);setText('ss-dur',T.ss_dur);
@@ -274,6 +283,7 @@ function applyLang(){
   setText('d-slicer-label',T.lbl_slicer_time);
   setText('d-lbl-layers',T.lbl_layers);
   setText('d-lbl-light',T.lbl_light);
+  setText('d-lbl-nozzle',T.label_nozzle);
   setText('d-lbl-bed',T.label_bed);
   // Dashboard buttons
   setText('d-btn-pause',T.btn_pause);
@@ -759,7 +769,7 @@ function applyState(){
         var loaded=(s.ams_loaded_slot!=null&&s.ams_loaded_slot>=0&&globalIdx===s.ams_loaded_slot);
         var activity=(slot.activity||'');
         var pct=empty?T.ams_empty:(slot.consumables_percent!=null?slot.consumables_percent+'%':'–');
-        var slotLabel='Slot '+(globalIdx+1);
+        var slotLabel=T.label_slot+' '+(globalIdx+1);
         html+='<div class="ams-slot'+(active?' active':'')+(loaded?' loaded':'')+(activity?' '+activity:'')+(empty?' empty':'')
           +'" style="--slot-color:'+col+';opacity:'+(empty?0.4:1)+';cursor:pointer" onclick="openSlotEdit('+i+')">'
           +'<div class="slot-circle" style="background:'+col+'"></div>'
@@ -770,7 +780,7 @@ function applyState(){
           +'</div>';
       });
       if(bid===-1&&acePresent){
-        html+='<div class="ams-slot ams-slot-bridge" aria-label="Slot 4 connected to ACE">'
+        html+='<div class="ams-slot ams-slot-bridge" aria-label="'+T.label_slot+' 4">'
           +'<div class="bridge-chip">ACE</div>'
           +'</div>';
       }
@@ -1503,7 +1513,7 @@ function uploadGcode(file){
   var zone=document.getElementById('store-upload-zone');
   var status=document.getElementById('store-upload-status');
   var label=document.getElementById('store-upload-label');
-  if(status) { status.textContent='⏳ Hochladen…'; status.style.display=''; status.className='upload-status-busy'; }
+  if(status) { status.textContent=T.store_upload_busy; status.style.display=''; status.className='upload-status-busy'; }
   if(label) label.style.display='none';
   if(zone) zone.style.pointerEvents='none';
   var fd=new FormData();
@@ -1515,7 +1525,7 @@ function uploadGcode(file){
       return r.json();
     })
     .then(function(){
-      if(status){ status.textContent='✓ '+file.name; status.className='upload-status-ok'; }
+      if(status){ status.textContent=T.store_upload_success.replace('{file}',file.name); status.className='upload-status-ok'; }
       loadStore();
       setTimeout(function(){
         if(status){status.style.display='none'; status.className='';}
@@ -1524,7 +1534,7 @@ function uploadGcode(file){
       }, 3000);
     })
     .catch(function(e){
-      if(status){ status.textContent='✗ '+e.message; status.className='upload-status-err'; }
+      if(status){ status.textContent=T.store_upload_error.replace('{error}',e.message); status.className='upload-status-err'; }
       if(label) label.style.display='';
       if(zone) zone.style.pointerEvents='';
       clog('Upload-Fehler: '+e,'msg-err');
@@ -1596,7 +1606,7 @@ function renderStore(){
       thumb+
       '<div title="'+f.filename+'" style="font-size:12px;font-weight:600;margin-bottom:4px;color:var(--txt)">'+name+statusBadge+'</div>'+
       lastInfo+
-      '<div style="font-size:11px;color:var(--txt2);margin-bottom:2px">⏱ Schätzung: '+est+'</div>'+
+      '<div style="font-size:11px;color:var(--txt2);margin-bottom:2px">⏱ '+T.store_estimate+': '+est+'</div>'+
       '<div style="font-size:11px;color:var(--txt2);margin-bottom:8px">📅 '+date+'</div>'+
       '<div style="display:flex;gap:6px;margin-top:auto">'+
         '<button onclick="storePrint(\''+f.id+'\',\''+f.filename.replace(/'/g,"\\'")+'\')" '+
@@ -1903,7 +1913,7 @@ function openFilamentDialog(slots){
   });
 
   if(!_amsSlots.length){
-    body.innerHTML='<p style="color:var(--txt2);font-size:13px;text-align:center;padding:16px 0">Keine belegten AMS-Slots.<br>Druck trotzdem starten?</p>';
+    body.innerHTML='<p style="color:var(--txt2);font-size:13px;text-align:center;padding:16px 0">'+T.fd_no_slots_msg.replace('{br}','<br>')+'</p>';
   } else {
     body.innerHTML=channels.map(function(gc,i){
       var isUsed=(gc&&gc.is_used!==false);
@@ -1917,18 +1927,18 @@ function openFilamentDialog(slots){
       var opts=compatible.map(function(s){
         var sel=(defaultSlot&&s.slot_index===defaultSlot.slot_index)?'selected':'';
         return '<option value="'+s.slot_index+'" data-color="'+s.color_hex+'" data-material="'+s.material+'" '+sel+'>'+
-          '● Slot '+(s.slot_index+1)+' · '+s.material+'</option>';
+          '● '+T.fd_slot+' '+(s.slot_index+1)+' · '+s.material+'</option>';
       }).join('');
       if(!compatible.length){
-        opts='<option value="-1" data-color="#888888" data-material="" selected>⚠ No matching material</option>';
+        opts='<option value="-1" data-color="#888888" data-material="" selected>⚠ '+T.fd_no_matching_material+'</option>';
       }
       // Kanal-Box (links): farbige Box mit Nummer + auto Kontrast-Text
       var txt=_contrastText(gc.color_hex);
       var slotColor=defaultSlot?defaultSlot.color_hex:'#888';
       var slotTxt=_contrastText(slotColor);
       var usedBadge=isUsed
-        ? '<span style="font-size:10px;color:var(--ok);font-weight:700;min-width:32px">USED</span>'
-        : '<span style="font-size:10px;color:var(--txt2);font-weight:700;min-width:32px;opacity:.75">USED</span>';
+        ? '<span style="font-size:10px;color:var(--ok);font-weight:700;min-width:32px">'+T.fd_used+'</span>'
+        : '<span style="font-size:10px;color:var(--txt2);font-weight:700;min-width:32px;opacity:.75">'+T.fd_used+'</span>';
       return '<div style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:6px;background:var(--raised);border:1px solid var(--border)">'+
         '<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;background:'+gc.color_hex+';color:'+txt+';font-weight:700;font-size:13px;border:1px solid var(--border);flex-shrink:0">'+(i+1)+'</span>'+
         '<span style="font-size:11px;color:var(--txt2);min-width:36px">'+gc.material+'</span>'+

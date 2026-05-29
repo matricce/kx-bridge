@@ -247,7 +247,7 @@
           <div class="card-title"><span>⊙</span> <span id="d-card-temps">Temperaturen</span></div>
           <div class="temp-card-inner">
             <div class="temp-block">
-              <div class="temp-label">Nozzle</div>
+              <div class="temp-label" id="d-lbl-nozzle">Nozzle</div>
               <div class="temp-row">
                 <div class="temp-val" id="d-nt">–</div>
                 <div class="temp-unit">°C</div>
@@ -419,7 +419,7 @@
           <input type="file" id="store-upload-input" accept=".gcode,.bgcode"
             style="display:none" onchange="uploadGcode(this.files[0]);this.value=''">
           <span id="store-upload-icon">⬆</span>
-          <span id="store-upload-label">GCode hierher ziehen oder <u>durchsuchen</u></span>
+          <span id="store-upload-label"><span id="store-upload-label-prefix">GCode hierher ziehen oder </span><u id="store-upload-label-browse">durchsuchen</u></span>
           <span id="store-upload-status" style="display:none"></span>
         </div>
         <div id="store-empty" style="display:none;color:var(--txt2);text-align:center;padding:40px 0;font-size:14px">
@@ -522,7 +522,7 @@
     <input type="text" id="apd-name" placeholder="z.B. Kobra X Wohnzimmer" style="width:100%;box-sizing:border-box;padding:8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);margin-bottom:6px">
     <div id="apd-status" style="font-size:12px;margin:8px 0;min-height:16px;color:var(--txt2)"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button onclick="closeAddPrinterDialog()" style="padding:8px 16px;background:var(--raised);border:1px solid var(--border);border-radius:8px;color:var(--txt);cursor:pointer">Abbrechen</button>
+      <button id="apd-cancel" onclick="closeAddPrinterDialog()" style="padding:8px 16px;background:var(--raised);border:1px solid var(--border);border-radius:8px;color:var(--txt);cursor:pointer">Abbrechen</button>
       <button id="apd-confirm" onclick="confirmAddPrinter()" style="padding:8px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">Hinzufügen</button>
     </div>
   </div>
