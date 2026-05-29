@@ -105,8 +105,40 @@ function _langToggleLabel(lang){
   return 'Espanol';
 }
 
+function _mapSupportedLang(lang){
+  if(!lang)return '';
+  var l=String(lang).toLowerCase().replace(/_/g,'-').trim();
+  if(l==='de'||l==='en'||l==='es'||l==='zh-cn')return l;
+
+  var base=l.split('-')[0];
+  if(base==='de'||base==='en'||base==='es')return base;
+
+  if(base==='zh'){
+    if(l.indexOf('cn')>=0||l.indexOf('hans')>=0||l==='zh')return 'zh-cn';
+  }
+  return '';
+}
+
 function _normalizeLang(lang){
-  return (lang==='de'||lang==='en'||lang==='es'||lang==='zh-cn')?lang:'de';
+  return _mapSupportedLang(lang)||'de';
+}
+
+function _detectBrowserLanguage(){
+  var prefs=[];
+  if(Array.isArray(navigator.languages)&&navigator.languages.length)prefs=navigator.languages;
+  else if(navigator.language)prefs=[navigator.language];
+  for(var i=0;i<prefs.length;i++){
+    var mapped=_mapSupportedLang(prefs[i]);
+    if(mapped)return mapped;
+  }
+  return '';
+}
+
+function _resolveInitialLanguage(){
+  var saved=localStorage.getItem('lang');
+  var mappedSaved=_mapSupportedLang(saved);
+  if(mappedSaved)return mappedSaved;
+  return _detectBrowserLanguage()||'de';
 }
 
 async function _loadLanguage(lang){
@@ -374,7 +406,7 @@ function ensureAceDryCards(){
   grid.setAttribute('data-init','1');
 }
 (function(){
-  var l=localStorage.getItem('lang')||'de';
+  var l=_resolveInitialLanguage();
   currentLang=_normalizeLang(l);
   var langSel=document.getElementById('lang-select');
   if(langSel)langSel.value=currentLang;
