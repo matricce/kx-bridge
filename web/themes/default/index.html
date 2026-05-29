@@ -32,7 +32,15 @@
   <span id="h-version" style="font-size:11px;opacity:.5;margin-left:6px"></span>
   <div class="hbadge" id="h-badge"><span class="dot"></span><span id="h-state">Standby</span></div>
   <button class="theme-btn" onclick="toggleTheme()">☀ / ☾</button>
-  <button class="theme-btn" onclick="toggleLang()" id="lang-btn">EN</button>
+  <div style="display:flex;align-items:center;gap:6px">
+    <span aria-hidden="true" style="font-size:15px;line-height:1;opacity:.85">🌐</span>
+    <select class="theme-btn" id="lang-select" onchange="setLanguageFromSelect()" style="padding:6px 10px">
+      <option value="de">Deutsch</option>
+      <option value="en">English</option>
+      <option value="es">Espanol</option>
+      <option value="zh-cn">中文(简体)</option>
+    </select>
+  </div>
   <button class="theme-btn" onclick="openSettings()" id="settings-btn" title="Einstellungen">⚙</button>
   <button class="conn-btn disconnected" id="conn-btn" onclick="toggleConnection()">⚡ Verbinden</button>
 </header>

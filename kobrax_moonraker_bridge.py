@@ -141,6 +141,7 @@ _KX_UI_ASSETS: dict[str, str] = {
     "style.css": "text/css",
     "app.js":    "application/javascript",
 }
+_KX_UI_TRANSLATION_RE = re.compile(r"^translations/([a-z]{2}(?:-[a-z]{2})?)\.json$")
 
 # Ring-Buffer für Browser-Log-Stream (letzte 200 Einträge)
 import collections as _collections
@@ -2152,11 +2153,21 @@ class KobraXBridge:
         })
 
     async def handle_kx_ui_asset(self, request):
-        name = request.match_info.get("name", "")
+        name = request.match_info.get("name", "").lstrip("/")
         ctype = _KX_UI_ASSETS.get(name)
-        if ctype is None:
-            raise web.HTTPNotFound()
-        path = os.path.join(_WEB_BASE, "web", "themes", self._ui_theme, name)
+        cache_control = "public, max-age=86400"
+
+        if ctype is not None:
+            path = os.path.join(_WEB_BASE, "web", "themes", self._ui_theme, name)
+        else:
+            m = _KX_UI_TRANSLATION_RE.match(name)
+            if not m:
+                raise web.HTTPNotFound()
+            lang = m.group(1)
+            ctype = "application/json"
+            cache_control = "no-store"
+            path = os.path.join(_WEB_BASE, "web", "translations", f"{lang}.json")
+
         try:
             raw = pathlib.Path(path).read_text(encoding="utf-8")
         except OSError:
@@ -2166,7 +2177,7 @@ class KobraXBridge:
         return web.Response(
             text=raw,
             content_type=ctype,
-            headers={"Cache-Control": "public, max-age=86400"},
+            headers={"Cache-Control": cache_control},
         )
 
     async def handle_index(self, request):
@@ -3505,7 +3516,7 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_post("/kx/files/{file_id}/verify", bridge.handle_kx_file_verify)
     r.add_get("/kx/filament/slots",        bridge.handle_kx_filament_slots)
     r.add_get("/kx/history",               bridge.handle_kx_history)
-    r.add_get("/kx/ui/{name}",             bridge.handle_kx_ui_asset)
+    r.add_get("/kx/ui/{name:.*}",          bridge.handle_kx_ui_asset)
     r.add_get("/kx/files/{id}/objects",    bridge.handle_kx_file_objects)
     r.add_post("/kx/skip",                 bridge.handle_kx_skip)
     r.add_post("/kx/skip/query",           bridge.handle_kx_skip_query)

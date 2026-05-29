@@ -89,144 +89,58 @@ function toggleTheme(){
 (function(){var t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t)})();
 
 // ── i18n ──
-var LANG_DE={
-  header_status_standby:'Bereit',header_status_printing:'Druckt',header_status_complete:'Fertig',header_status_error:'Fehler',
-  kobra_free:'Bereit',kobra_busy:'Beschäftigt',kobra_printing:'Druckt',kobra_preheating:'Aufheizen',kobra_auto_leveling:'Nivellierung',kobra_checking:'Prüfung',kobra_updated:'Aktualisierung',kobra_init:'Initialisierung',kobra_pausing:'Pausiert...',kobra_paused:'Pausiert',kobra_resuming:'Fortsetzen...',kobra_resumed:'Fortgesetzt',kobra_stopping:'Stoppt...',kobra_stoped:'Gestoppt',kobra_finished:'Abgeschlossen',kobra_failed:'Fehler',kobra_canceled:'Abgebrochen',kobra_offline:'Offline',
-  nav_dashboard:'Dashboard',nav_print:'Druck',nav_temps:'Temperaturen',nav_motion:'Achsen',nav_ams:'AMS',nav_extras:'Licht / Lüfter',nav_console:'Konsole',
-  card_progress:'Fortschritt',card_temps:'Temperaturen',card_light_fan:'Lüfter',card_speed:'Druckgeschwindigkeit',card_cam:'Kamera',lbl_elapsed:'Verstrichen:',lbl_remaining:'Restzeit:',lbl_slicer_time:'Slicer-Schätzung:',lbl_layers:'Layer',
-  speed_silent:'🐢 Leise',speed_normal:'⚡ Normal',speed_sport:'🚀 Sport',
-  lbl_light:'💡 Licht',lbl_feed:'Einziehen',lbl_unload:'Ausziehen',
-  card_ace_dry:'ACE Trocknung',ace_dry_dryer:'Trockner',ace_dry_status_off:'Status: Aus',ace_dry_status_on:'Status: Aktiv',ace_dry_status_remaining:'Rest',ace_dry_humidity:'Luftfeuchte',ace_dry_current_temp:'Temperatur',ace_dry_chart:'Verlauf (Temp/Feuchte)',ace_dry_temp:'Temperatur (°C)',ace_dry_duration:'Dauer (Min)',ace_dry_start:'▶ Start',ace_dry_stop:'■ Stop',ace_dry_auto_refill:'Auto-Nachschub',ace_dry_enable:'Trocknung aktivieren',ace_dry_temp_line:'Trocknungstemperatur',ace_dry_time_line:'Trocknungszeit',ace_dry_ui_pending:'(nur UI, Backend folgt)',ace_dry_dialog_title:'Trockner Temp/Zeit-Einstellungen',ace_dry_dialog_temp:'Temperatur (30-80°C)',ace_dry_dialog_time:'Restzeit (h:m:s)',ace_dry_dialog_confirm:'Bestätigen',ace_dry_dialog_cancel:'Abbrechen',ace_dry_dialog_save_restart:'Speichern & Neustart',ace_dry_dialog_custom_name:'Eigener Name',ace_dry_dialog_reset_default:'Auf Standard zurücksetzen',
-  cam_placeholder:'📷 Kamera nicht gestartet',btn_cam_start:'▶ Kamera',btn_cam_stop:'◼ Kamera',
-  btn_pause:'⏸ Pause',btn_resume:'▶ Weiter',btn_cancel:'✕ Stopp',
-  label_nozzle:'Nozzle',label_bed:'Bett',label_fan:'🌀 Lüfter',label_light:'💡 Licht',label_on_off:'Ein / Aus',label_speed:'Geschwindigkeit',
-  panel_print_title:'Drucksteuerung',panel_print_btn_pause:'⏸ Pause',panel_print_btn_resume:'▶ Fortsetzen',panel_print_btn_cancel:'✕ Abbrechen',panel_print_temps_live:'Temperaturen (Live)',
-  label_set:'Setzen',label_off:'Aus',
-  panel_temps_nozzle:'Nozzle',panel_temps_bed:'Heizbett',panel_temps_chart:'Verlauf (letzte 60 Messungen)',label_target_c:'Ziel:',
-  panel_motion_xy:'XY-Achsen',panel_motion_z:'Z-Achse',label_step:'Schrittweite:',btn_home_z:'Home Z',btn_home_xy:'Home XY',btn_home_all:'Home All',btn_disable_motors:'Motoren aus',
-  panel_ams_title:'Filament',card_ams:'Filament',ams_no_data:'Keine AMS-Daten empfangen',label_slot:'Slot',ams_empty:'Leer',
-  panel_extras_light:'Licht',panel_extras_fan:'Lüfter',panel_extras_camera:'Kamera',btn_cam_start2:'▶ Start',btn_cam_stop2:'◼ Stop',
-  panel_console_title:'Ereignis-Log',
-  log_light_on:'Licht an',log_light_off:'Licht aus',log_fan:'Lüfter →',log_nozzle:'Nozzle →',log_bed:'Bett →',log_axis:'Achse',log_home:'Home',log_home_all:'Home All',log_cam_start:'Kamera gestartet:',log_cam_stop:'Kamera gestoppt',log_poll_error:'Poll-Fehler:',log_error:'Fehler:',
-  confirm_cancel:'Druck wirklich abbrechen?',
-  settings_title:'Einstellungen',settings_connection:'Verbindung',settings_print:'Druckeinstellungen',settings_poll:'Poll-Intervall',settings_version:'Version',
-  settings_save:'Speichern & Neustart',settings_printer_name:'Drucker-Name',settings_printer_ip:'Drucker-IP',settings_mqtt_port:'MQTT-Port',
-  settings_username:'MQTT-Benutzername',settings_password:'MQTT-Passwort',settings_device_id:'Device-ID',settings_mode_id:'Mode-ID',hint_ip_no_port:'Nur IP-Adresse, kein Port (z.B. 192.168.1.102)',
-  settings_default_slot:'Standard-Slot (Einfarbdruck)',settings_slot_auto:'Auto (alle belegten Slots)',settings_auto_leveling:'Auto-Leveling vor Druck',settings_camera_on_print:'Kamera bei Druckstart einschalten',
-  settings_web_upload_warning:'Warnung bei Web-Upload-Druck anzeigen',
-  update_check:'Auf Updates prüfen',update_checking:'Prüfe...',update_available:'verfügbar',update_none:'Bereits aktuell',
-  update_apply:'Jetzt installieren',update_applying:'Lade herunter...',update_restarting:'Starte neu...',update_error:'Fehler',
-  btn_connect:'⚡ Verbinden',btn_disconnect:'✕ Trennen',
-  lbl_conn_error:'Verbindungsfehler:',
-  slot_edit_title:'Slot bearbeiten',slot_edit_color:'Farbe',slot_edit_material:'Material',
-  slot_edit_load:'⬇ Einziehen',slot_edit_unload:'⬆ Ausziehen',
-  slot_edit_save:'💾 Speichern',slot_edit_custom:'z.B. PLA, PETG, ABS…',
-  slot_edit_ok:'AMS Slot',
-  log_dir_all:'Alle',log_lvl_label:'Level:',
-  file_ready_btn:'▶ Druck starten',
-  file_slots_btn:'🎨 Slots wählen',
-  file_cancel_btn:'✕ Abbrechen',
-  nav_printers:'Drucker',
-  skip_title:'✂ Objekte überspringen',skip_hint:'Objekte abwählen, die nicht weiter gedruckt werden sollen:',
-  skip_btn_label:'Objekte',skip_no_objects:'Keine Objekte in diesem Druck.',
-  skip_already:'übersprungen',skip_select_at_least_one:'Bitte mindestens ein Objekt wählen.',
-  skip_sending:'Sende …',skip_success:'Objekte werden übersprungen.',
-  fd_objects_hint:'Objekte überspringen (optional):',
-  add_printer:'Drucker hinzufügen',apd_lbl_ip:'Drucker-IP',apd_lbl_name:'Name (optional)',
-  apd_fetching:'Hole Daten vom Drucker…',apd_success:'Drucker hinzugefügt, Bridge startet neu…',apd_err_ip:'Bitte IP-Adresse eingeben',
-  printers_remove:'Drucker entfernen',printers_remove_confirm:'Drucker "{name}" entfernen? Die Bridge startet neu.',
-  printers_active:'● aktiv',
-  printers_switch:'Wechseln →',
-  printers_current:'Aktueller Drucker',
-  printers_loading:'Lade…',
-  printers_none:'Keine Drucker konfiguriert.',
-  printers_empty_hint:'Noch kein Drucker eingerichtet.',
-  nav_browser:'Browser',
-  panel_browser_title:'Datei-Browser',
-  store_empty:'Noch keine Dateien hochgeladen.',
-  store_refresh:'↻ Aktualisieren',
-  store_print:'▶ Drucken',
-  store_download:'⬇ Download',
-  store_delete_confirm:'Datei löschen?',
-  store_print_confirm:'Datei drucken?',
-  store_web_verify_title:'Datei verifizieren',
-  store_web_verify_msg:'Bitte bestätige, dass diese Datei für den Anycubic Kobra X erstellt wurde.',
-  store_web_verify_confirm:'Bestätigen',
-  store_web_verify_abort:'Abbrechen',
-  store_no_results:'Keine Dateien gefunden.',
-  store_never:'noch nicht gedruckt',
-  sf_all:'Alle',sf_ok:'✓ Erfolgreich',sf_err:'✗ Fehler',sf_new:'Neu',
-  ss_date:'↓ Datum',ss_name:'A–Z Name',ss_dur:'⏱ Druckzeit'
-};
-var LANG_EN={
-  header_status_standby:'Ready',header_status_printing:'Printing',header_status_complete:'Complete',header_status_error:'Error',
-  kobra_free:'Ready',kobra_busy:'Busy',kobra_printing:'Printing',kobra_preheating:'Preheating',kobra_auto_leveling:'Auto Leveling',kobra_checking:'Checking',kobra_updated:'Updating',kobra_init:'Initializing',kobra_pausing:'Pausing...',kobra_paused:'Paused',kobra_resuming:'Resuming...',kobra_resumed:'Resumed',kobra_stopping:'Stopping...',kobra_stoped:'Stopped',kobra_finished:'Finished',kobra_failed:'Error',kobra_canceled:'Cancelled',kobra_offline:'Offline',
-  nav_dashboard:'Dashboard',nav_print:'Print',nav_temps:'Temperatures',nav_motion:'Motion',nav_ams:'AMS',nav_extras:'Light / Fan',nav_console:'Console',
-  card_progress:'Progress',card_temps:'Temperatures',card_light_fan:'Fan',card_speed:'Print Speed',card_cam:'Camera',lbl_elapsed:'Elapsed:',lbl_remaining:'Remaining:',lbl_slicer_time:'Slicer estimate:',lbl_layers:'Layer',
-  speed_silent:'🐢 Silent',speed_normal:'⚡ Normal',speed_sport:'🚀 Sport',
-  lbl_light:'💡 Light',lbl_feed:'Load',lbl_unload:'Unload',
-  card_ace_dry:'ACE Drying',ace_dry_dryer:'Dryer',ace_dry_status_off:'Status: Off',ace_dry_status_on:'Status: Active',ace_dry_status_remaining:'Remaining',ace_dry_humidity:'Humidity',ace_dry_current_temp:'Temperature',ace_dry_chart:'History (Temp/Humidity)',ace_dry_temp:'Temperature (°C)',ace_dry_duration:'Duration (min)',ace_dry_start:'▶ Start',ace_dry_stop:'■ Stop',ace_dry_auto_refill:'Auto Refill',ace_dry_enable:'Enable Drying',ace_dry_temp_line:'Drying Temperature',ace_dry_time_line:'Drying Time',ace_dry_ui_pending:'(UI only, backend next)',ace_dry_dialog_title:'Dryer Temp/Time Settings',ace_dry_dialog_temp:'Temperature (30-80°C)',ace_dry_dialog_time:'Rem. Time (h:m:s)',ace_dry_dialog_confirm:'Confirm',ace_dry_dialog_cancel:'Cancel',ace_dry_dialog_save_restart:'Save & Restart',ace_dry_dialog_custom_name:'Custom Name',ace_dry_dialog_reset_default:'Reset to Default',
-  cam_placeholder:'📷 Camera not started',btn_cam_start:'▶ Camera',btn_cam_stop:'◼ Camera',
-  btn_pause:'⏸ Pause',btn_resume:'▶ Resume',btn_cancel:'✕ Stop',
-  label_nozzle:'Nozzle',label_bed:'Bed',label_fan:'🌀 Fan',label_light:'💡 Light',label_on_off:'On / Off',label_speed:'Speed',
-  panel_print_title:'Print Control',panel_print_btn_pause:'⏸ Pause',panel_print_btn_resume:'▶ Resume',panel_print_btn_cancel:'✕ Cancel',panel_print_temps_live:'Temperatures (Live)',
-  label_set:'Set',label_off:'Off',
-  panel_temps_nozzle:'Nozzle',panel_temps_bed:'Heated Bed',panel_temps_chart:'History (last 60 readings)',label_target_c:'Target:',
-  panel_motion_xy:'XY Axes',panel_motion_z:'Z Axis',label_step:'Step size:',btn_home_z:'Home Z',btn_home_xy:'Home XY',btn_home_all:'Home All',btn_disable_motors:'Motors Off',
-  panel_ams_title:'Filament',card_ams:'Filament',ams_no_data:'No AMS data received',label_slot:'Slot',ams_empty:'Empty',
-  panel_extras_light:'Light',panel_extras_fan:'Fan',panel_extras_camera:'Camera',btn_cam_start2:'▶ Start',btn_cam_stop2:'◼ Stop',
-  panel_console_title:'Event Log',
-  log_light_on:'Light on',log_light_off:'Light off',log_fan:'Fan →',log_nozzle:'Nozzle →',log_bed:'Bed →',log_axis:'Axis',log_home:'Home',log_home_all:'Home All',log_cam_start:'Camera started:',log_cam_stop:'Camera stopped',log_poll_error:'Poll error:',log_error:'Error:',
-  confirm_cancel:'Really cancel the print?',
-  settings_title:'Settings',settings_connection:'Connection',settings_print:'Print Settings',settings_poll:'Poll Interval',settings_version:'Version',
-  settings_save:'Save & Restart',settings_printer_name:'Printer Name',settings_printer_ip:'Printer IP',settings_mqtt_port:'MQTT Port',
-  settings_username:'MQTT Username',settings_password:'MQTT Password',settings_device_id:'Device ID',settings_mode_id:'Mode ID',hint_ip_no_port:'IP address only, no port (e.g. 192.168.1.102)',
-  settings_default_slot:'Default Slot (single color)',settings_slot_auto:'Auto (all loaded slots)',settings_auto_leveling:'Auto-Leveling before print',settings_camera_on_print:'Turn camera on at print start',
-  settings_web_upload_warning:'Show warning when printing web uploads',
-  update_check:'Check for Updates',update_checking:'Checking...',update_available:'available',update_none:'Already up to date',
-  update_apply:'Install Now',update_applying:'Downloading...',update_restarting:'Restarting...',update_error:'Error',
-  btn_connect:'⚡ Connect',btn_disconnect:'✕ Disconnect',
-  lbl_conn_error:'Connection error:',
-  slot_edit_title:'Edit Slot',slot_edit_color:'Color',slot_edit_material:'Material',
-  slot_edit_load:'⬇ Load',slot_edit_unload:'⬆ Unload',
-  slot_edit_save:'💾 Save',slot_edit_custom:'e.g. PLA, PETG, ABS…',
-  slot_edit_ok:'AMS Slot',
-  log_dir_all:'All',log_lvl_label:'Level:',
-  file_ready_btn:'▶ Start Print',
-  file_slots_btn:'🎨 Select Slots',
-  file_cancel_btn:'✕ Cancel',
-  nav_printers:'Printers',
-  skip_title:'✂ Skip objects',skip_hint:'Uncheck objects you no longer want to print:',
-  skip_btn_label:'Objects',skip_no_objects:'No objects in this print.',
-  skip_already:'skipped',skip_select_at_least_one:'Please pick at least one object.',
-  skip_sending:'Sending …',skip_success:'Objects will be skipped.',
-  fd_objects_hint:'Skip objects (optional):',
-  add_printer:'Add printer',apd_lbl_ip:'Printer IP',apd_lbl_name:'Name (optional)',
-  apd_fetching:'Fetching data from printer…',apd_success:'Printer added, bridge restarting…',apd_err_ip:'Please enter an IP address',
-  printers_remove:'Remove printer',printers_remove_confirm:'Remove printer "{name}"? The bridge will restart.',
-  printers_active:'● active',
-  printers_switch:'Switch →',
-  printers_current:'Current printer',
-  printers_loading:'Loading…',
-  printers_none:'No printers configured.',
-  printers_empty_hint:'No printer set up yet.',
-  nav_browser:'Browser',
-  panel_browser_title:'File Browser',
-  store_empty:'No files uploaded yet.',
-  store_refresh:'↻ Refresh',
-  store_print:'▶ Print',
-  store_download:'⬇ Download',
-  store_delete_confirm:'Delete file?',
-  store_print_confirm:'Print file?',
-  store_web_verify_title:'Verify file',
-  store_web_verify_msg:'Please verify this file was made for Anycubic Kobra X.',
-  store_web_verify_confirm:'Confirm',
-  store_web_verify_abort:'Abort',
-  store_no_results:'No files found.',
-  store_never:'never printed',
-  sf_all:'All',sf_ok:'✓ Completed',sf_err:'✗ Failed',sf_new:'New',
-  ss_date:'↓ Date',ss_name:'A–Z Name',ss_dur:'⏱ Print time'
-};
+var currentLang='de';
+var T={};
+var _langCache={};
+
+function tr(key,fallback){
+  var v=T&&T[key];
+  return (typeof v==='string'&&v.length)?v:(fallback!==undefined?fallback:'');
+}
+
+function _langToggleLabel(lang){
+  if(lang==='de')return 'Deutsch';
+  if(lang==='en')return 'English';
+  if(lang==='zh-cn')return '简体中文';
+  return 'Espanol';
+}
+
+function _normalizeLang(lang){
+  return (lang==='de'||lang==='en'||lang==='es'||lang==='zh-cn')?lang:'de';
+}
+
+async function _loadLanguage(lang){
+  var l=_normalizeLang(lang);
+  if(_langCache[l])return _langCache[l];
+  var res=await fetch('/kx/ui/translations/'+l+'.json');
+  if(!res.ok)throw new Error('failed to load translations: '+l);
+  var data=await res.json();
+  _langCache[l]=data||{};
+  return _langCache[l];
+}
+
+async function setLanguage(lang){
+  var l=_normalizeLang(lang);
+  try{
+    T=await _loadLanguage(l);
+  }catch(_){
+    var fb=(l==='de')?'en':'de';
+    T=await _loadLanguage(fb);
+    l=fb;
+  }
+  currentLang=l;
+  localStorage.setItem('lang',l);
+  var langSel=document.getElementById('lang-select');
+  if(langSel)langSel.value=l;
+  document.documentElement.setAttribute('lang',l);
+  applyLang();
+}
+
+function setLanguageFromSelect(){
+  var langSel=document.getElementById('lang-select');
+  var next=langSel?langSel.value:'de';
+  setLanguage(next).catch(function(){});
+}
 // Multi-Printer: BASE_URL aus Pathname (/printer2 → andere Bridge-Instanz)
 var _printers=[];
 var _activePrinter=null;
@@ -285,17 +199,6 @@ document.addEventListener('click',function(e){
     if(menu)menu.style.display='none';
   }
 });
-
-var currentLang='de';
-var T=LANG_DE;
-function toggleLang(){
-  currentLang=currentLang==='de'?'en':'de';
-  T=currentLang==='de'?LANG_DE:LANG_EN;
-  localStorage.setItem('lang',currentLang);
-  document.getElementById('lang-btn').textContent=currentLang==='de'?'EN':'DE';
-  document.documentElement.setAttribute('lang',currentLang);
-  applyLang();
-}
 function applyLang(){
   ensureAceDryCards();
   // Nav
@@ -391,25 +294,25 @@ function applyLang(){
   document.querySelectorAll('.lbl-feed').forEach(e=>e.textContent=T.lbl_feed);
   document.querySelectorAll('.lbl-unload').forEach(e=>e.textContent=T.lbl_unload);
   for(var i=0;i<4;i++){
-    setText('d-card-ace-dry-'+i,'ACE '+(i+1)+' - '+(T.ace_dry_dryer||'Dryer'));
-    setText('d-ace-auto-refill-label-'+i,T.ace_dry_auto_refill||'Auto Refill');
-    setText('d-ace-drying-enable-label-'+i,T.ace_dry_enable||'Enable Drying');
-    setText('d-ace-dry-humidity-label-'+i,(T.ace_dry_humidity||'Humidity')+':');
-    setText('d-ace-dry-current-temp-label-'+i,(T.ace_dry_current_temp||'Current Temp')+':');
-    setText('d-ace-dry-target-label-'+i,(T.ace_dry_temp_line||'Drying Temperature')+':');
-    setText('d-ace-dry-time-label-'+i,(T.ace_dry_time_line||'Drying Time')+':');
-    setText('d-ace-dry-chart-label-'+i,T.ace_dry_chart||'History (Temp/Humidity)');
+      setText('d-card-ace-dry-'+i,'ACE '+(i+1)+' - '+tr('ace_dry_dryer'));
+      setText('d-ace-auto-refill-label-'+i,tr('ace_dry_auto_refill'));
+      setText('d-ace-drying-enable-label-'+i,tr('ace_dry_enable'));
+      setText('d-ace-dry-humidity-label-'+i,tr('ace_dry_humidity')+':');
+      setText('d-ace-dry-current-temp-label-'+i,tr('ace_dry_current_temp')+':');
+      setText('d-ace-dry-target-label-'+i,tr('ace_dry_temp_line')+':');
+      setText('d-ace-dry-time-label-'+i,tr('ace_dry_time_line')+':');
+      setText('d-ace-dry-chart-label-'+i,tr('ace_dry_chart'));
     var adTemp=document.getElementById('ace-dry-temp-'+i);if(adTemp)adTemp.setAttribute('placeholder',T.ace_dry_temp);
     var adDur=document.getElementById('ace-dry-duration-'+i);if(adDur)adDur.setAttribute('placeholder',T.ace_dry_duration);
   }
-  setText('ace-dry-dialog-title',T.ace_dry_dialog_title||'Dryer Temp/Time Settings');
-  setText('ace-dry-dialog-temp-label',T.ace_dry_dialog_temp||'Temperature (30-80°C)');
-  setText('ace-dry-dialog-time-label',T.ace_dry_dialog_time||'Rem. Time (h:m:s)');
-  setText('ace-dry-dialog-custom-name-label',T.ace_dry_dialog_custom_name||'Custom Name');
-  setText('ace-dry-dialog-cancel',T.ace_dry_dialog_cancel||'Cancel');
-  setText('ace-dry-dialog-confirm',T.ace_dry_dialog_confirm||'Confirm');
-  setText('ace-dry-dialog-reset-default',T.ace_dry_dialog_reset_default||'Reset to Default');
-  setText('ace-dry-dialog-save-preset',T.ace_dry_dialog_save_restart||'Save & Restart');
+  setText('ace-dry-dialog-title',tr('ace_dry_dialog_title'));
+  setText('ace-dry-dialog-temp-label',tr('ace_dry_dialog_temp'));
+  setText('ace-dry-dialog-time-label',tr('ace_dry_dialog_time'));
+  setText('ace-dry-dialog-custom-name-label',tr('ace_dry_dialog_custom_name'));
+  setText('ace-dry-dialog-cancel',tr('ace_dry_dialog_cancel'));
+  setText('ace-dry-dialog-confirm',tr('ace_dry_dialog_confirm'));
+  setText('ace-dry-dialog-reset-default',tr('ace_dry_dialog_reset_default'));
+  setText('ace-dry-dialog-save-preset',tr('ace_dry_dialog_save_restart'));
   aceDryDialogSyncCustomButtonNames();
   // conn-btn text (nur wenn nicht im Übergangszustand)
   updateConnBtn();
@@ -472,12 +375,13 @@ function ensureAceDryCards(){
 }
 (function(){
   var l=localStorage.getItem('lang')||'de';
-  currentLang=l;T=l==='de'?LANG_DE:LANG_EN;
-  document.getElementById('lang-btn').textContent=l==='de'?'EN':'DE';
-  document.documentElement.setAttribute('lang',l);
+  currentLang=_normalizeLang(l);
+  var langSel=document.getElementById('lang-select');
+  if(langSel)langSel.value=currentLang;
+  document.documentElement.setAttribute('lang',currentLang);
   // defer until DOM ready
   window.addEventListener('DOMContentLoaded',function(){
-    applyLang();
+    setLanguage(currentLang).catch(function(){});
     // Kein Drucker konfiguriert? → direkt in den Drucker-Tab (zeigt "+ Drucker hinzufügen")
     fetch('/kx/printers').then(function(r){return r.json()}).then(function(d){
       if(!d.result||!d.result.length){showPanel('printers');loadPrinterTab();}
@@ -649,7 +553,7 @@ function applyState(){
   _syncAceDryPresetsFromServer(s.ace_dry_presets);
   // connection error banner – nur wenn überhaupt ein Drucker konfiguriert ist
   var banner=document.getElementById('conn-error-banner');
-  if(banner){if(s.connection_error&&_printers.length>0){banner.textContent='⚠ '+(T.lbl_conn_error||'Connection error:')+' '+s.connection_error;banner.style.display='block';}else{banner.style.display='none';}}
+  if(banner){if(s.connection_error&&_printers.length>0){banner.textContent='⚠ '+tr('lbl_conn_error')+' '+s.connection_error;banner.style.display='block';}else{banner.style.display='none';}}
   var frb=document.getElementById('file-ready-banner');
   if(frb){
     if(s.file_ready&&s.print_state==='standby'){
@@ -734,7 +638,7 @@ function applyState(){
 
   var amsTitle=document.getElementById('d-card-ams');
   if(amsTitle){
-    var baseTitle=T.card_ams||'Filament';
+    var baseTitle=tr('card_ams');
     var modeMap={toolhead:'Toolhead',ace_direct:'ACE Direct',ace_hub:'ACE Hub'};
     var modeTxt=modeMap[s.filament_mode]||'';
     amsTitle.textContent=modeTxt?(baseTitle+' - '+modeTxt):baseTitle;
@@ -861,10 +765,10 @@ function updateConnBtn(){
   var offline=S.kobra_state==='offline';
   if(offline){
     btn.className='conn-btn disconnected';
-    btn.textContent=T.btn_connect||'⚡ Verbinden';
+    btn.textContent=tr('btn_connect');
   } else {
     btn.className='conn-btn connected';
-    btn.textContent=T.btn_disconnect||'✕ Trennen';
+    btn.textContent=tr('btn_disconnect');
   }
 }
 
@@ -956,7 +860,7 @@ function updateSlotEditFeedButton(){
     return;
   }
   btn.style.display='';
-  btn.textContent=_slotEditLoaded?(T.slot_edit_unload||'⬆ Unload'):(T.slot_edit_load||'⬇ Load');
+  btn.textContent=_slotEditLoaded?tr('slot_edit_unload'):tr('slot_edit_load');
 }
 function openSlotEdit(i){
   var slot=(window._amsSlots||[])[i]||{};
@@ -1010,7 +914,7 @@ function startReadyFile(){
       if(btn){btn.disabled=false;setText('file-ready-btn',T.file_ready_btn);}
     })
     .catch(function(e){
-      clog((T.log_error||'Error:')+' '+e,'msg-err');
+      clog(tr('log_error')+' '+e,'msg-err');
       if(btn){btn.disabled=false;setText('file-ready-btn',T.file_ready_btn);}
     });
 }
@@ -1041,7 +945,7 @@ function saveSlotEdit(){
     .then(function(r){return r.json();})
     .then(function(r){
       closeSlotEdit();
-      clog((T.slot_edit_ok||'AMS Slot')+' '+(_slotEditIndex+1)+': '+mat+' '+hex,'msg-ok');
+      clog(tr('slot_edit_ok')+' '+(_slotEditIndex+1)+': '+mat+' '+hex,'msg-ok');
     })
     .catch(function(e){clog('Fehler: '+e,'msg-err');});
 }
@@ -1266,13 +1170,13 @@ function camStart(){
       img.style.display='none';
       ph.style.display='flex';
       camOn=false;
-      document.getElementById('cam-toggle-btn').textContent=T.btn_cam_start||'▶ Kamera';
-      clog((T.log_error||'Fehler:')+' Stream nicht verfügbar','msg-err');
+      document.getElementById('cam-toggle-btn').textContent=tr('btn_cam_start');
+      clog(tr('log_error')+' '+tr('cam_stream_unavailable'),'msg-err');
     };
     img.src='/api/camera/stream?t='+Date.now();
     camOn=true;
-    document.getElementById('cam-toggle-btn').textContent=T.btn_cam_stop||'◼ Kamera';
-    clog((T.log_cam_start||'Kamera gestartet'),'msg-ok');
+    document.getElementById('cam-toggle-btn').textContent=tr('btn_cam_stop');
+    clog(tr('log_cam_start'),'msg-ok');
     // MJPEG liefert kein onload – Spinner nach kurzem Timeout ausblenden
     setTimeout(function(){
       sp.style.display='none';
@@ -1281,7 +1185,7 @@ function camStart(){
   }).catch(function(e){
     sp.style.display='none';
     ph.style.display='flex';
-    clog((T.log_error||'Fehler:')+' '+e,'msg-err');
+    clog(tr('log_error')+' '+e,'msg-err');
   });
 }
 
@@ -1292,8 +1196,8 @@ function camStop(){
   img.style.display='none';
   document.getElementById('cam-placeholder').style.display='flex';
   camOn=false;
-  document.getElementById('cam-toggle-btn').textContent=T.btn_cam_start||'▶ Kamera';
-  clog((T.log_cam_stop||'Kamera gestoppt'),'msg-ok');
+  document.getElementById('cam-toggle-btn').textContent=tr('btn_cam_start');
+  clog(tr('log_cam_stop'),'msg-ok');
 }
 
 function aceDryStart(aceId){
@@ -1307,7 +1211,7 @@ function aceDryStart(aceId){
     .then(function(r){return r.json();})
     .then(function(r){
       if(r.error){throw new Error(r.error);}
-      clog('ACE '+(aceId+1)+' - '+(T.ace_dry_dryer||'Dryer')+': '+(T.ace_dry_start||'start')+' ('+t+'°C, '+d+' min)','msg-ok');
+      clog('ACE '+(aceId+1)+' - '+tr('ace_dry_dryer')+': '+tr('ace_dry_start')+' ('+t+'°C, '+d+' min)','msg-ok');
       poll();
     })
     .catch(function(e){clog('ACE-Fehler: '+e,'msg-err');});
@@ -1323,7 +1227,7 @@ function aceAutoRefillToggle(aceId){
     .then(function(d){
       delete _aceAutoFeedPending[aceId];
       if(d.error){clog('Auto Refill error: '+d.error,'msg-err');var t=document.getElementById('ace-auto-refill-toggle-'+aceId);if(t)t.checked=!on;return;}
-      clog('ACE '+(aceId+1)+' - '+(T.ace_dry_auto_refill||'Auto Refill')+': '+(on?'ON':'OFF'),'msg-ok');
+      clog('ACE '+(aceId+1)+' - '+tr('ace_dry_auto_refill')+': '+(on?'ON':'OFF'),'msg-ok');
     })
     .catch(function(e){delete _aceAutoFeedPending[aceId];clog('Auto Refill error: '+e,'msg-err');var t=document.getElementById('ace-auto-refill-toggle-'+aceId);if(t)t.checked=!on;});
 }
@@ -1351,7 +1255,7 @@ function openAceDryDialog(aceId){
   aceDryDialogUpdateSaveButton();
   aceDryDialogUpdateResetButton();
   var sb=document.getElementById('ace-dry-dialog-save-preset');
-  if(sb){sb.disabled=false;sb.textContent=T.ace_dry_dialog_save_restart||'Save & Restart';}
+  if(sb){sb.disabled=false;sb.textContent=tr('ace_dry_dialog_save_restart');}
   document.getElementById('ace-dry-dialog').classList.add('open');
 }
 
@@ -1509,11 +1413,11 @@ function saveAceDryPresetAndRestart(){
     };
     return post('/api/settings',d);
   }).then(function(){
-    clog('ACE preset '+key+' '+(T.settings_save||'Save & Restart'),'msg-ok');
+    clog('ACE preset '+key+' '+tr('settings_save'),'msg-ok');
     closeAceDryDialog();
   }).catch(function(e){
     btn.disabled=false;
-    btn.textContent=T.ace_dry_dialog_save_restart||'Save & Restart';
+    btn.textContent=tr('ace_dry_dialog_save_restart');
     clog('ACE-Preset Fehler: '+e,'msg-err');
   });
 }
@@ -1549,7 +1453,7 @@ function aceDryStop(aceId){
     .then(function(r){return r.json();})
     .then(function(r){
       if(r.error){throw new Error(r.error);}
-      clog('ACE '+(aceId+1)+' - '+(T.ace_dry_dryer||'Dryer')+': '+(T.ace_dry_stop||'stop'),'msg-ok');
+      clog('ACE '+(aceId+1)+' - '+tr('ace_dry_dryer')+': '+tr('ace_dry_stop'),'msg-ok');
       poll();
     })
     .catch(function(e){clog('ACE-Fehler: '+e,'msg-err');});
@@ -2061,7 +1965,7 @@ function confirmFilamentPrint(){
         if(btn){btn.disabled=false;setText('file-ready-btn',T.file_ready_btn);}
       })
       .catch(function(e){
-        clog((T.log_error||'Error:')+' '+e,'msg-err');
+        clog(tr('log_error')+' '+e,'msg-err');
         if(btn){btn.disabled=false;setText('file-ready-btn',T.file_ready_btn);}
       });
   } else {
@@ -2165,13 +2069,13 @@ function renderSkipList(){
   var box=document.getElementById('skip-list');
   if(!box)return;
   if(!_skipObjects.length){
-    box.innerHTML='<div style="color:var(--txt2);font-size:12px;padding:12px;text-align:center">'+(T.skip_no_objects||'Keine Objekte in diesem Druck.')+'</div>';
+    box.innerHTML='<div style="color:var(--txt2);font-size:12px;padding:12px;text-align:center">'+tr('skip_no_objects')+'</div>';
     return;
   }
   box.innerHTML=_skipObjects.map(function(o,i){
     var label=_shortLabel(o.name);
     var dis=o.skipped?'disabled':'';
-    var note=o.skipped?'<span style="font-size:11px;color:var(--warn);margin-left:auto">'+(T.skip_already||'übersprungen')+'</span>':'';
+    var note=o.skipped?'<span style="font-size:11px;color:var(--warn);margin-left:auto">'+tr('skip_already')+'</span>':'';
     return '<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:var(--raised);border:1px solid var(--border);font-size:12px;'+(o.skipped?'opacity:0.5':'')+'">'+
       '<input type="checkbox" data-idx="'+i+'" '+(o.willSkip?'checked':'')+' '+dis+' onchange="_toggleWillSkip('+i+',this.checked)">'+
       '<span style="word-break:break-all">'+label+'</span>'+note+
@@ -2222,13 +2126,13 @@ function confirmSkip(){
   var names=_skipObjects.filter(function(o){return o.willSkip;}).map(function(o){return o.name;});
   var st=document.getElementById('skip-status');
   var btn=document.getElementById('skip-confirm');
-  if(!names.length){st.textContent=T.skip_select_at_least_one||'Bitte mindestens ein Objekt wählen.';st.style.color='var(--warn)';return;}
-  btn.disabled=true; st.textContent=T.skip_sending||'Sende …'; st.style.color='var(--txt2)';
+  if(!names.length){st.textContent=tr('skip_select_at_least_one');st.style.color='var(--warn)';return;}
+  btn.disabled=true; st.textContent=tr('skip_sending'); st.style.color='var(--txt2)';
   fetch(_apiUrl('/kx/skip'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({names:names})})
     .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
     .then(function(res){
       if(!res.ok){st.textContent=(res.j&&res.j.error)||'Fehler';st.style.color='var(--err)';btn.disabled=false;return;}
-      st.textContent=T.skip_success||'Objekte werden übersprungen.';st.style.color='var(--ok)';
+      st.textContent=tr('skip_success');st.style.color='var(--ok)';
       // Dialog offen lassen + neu laden damit der "übersprungen"-Status erscheint
       setTimeout(function(){ _refreshSkipDialog(); btn.disabled=false; st.textContent=''; }, 1500);
     })
