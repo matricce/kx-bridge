@@ -8,9 +8,10 @@
   Plugin akzeptiert wird. Damit funktionieren Time-Lapse, Layer-aligned
   First-Layer-Scan und WebRTC-Live-Stream gegen einen (selbst gehosteten oder
   Cloud-) Obico-Server. **Hinweis:** Das KI-Modell zur Spaghetti-Erkennung
-  ist auf seitliche Kamera-Winkel (Ender/Voron) trainiert — beim Kobra X
-  mit Top-Down-Kamera erkennt es derzeit keine Druckfehler. Das ist deshalb
-  noch nicht produktiv nutzbar, aber Stream/Time-Lapse/Telemetrie laufen.
+  ist auf seitliche Kamera-Winkel (Ender/Voron) trainiert — wie zuverlässig
+  es beim Kobra X mit Top-Down-Kamera funktioniert, muss empirisch getestet
+  werden (bei uns ging es schon ganz gut). Stream, Time-Lapse und Telemetrie
+  laufen, die Failure-Erkennung ist deshalb noch als experimentell markiert.
 - **Mehrsprachiges UI (PR #37 von @gangoke):** Inline-Translations sind raus,
   stattdessen wechselbares Sprach-Dropdown mit Globe-Icon. Auto-Auswahl nach
   Browser-Locale, manuelle Wahl wird im LocalStorage gemerkt. Sprachen: 🇩🇪 🇬🇧

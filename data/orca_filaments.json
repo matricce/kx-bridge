@@ -1,0 +1,7016 @@
+[
+  {
+    "id": "GFB99",
+    "name": "Anker Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB98",
+    "name": "Anker Generic ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFN99",
+    "name": "Anker Generic PA",
+    "vendor": "Generic",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "GFN98",
+    "name": "Anker Generic PA-CF",
+    "vendor": "Generic",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "Anker Generic PC",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Anker Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG98",
+    "name": "Anker Generic PETG-CF",
+    "vendor": "Generic",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Anker Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL96",
+    "name": "Anker Generic PLA Silk",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL95",
+    "name": "Anker Generic PLA+",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL98",
+    "name": "Anker Generic PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFS99",
+    "name": "Anker Generic PVA",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "Anker Generic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Anycubic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFA99",
+    "name": "Anycubic ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Anycubic Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB98",
+    "name": "Anycubic Generic ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFN99",
+    "name": "Anycubic Generic PA",
+    "vendor": "Generic",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "GFN98",
+    "name": "Anycubic Generic PA-CF",
+    "vendor": "Generic",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "Anycubic Generic PC",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Anycubic Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Anycubic Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL98",
+    "name": "Anycubic Generic PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFS99",
+    "name": "Anycubic Generic PVA",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "Anycubic Generic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Anycubic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Anycubic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Anycubic PLA High Speed",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Anycubic PLA Silk",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Anycubic PLA+",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "Anycubic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Artillery Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB98",
+    "name": "Artillery Generic ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Artillery Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Artillery Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL98",
+    "name": "Artillery Generic PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "Artillery Generic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "BSFI004",
+    "name": "Blocks Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "BSFI005",
+    "name": "Blocks Generic ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "BSFI010",
+    "name": "Blocks Generic ASA-CF",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "BSFI006",
+    "name": "Blocks Generic PA",
+    "vendor": "Generic",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "BSFI007",
+    "name": "Blocks Generic PA-CF",
+    "vendor": "Generic",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "BSFI008",
+    "name": "Blocks Generic PC",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "BSFI002",
+    "name": "Blocks Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "BSFI001",
+    "name": "Blocks Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BSFI010",
+    "name": "Blocks Generic PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "BSFI009",
+    "name": "Blocks Generic PVA",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "BSFI003",
+    "name": "Blocks Generic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "C1 Generic High Flow PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "C1 Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "C1 Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Chuanying ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Chuanying ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Chuanying Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Chuanying Generic ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Chuanying Generic HIPS",
+    "vendor": "Generic",
+    "type": "HIPS",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Chuanying Generic HS PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Chuanying Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Chuanying Generic PETG-CF10",
+    "vendor": "Generic",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Chuanying Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Chuanying Generic PLA-CF10",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Chuanying Generic PLA-Silk",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Chuanying Generic PVA",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Chuanying Generic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Chuanying HS PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Chuanying PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Chuanying PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Chuanying PLA-SILK",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Comgrow Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Comgrow Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Comgrow Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Comgrow T300 PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "CoPrint Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "CoPrint Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "CoPrint Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "CoPrint Generic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Creality Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB98",
+    "name": "Creality Generic ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFB98",
+    "name": "Creality Generic ASA-CF",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFN98",
+    "name": "Creality Generic PA-CF",
+    "vendor": "Generic",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "Creality Generic PC",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Creality Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Creality Generic PETG-CF",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Creality Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Creality Generic PLA High Speed",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Creality Generic PLA Matte",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Creality Generic PLA Silk",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Creality Generic PLA Wood",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL98",
+    "name": "Creality Generic PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "Creality Generic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Creality HF Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Creality HF Generic Speed PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "DeltaMaker Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "DeltaMaker Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "DeltaMaker Generic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Dremel Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "DFL99",
+    "name": "Désactivé",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Elegoo PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Flashforge ABS Basic",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Flashforge ABS-CF",
+    "vendor": "Generic",
+    "type": "ABS-CF",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Flashforge ASA Basic",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Flashforge ASA-CF",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Flashforge Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Flashforge Generic ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Flashforge Generic HIPS",
+    "vendor": "Generic",
+    "type": "HIPS",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Flashforge Generic HS PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Flashforge Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Flashforge Generic PETG-CF",
+    "vendor": "Generic",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Flashforge Generic PETG-CF10",
+    "vendor": "Generic",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "FFG01",
+    "name": "Flashforge Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Flashforge Generic PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Flashforge Generic PLA-CF10",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Flashforge Generic PLA-SILK",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Flashforge Generic PLA-Silk",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Flashforge Generic PVA",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Flashforge Generic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Flashforge HIPS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Flashforge HS PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Flashforge HS PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "FFG01",
+    "name": "Flashforge HS PLA Burnt Ti",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "FFG01",
+    "name": "Flashforge PA",
+    "vendor": "Generic",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Flashforge PA-CF",
+    "vendor": "Generic",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Flashforge PAHT-CF",
+    "vendor": "Generic",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FlashForge PC",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Flashforge PETG Basic",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Flashforge PETG Pro",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Flashforge PETG Transparent",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Flashforge PETG-CF",
+    "vendor": "Generic",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "FFG01",
+    "name": "Flashforge PLA Basic",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "FFG01",
+    "name": "Flashforge PLA Buint Ti",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "FFG01",
+    "name": "Flashforge PLA Color Change",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "FFG01",
+    "name": "Flashforge PLA Galaxy",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "FFG01",
+    "name": "Flashforge PLA Luminous",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "FFG01",
+    "name": "Flashforge PLA Matte",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "FFG01",
+    "name": "Flashforge PLA Metal",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "FFG01",
+    "name": "Flashforge PLA Pro",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Flashforge PLA Silk",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "FFG01",
+    "name": "Flashforge PLA Sparkle",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Flashforge PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FlashForge PPS",
+    "vendor": "Generic",
+    "type": "PPS",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Flashforge PPS",
+    "vendor": "Generic",
+    "type": "PPS",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FlashForge PPS-CF",
+    "vendor": "Generic",
+    "type": "PPS-CF",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Flashforge PPS-CF",
+    "vendor": "Generic",
+    "type": "PPS-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Flashforge TPU 65D",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Flashforge TPU 95A",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FLSun Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB98",
+    "name": "FLSun Generic ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFN99",
+    "name": "FLSun Generic PA",
+    "vendor": "Generic",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "GFN98",
+    "name": "FLSun Generic PA-CF",
+    "vendor": "Generic",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "FLSun Generic PC",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "FLSun Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "FLSun Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL98",
+    "name": "FLSun Generic PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFS99",
+    "name": "FLSun Generic PVA",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "FLSun Generic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FLSun S1 ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB98",
+    "name": "FLSun S1 ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "FLSun S1 PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "FLSun S1 PLA Generic",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "FLSun S1 PLA High Speed",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "FLSun S1 PLA Silk",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "FLSun S1 TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FLSun T1 ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB98",
+    "name": "FLSun T1 ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "FLSun T1 PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "FLSun T1 PLA Generic",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "FLSun T1 PLA High Speed",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "FLSun T1 PLA Silk",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "FLSun T1 TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FlyingBear Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFN98",
+    "name": "FlyingBear Generic PA-CF",
+    "vendor": "Generic",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "FlyingBear Generic PC",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "FlyingBear Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "FlyingBear Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "FlyingBear Generic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FusRock Generic PAHT-CF",
+    "vendor": "Generic",
+    "type": "PAHT-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FusRock Generic PET-CF",
+    "vendor": "Generic",
+    "type": "PET-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FusRock Generic S-Multi",
+    "vendor": "Generic",
+    "type": "PET-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FusRock Generic S-PAHT",
+    "vendor": "Generic",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FusRock PAHT",
+    "vendor": "Generic",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FusRock PAHT-CF",
+    "vendor": "Generic",
+    "type": "PAHT-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FusRock PET",
+    "vendor": "Generic",
+    "type": "PET",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FusRock PET-CF",
+    "vendor": "Generic",
+    "type": "PET-CF",
+    "color": ""
+  },
+  {
+    "id": "OGFB99",
+    "name": "Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFL504",
+    "name": "Generic ABS HT",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "OGFB98",
+    "name": "Generic ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFS97",
+    "name": "Generic BVOH",
+    "vendor": "Generic",
+    "type": "BVOH",
+    "color": ""
+  },
+  {
+    "id": "OGFLC99",
+    "name": "Generic CoPE",
+    "vendor": "Generic",
+    "type": "CoPE",
+    "color": ""
+  },
+  {
+    "id": "GFR99",
+    "name": "Generic EVA",
+    "vendor": "Generic",
+    "type": "EVA",
+    "color": ""
+  },
+  {
+    "id": "GFS98",
+    "name": "Generic HIPS",
+    "vendor": "Generic",
+    "type": "HIPS",
+    "color": ""
+  },
+  {
+    "id": "OGFN99",
+    "name": "Generic PA",
+    "vendor": "Generic",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "OGFN98",
+    "name": "Generic PA-CF",
+    "vendor": "Generic",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "Generic PC",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "Generic PCCF @E3NG v1.2S",
+    "name": "Generic PCCF",
+    "vendor": "Generic",
+    "type": "PC-CF",
+    "color": ""
+  },
+  {
+    "id": "GFG97",
+    "name": "Generic PCTG",
+    "vendor": "Generic",
+    "type": "PCTG",
+    "color": ""
+  },
+  {
+    "id": "GFP99",
+    "name": "Generic PE",
+    "vendor": "Generic",
+    "type": "PE",
+    "color": ""
+  },
+  {
+    "id": "GFP98",
+    "name": "Generic PE-CF",
+    "vendor": "Generic",
+    "type": "PE-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Generic PET",
+    "vendor": "Generic",
+    "type": "PET",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Generic PETG Basic",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG96",
+    "name": "Generic PETG HF",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG98",
+    "name": "Generic PETG-CF",
+    "vendor": "Generic",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Generic PETG-CF10",
+    "vendor": "Generic",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "GFR98",
+    "name": "Generic PHA",
+    "vendor": "Generic",
+    "type": "PHA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL95",
+    "name": "Generic PLA High Speed",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL96",
+    "name": "Generic PLA Silk",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Generic PLA+",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL98",
+    "name": "Generic PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Generic PLA-CF10",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFP97",
+    "name": "Generic PP",
+    "vendor": "Generic",
+    "type": "PP",
+    "color": ""
+  },
+  {
+    "id": "GFP96",
+    "name": "Generic PP-CF",
+    "vendor": "Generic",
+    "type": "PP-CF",
+    "color": ""
+  },
+  {
+    "id": "GFP95",
+    "name": "Generic PP-GF",
+    "vendor": "Generic",
+    "type": "PP-GF",
+    "color": ""
+  },
+  {
+    "id": "GFN97",
+    "name": "Generic PPA-CF",
+    "vendor": "Generic",
+    "type": "PPA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFN96",
+    "name": "Generic PPA-GF",
+    "vendor": "Generic",
+    "type": "PPA-GF",
+    "color": ""
+  },
+  {
+    "id": "GFT97",
+    "name": "Generic PPS",
+    "vendor": "Generic",
+    "type": "PPS",
+    "color": ""
+  },
+  {
+    "id": "GFT98",
+    "name": "Generic PPS-CF",
+    "vendor": "Generic",
+    "type": "PPS-CF",
+    "color": ""
+  },
+  {
+    "id": "GFS99",
+    "name": "Generic PVA",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "BFLSBS99",
+    "name": "Generic SBS",
+    "vendor": "Generic",
+    "type": "SBS",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "Generic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Generic TPU 85A",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "QD_1_0_50",
+    "name": "Generic TPU 95A",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFU98",
+    "name": "Generic TPU for AMS",
+    "vendor": "Generic",
+    "type": "TPU-AMS",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "InfiMech Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFN98",
+    "name": "InfiMech Generic PA-CF",
+    "vendor": "Generic",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "InfiMech Generic PC",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "InfiMech Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "InfiMech Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "InfiMech Generic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Lulzbot 2.85mm ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Lulzbot 2.85mm PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Lulzbot 2.85mm PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "MM Generic PEEK",
+    "vendor": "Generic",
+    "type": "PEEK",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "OrcaArena Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB98",
+    "name": "OrcaArena Generic ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFN99",
+    "name": "OrcaArena Generic PA",
+    "vendor": "Generic",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "GFN98",
+    "name": "OrcaArena Generic PA-CF",
+    "vendor": "Generic",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "OrcaArena Generic PC",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "OrcaArena Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "OrcaArena Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA05",
+    "name": "OrcaArena Generic PLA Silk",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL98",
+    "name": "OrcaArena Generic PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFS99",
+    "name": "OrcaArena Generic PVA",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "OrcaArena Generic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFN99",
+    "name": "PA6 CF20 (Performance)",
+    "vendor": "Generic",
+    "type": "PA6-CF",
+    "color": ""
+  },
+  {
+    "id": "GFSL99",
+    "name": "Peopoly Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFPETG-1",
+    "name": "Peopoly Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Peopoly Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "PETG ESD (Performance)",
+    "vendor": "Generic",
+    "type": "PETG-ESD",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Phrozen PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "1393866034",
+    "name": "PolyLite Dual PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "1393866034",
+    "name": "PolyLite J1 PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "1393866034",
+    "name": "PolyLite PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Polymaker CoPA",
+    "vendor": "Generic",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Polymaker PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "37895926870",
+    "name": "PolyTerra PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFN99",
+    "name": "PPS Carbone (Performance)",
+    "vendor": "Generic",
+    "type": "PPS-CF",
+    "color": ""
+  },
+  {
+    "id": "Prusa Generic ABS @CORE One 0.6",
+    "name": "Prusa Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB99_6",
+    "name": "Prusa Generic ABS HF",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB98_5",
+    "name": "Prusa Generic ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFB98_6",
+    "name": "Prusa Generic ASA HF",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "Prusa Generic FLEX",
+    "vendor": "Generic",
+    "type": "FLEX",
+    "color": ""
+  },
+  {
+    "id": "GFN99_4",
+    "name": "Prusa Generic PA",
+    "vendor": "Generic",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "GFN98_4",
+    "name": "Prusa Generic PA-CF",
+    "vendor": "Generic",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFC99_4",
+    "name": "Prusa Generic PC",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFC99_5",
+    "name": "Prusa Generic PC HF",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "Prusa Generic PETG @CORE One 0.6",
+    "name": "Prusa Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG99_6",
+    "name": "Prusa Generic PETG HF",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "Prusa Generic PLA @CORE One 0.6",
+    "name": "Prusa Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99_6",
+    "name": "Prusa Generic PLA HF",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "Prusa Generic PLA Silk @CORE One 0.6",
+    "name": "Prusa Generic PLA Silk",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL98_5",
+    "name": "Prusa Generic PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFS99_4",
+    "name": "Prusa Generic PVA",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "GFS99_5",
+    "name": "Prusa Generic PVA HF",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "Prusa Generic TPU @CORE One 0.6",
+    "name": "Prusa Generic TPU",
+    "vendor": "Generic",
+    "type": "FLEX",
+    "color": ""
+  },
+  {
+    "id": "GFU99_3",
+    "name": "Prusa Generic TPU HF",
+    "vendor": "Generic",
+    "type": "FLEX",
+    "color": ""
+  },
+  {
+    "id": "GFN98",
+    "name": "Prusament PA-CF",
+    "vendor": "Generic",
+    "type": "PA11-CF",
+    "color": ""
+  },
+  {
+    "id": "GFRH06",
+    "name": "Prusament PC-CF",
+    "vendor": "Generic",
+    "type": "PC-CF",
+    "color": ""
+  },
+  {
+    "id": "GFS98",
+    "name": "Prusament PVB",
+    "vendor": "Generic",
+    "type": "PVB",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "QIDI ABS Odorless",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "QIDI ABS Rapido",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "QIDI ABS Rapido Metal",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "QIDI ABS-GF",
+    "vendor": "Generic",
+    "type": "ABS-GF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "QIDI ABS-GF10",
+    "vendor": "Generic",
+    "type": "ABS-GF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "QIDI ABS-GF25",
+    "vendor": "Generic",
+    "type": "ABS-GF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "QIDI ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Qidi ASA-Aero",
+    "vendor": "Generic",
+    "type": "ASA-AERO",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "QIDI ASA-CF",
+    "vendor": "Generic",
+    "type": "ASA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Qidi Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Qidi Generic ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFN99",
+    "name": "Qidi Generic PA",
+    "vendor": "Generic",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "GFN98",
+    "name": "Qidi Generic PA-CF",
+    "vendor": "Generic",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "Qidi Generic PC",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Qidi Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG98",
+    "name": "Qidi Generic PETG-CF",
+    "vendor": "Generic",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Qidi Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Qidi Generic PLA High Speed",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA05",
+    "name": "Qidi Generic PLA Silk",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Qidi Generic PLA+",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL98",
+    "name": "Qidi Generic PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFS99",
+    "name": "Qidi Generic PVA",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Qidi Generic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Qidi Generic TPU 95A",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "QIDI PA-Ultra",
+    "vendor": "Generic",
+    "type": "UltraPA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "QIDI PA12-CF",
+    "vendor": "Generic",
+    "type": "PA12-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "QIDI PAHT-CF",
+    "vendor": "Generic",
+    "type": "PAHT-CF",
+    "color": ""
+  },
+  {
+    "id": "GFL98",
+    "name": "QIDI PAHT-GF",
+    "vendor": "Generic",
+    "type": "PAHT-GF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Qidi PC-ABS-FR",
+    "vendor": "Generic",
+    "type": "PC-ABS-FR",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "QIDI PET-CF",
+    "vendor": "Generic",
+    "type": "PET-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "QIDI PET-GF",
+    "vendor": "Generic",
+    "type": "PET-GF",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "QIDI PETG Basic",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "QIDI PETG Rapido",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "QIDI PETG Tough",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "QIDI PETG Translucent",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "QIDI PETG-CF",
+    "vendor": "Generic",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "QIDI PETG-GF",
+    "vendor": "Generic",
+    "type": "PETG-GF",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "QIDI PLA Basic",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "QIDI PLA Matte Basic",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "QIDI PLA Rapido",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "QIDI PLA Rapido Matte",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "QIDI PLA Rapido Metal",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "QIDI PLA Rapido Silk",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL98",
+    "name": "QIDI PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFL98",
+    "name": "Qidi PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "QIDI PPS-CF",
+    "vendor": "Generic",
+    "type": "PPS-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "QIDI PPS-GF",
+    "vendor": "Generic",
+    "type": "PPS-GF",
+    "color": ""
+  },
+  {
+    "id": "QD_0_1_32",
+    "name": "QIDI Support For PAHT",
+    "vendor": "Generic",
+    "type": "PAHT-S",
+    "color": ""
+  },
+  {
+    "id": "QD_0_1_33",
+    "name": "QIDI Support For PET/PA",
+    "vendor": "Generic",
+    "type": "PA-S",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Qidi TPU 95A-HF",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "QIDI TPU-Aero",
+    "vendor": "Generic",
+    "type": "TPU-AERO",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "QIDI UltraPA-CF25",
+    "vendor": "Generic",
+    "type": "UltraPA-CF25",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "QIDI WOOD Rapido",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "RatRig BigNozzle ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB98",
+    "name": "RatRig BigNozzle ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "RatRig BigNozzle PCTG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "RatRig BigNozzle PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "RatRig BigNozzle PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "RatRig BigNozzle TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "RatRig Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB98",
+    "name": "RatRig Generic ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFN99",
+    "name": "RatRig Generic PA",
+    "vendor": "Generic",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "GFN98",
+    "name": "RatRig Generic PA-CF",
+    "vendor": "Generic",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "RatRig Generic PC",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "RatRig Generic PCTG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "RatRig Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "RatRig Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL98",
+    "name": "RatRig Generic PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFS99",
+    "name": "RatRig Generic PVA",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "RatRig Generic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "re3D Greengate rPETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "re3D PC",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "re3D PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "re3D PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "re3D rPP",
+    "vendor": "Generic",
+    "type": "PP",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "SecKit Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB98",
+    "name": "SecKit Generic ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFN99",
+    "name": "SecKit Generic PA",
+    "vendor": "Generic",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "GFN98",
+    "name": "SecKit Generic PA-CF",
+    "vendor": "Generic",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "SecKit Generic PC",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "SecKit Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "SecKit Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL98",
+    "name": "SecKit Generic PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFS99",
+    "name": "SecKit Generic PVA",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "SecKit Generic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "3811508002",
+    "name": "Snapmaker ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "1682237920",
+    "name": "Snapmaker ABS Benchy",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "2742961008",
+    "name": "Snapmaker ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "168223792",
+    "name": "Snapmaker Dual ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "168223792",
+    "name": "Snapmaker Dual ABS Benchy",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "1247172706",
+    "name": "Snapmaker Dual ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "1207881278",
+    "name": "Snapmaker Dual Breakaway",
+    "vendor": "Generic",
+    "type": "Breakaway Support",
+    "color": ""
+  },
+  {
+    "id": "3493177425",
+    "name": "Snapmaker Dual PA-CF",
+    "vendor": "Generic",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "2128577941",
+    "name": "Snapmaker Dual PET",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "2209001062",
+    "name": "Snapmaker Dual PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "1042511226",
+    "name": "Snapmaker Dual PETG-CF",
+    "vendor": "Generic",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "1417031127",
+    "name": "Snapmaker Dual PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "200803790",
+    "name": "Snapmaker Dual PLA Eco",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "3503790988",
+    "name": "Snapmaker Dual PLA Matte",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "2029994346",
+    "name": "Snapmaker Dual PLA Metal",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "1181363872",
+    "name": "Snapmaker Dual PLA Silk",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "1702147325",
+    "name": "Snapmaker Dual PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "3104636980",
+    "name": "Snapmaker Dual PVA",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "2971656290",
+    "name": "Snapmaker Dual TPE",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "2971656290",
+    "name": "Snapmaker Dual TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "2971656290",
+    "name": "Snapmaker Dual TPU High-Flow",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "1223824394",
+    "name": "Snapmaker J1 ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "1223824394",
+    "name": "Snapmaker J1 ABS Benchy",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "144877656",
+    "name": "Snapmaker J1 ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "3492897526",
+    "name": "Snapmaker J1 Breakaway",
+    "vendor": "Generic",
+    "type": "Breakaway Support",
+    "color": ""
+  },
+  {
+    "id": "1210173120",
+    "name": "Snapmaker J1 PA-CF",
+    "vendor": "Generic",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "1009481135",
+    "name": "Snapmaker J1 PET",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "1172603684",
+    "name": "Snapmaker J1 PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "4235401834",
+    "name": "Snapmaker J1 PETG-CF",
+    "vendor": "Generic",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "377675245",
+    "name": "Snapmaker J1 PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "3383257822",
+    "name": "Snapmaker J1 PLA Eco",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "1192769348",
+    "name": "Snapmaker J1 PLA Matte",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "4012961186",
+    "name": "Snapmaker J1 PLA Metal",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "1528786603",
+    "name": "Snapmaker J1 PLA Silk",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "3806593857",
+    "name": "Snapmaker J1 PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "4227461134",
+    "name": "Snapmaker J1 PVA",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "4092268632",
+    "name": "Snapmaker J1 TPE",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "4092268632",
+    "name": "Snapmaker J1 TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "4092268632",
+    "name": "Snapmaker J1 TPU High-Flow",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "34931774250",
+    "name": "Snapmaker PA-CF",
+    "vendor": "Generic",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "2128577941",
+    "name": "Snapmaker PET",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "1895495477",
+    "name": "Snapmaker PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "10425112260",
+    "name": "Snapmaker PETG-CF",
+    "vendor": "Generic",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "14170311270",
+    "name": "Snapmaker PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "2008037900",
+    "name": "Snapmaker PLA Eco",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "20299943460",
+    "name": "Snapmaker PLA Metal",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "1655727393",
+    "name": "Snapmaker PLA Silk",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "17021473250",
+    "name": "Snapmaker PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "1344609062",
+    "name": "Snapmaker PVA",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "29716562900",
+    "name": "Snapmaker TPE",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "29716562900",
+    "name": "Snapmaker TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "297165629001",
+    "name": "Snapmaker TPU 95A",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "29716562900",
+    "name": "Snapmaker TPU High-Flow",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol SV06 ACE ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol SV06 ACE PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol SV06 ACE PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol SV06 ACE TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol SV06 Plus ACE ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol SV06 Plus ACE PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol SV06 Plus ACE PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol SV06 Plus ACE TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol SV07 PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol SV08 ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol SV08 PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol SV08 PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol SV08 TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol Zero ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol Zero PC",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol Zero PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol Zero PETG HS Nozzle",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol Zero PLA Basic",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol Zero PLA Basic HS Nozzle",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol Zero PLA Silk",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol Zero PLA Silk HS Nozzle",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Sovol Zero TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "SUNLU PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Tiertime Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB98",
+    "name": "Tiertime Generic ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFS97",
+    "name": "Tiertime Generic BVOH",
+    "vendor": "Generic",
+    "type": "BVOH",
+    "color": ""
+  },
+  {
+    "id": "GFR99",
+    "name": "Tiertime Generic EVA",
+    "vendor": "Generic",
+    "type": "EVA",
+    "color": ""
+  },
+  {
+    "id": "GFS98",
+    "name": "Tiertime Generic HIPS",
+    "vendor": "Generic",
+    "type": "HIPS",
+    "color": ""
+  },
+  {
+    "id": "GFN99",
+    "name": "Tiertime Generic PA",
+    "vendor": "Generic",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "GFN98",
+    "name": "Tiertime Generic PA-CF",
+    "vendor": "Generic",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "Tiertime Generic PC",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFG97",
+    "name": "Tiertime Generic PCTG",
+    "vendor": "Generic",
+    "type": "PCTG",
+    "color": ""
+  },
+  {
+    "id": "GFP99",
+    "name": "Tiertime Generic PE",
+    "vendor": "Generic",
+    "type": "PE",
+    "color": ""
+  },
+  {
+    "id": "GFP98",
+    "name": "Tiertime Generic PE-CF",
+    "vendor": "Generic",
+    "type": "PE-CF",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Tiertime Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG98",
+    "name": "Tiertime Generic PETG-CF",
+    "vendor": "Generic",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "GFR98",
+    "name": "Tiertime Generic PHA",
+    "vendor": "Generic",
+    "type": "PHA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Tiertime Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL95",
+    "name": "Tiertime Generic PLA High Speed",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL96",
+    "name": "Tiertime Generic PLA Silk",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL98",
+    "name": "Tiertime Generic PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFP97",
+    "name": "Tiertime Generic PP",
+    "vendor": "Generic",
+    "type": "PP",
+    "color": ""
+  },
+  {
+    "id": "GFP96",
+    "name": "Tiertime Generic PP-CF",
+    "vendor": "Generic",
+    "type": "PP-CF",
+    "color": ""
+  },
+  {
+    "id": "GFP95",
+    "name": "Tiertime Generic PP-GF",
+    "vendor": "Generic",
+    "type": "PP-GF",
+    "color": ""
+  },
+  {
+    "id": "GFN97",
+    "name": "Tiertime Generic PPA-CF",
+    "vendor": "Generic",
+    "type": "PPA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFN96",
+    "name": "Tiertime Generic PPA-GF",
+    "vendor": "Generic",
+    "type": "PPA-GF",
+    "color": ""
+  },
+  {
+    "id": "GFT97",
+    "name": "Tiertime Generic PPS",
+    "vendor": "Generic",
+    "type": "PPS",
+    "color": ""
+  },
+  {
+    "id": "GFT98",
+    "name": "Tiertime Generic PPS-CF",
+    "vendor": "Generic",
+    "type": "PPS-CF",
+    "color": ""
+  },
+  {
+    "id": "GFS99",
+    "name": "Tiertime Generic PVA",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Tiertime Generic SBS",
+    "vendor": "Generic",
+    "type": "SBS",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "Tiertime Generic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Tinmorry PETG-ECO",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "TwoTrees Generic 95A TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFL100",
+    "name": "TwoTrees Generic HS PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Volumic ABS Ultra",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Volumic ABS Ultra (Performance)",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Volumic ASA Ultra",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Volumic ASA Ultra (Performance)",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "Volumic FLEX93 Ultra",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "Volumic FLEX93 Ultra (Performance)",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFN99",
+    "name": "Volumic NYLON Ultra",
+    "vendor": "Generic",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "GFN99",
+    "name": "Volumic NYLON Ultra (Performance)",
+    "vendor": "Generic",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "Volumic PC",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "Volumic PC (Performance)",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Volumic PCTG Ultra (Performance)",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Volumic PETG Ultra",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Volumic PETG Ultra (Performance)",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG98",
+    "name": "Volumic PETG Ultra carbone",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG98",
+    "name": "Volumic PETG Ultra carbone (Performance)",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Volumic PLA Ultra",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Volumic PLA Ultra (Performance)",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Volumic PP Ultra",
+    "vendor": "Generic",
+    "type": "PP",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Volumic PP Ultra (Performance)",
+    "vendor": "Generic",
+    "type": "PP",
+    "color": ""
+  },
+  {
+    "id": "GFS99",
+    "name": "Volumic PVA",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "GFS99",
+    "name": "Volumic PVA-BVOH (Performance)",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Volumic UNIVERSAL Ultra",
+    "vendor": "Generic",
+    "type": "UNIV",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Volumic UNIVERSAL Ultra (Performance)",
+    "vendor": "Generic",
+    "type": "UNIV",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Vzbot Generic ABS",
+    "vendor": "Generic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB98",
+    "name": "Vzbot Generic ASA",
+    "vendor": "Generic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFN99",
+    "name": "Vzbot Generic PA",
+    "vendor": "Generic",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "GFN98",
+    "name": "Vzbot Generic PA-CF",
+    "vendor": "Generic",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "Vzbot Generic PC",
+    "vendor": "Generic",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Vzbot Generic PETG",
+    "vendor": "Generic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Vzbot Generic PLA",
+    "vendor": "Generic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL98",
+    "name": "Vzbot Generic PLA-CF",
+    "vendor": "Generic",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFS99",
+    "name": "Vzbot Generic PVA",
+    "vendor": "Generic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "Vzbot Generic TPU",
+    "vendor": "Generic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB00",
+    "name": "Afinia ABS",
+    "vendor": "Afinia",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB00",
+    "name": "Afinia ABS+",
+    "vendor": "Afinia",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFA00",
+    "name": "Afinia PLA",
+    "vendor": "Afinia",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFU01",
+    "name": "Afinia TPU",
+    "vendor": "Afinia",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB00",
+    "name": "Afinia Value ABS",
+    "vendor": "Afinia",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFA00",
+    "name": "Afinia Value PLA",
+    "vendor": "Afinia",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "AliZ003",
+    "name": "AliZ PA-CF",
+    "vendor": "Aliz",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "AliZ001",
+    "name": "AliZ PETG",
+    "vendor": "Aliz",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "AZ01-1",
+    "name": "AliZ PETG-CF",
+    "vendor": "Aliz",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "AZ01-2",
+    "name": "AliZ PETG-Metal",
+    "vendor": "Aliz",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "AliZ002",
+    "name": "AliZ PLA",
+    "vendor": "Aliz",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Anycubic ABS",
+    "vendor": "Anycubic",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFA99",
+    "name": "Anycubic ASA",
+    "vendor": "Anycubic",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "Anycubic PEBA 95A",
+    "vendor": "Anycubic",
+    "type": "PEBA",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Anycubic PETG",
+    "vendor": "Anycubic",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL92",
+    "name": "Anycubic PLA",
+    "vendor": "Anycubic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL98",
+    "name": "Anycubic PLA Glow",
+    "vendor": "Anycubic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL96",
+    "name": "Anycubic PLA High Speed",
+    "vendor": "Anycubic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Anycubic PLA Luminous",
+    "vendor": "Anycubic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL95",
+    "name": "Anycubic PLA Matte",
+    "vendor": "Anycubic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL97",
+    "name": "Anycubic PLA SE",
+    "vendor": "Anycubic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Anycubic PLA Silk",
+    "vendor": "Anycubic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL94",
+    "name": "Anycubic PLA Slik",
+    "vendor": "Anycubic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL93",
+    "name": "Anycubic PLA+",
+    "vendor": "Anycubic",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFPVA",
+    "name": "Anycubic PVA",
+    "vendor": "Anycubic",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "Anycubic TPU",
+    "vendor": "Anycubic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFTPU 95A",
+    "name": "Anycubic TPU 95A",
+    "vendor": "Anycubic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFTPU for ACE",
+    "name": "Anycubic TPU for ACE",
+    "vendor": "Anycubic",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "P39db358",
+    "name": "Artillery ABS",
+    "vendor": "Artillery",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "P87436f6",
+    "name": "Artillery ASA",
+    "vendor": "Artillery",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Artillery PA",
+    "vendor": "Artillery",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Artillery PA-CF",
+    "vendor": "Artillery",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Artillery PC",
+    "vendor": "Artillery",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "P11851ba",
+    "name": "Artillery PET",
+    "vendor": "Artillery",
+    "type": "PET",
+    "color": ""
+  },
+  {
+    "id": "P284941e",
+    "name": "Artillery PETG",
+    "vendor": "Artillery",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "P284941e",
+    "name": "Artillery PETG Basic",
+    "vendor": "Artillery",
+    "type": "PETG Basic",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Artillery PETG-CF",
+    "vendor": "Artillery",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "Pfcf9c4c",
+    "name": "Artillery PLA",
+    "vendor": "Artillery",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "Pfcf9c4c",
+    "name": "Artillery PLA Basic",
+    "vendor": "Artillery",
+    "type": "PLA Basic",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Artillery PLA Basic+",
+    "vendor": "Artillery",
+    "type": "PLA Basic+",
+    "color": ""
+  },
+  {
+    "id": "Pfcf9c4c",
+    "name": "Artillery PLA Matte",
+    "vendor": "Artillery",
+    "type": "PLA Matte",
+    "color": ""
+  },
+  {
+    "id": "Pfcf9c4c",
+    "name": "Artillery PLA Silk",
+    "vendor": "Artillery",
+    "type": "PLA Silk",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Artillery PLA Tough",
+    "vendor": "Artillery",
+    "type": "PLA Tough",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Artillery PLA-CF",
+    "vendor": "Artillery",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "P8163162",
+    "name": "Artillery PVA",
+    "vendor": "Artillery",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Artillery TPU",
+    "vendor": "Artillery",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "OGFB00",
+    "name": "Bambu ABS",
+    "vendor": "Bambu Lab",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "OGFB50",
+    "name": "Bambu ABS-GF",
+    "vendor": "Bambu Lab",
+    "type": "ABS-GF",
+    "color": ""
+  },
+  {
+    "id": "OGFB01",
+    "name": "Bambu ASA",
+    "vendor": "Bambu Lab",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "OGFB02",
+    "name": "Bambu ASA-Aero",
+    "vendor": "Bambu Lab",
+    "type": "ASA-AERO",
+    "color": ""
+  },
+  {
+    "id": "OGFB51",
+    "name": "Bambu ASA-CF",
+    "vendor": "Bambu Lab",
+    "type": "ASA-CF",
+    "color": ""
+  },
+  {
+    "id": "OGFN03",
+    "name": "Bambu PA-CF",
+    "vendor": "Bambu Lab",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "OGFN05",
+    "name": "Bambu PA6-CF",
+    "vendor": "Bambu Lab",
+    "type": "PA6-CF",
+    "color": ""
+  },
+  {
+    "id": "OGFN08",
+    "name": "Bambu PA6-GF",
+    "vendor": "Bambu Lab",
+    "type": "PA-GF",
+    "color": ""
+  },
+  {
+    "id": "OGFN04",
+    "name": "Bambu PAHT-CF",
+    "vendor": "Bambu Lab",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "OGFC00",
+    "name": "Bambu PC",
+    "vendor": "Bambu Lab",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "OGFC01",
+    "name": "Bambu PC FR",
+    "vendor": "Bambu Lab",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "OGFT01",
+    "name": "Bambu PET-CF",
+    "vendor": "Bambu Lab",
+    "type": "PET-CF",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Bambu PETG",
+    "vendor": "Bambu Lab",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "OGFG00",
+    "name": "Bambu PETG Basic",
+    "vendor": "Bambu Lab",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "OGFG02",
+    "name": "Bambu PETG HF",
+    "vendor": "Bambu Lab",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "OGFG01",
+    "name": "Bambu PETG Translucent",
+    "vendor": "Bambu Lab",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "OGFG50",
+    "name": "Bambu PETG-CF",
+    "vendor": "Bambu Lab",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Bambu PLA",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFA11",
+    "name": "Bambu PLA Aero",
+    "vendor": "Bambu Lab",
+    "type": "PLA-AERO",
+    "color": ""
+  },
+  {
+    "id": "OGFA00",
+    "name": "Bambu PLA Basic",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFA13",
+    "name": "Bambu PLA Dynamic",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFA15",
+    "name": "Bambu PLA Galaxy",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFA12",
+    "name": "Bambu PLA Glow",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFA03",
+    "name": "Bambu PLA Impact",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA18",
+    "name": "Bambu PLA Lite",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFA07",
+    "name": "Bambu PLA Marble",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFA01",
+    "name": "Bambu PLA Matte",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFA02",
+    "name": "Bambu PLA Metal",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFA05",
+    "name": "Bambu PLA Silk",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFA06",
+    "name": "Bambu PLA Silk+",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFA08",
+    "name": "Bambu PLA Sparkle",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFA09",
+    "name": "Bambu PLA Tough",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA10",
+    "name": "Bambu PLA Tough+",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA17",
+    "name": "Bambu PLA Translucent",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFA16",
+    "name": "Bambu PLA Wood",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFA50",
+    "name": "Bambu PLA-CF",
+    "vendor": "Bambu Lab",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "OGFN06",
+    "name": "Bambu PPA-CF",
+    "vendor": "Bambu Lab",
+    "type": "PPA-CF",
+    "color": ""
+  },
+  {
+    "id": "OGFT02",
+    "name": "Bambu PPS-CF",
+    "vendor": "Bambu Lab",
+    "type": "PPS-CF",
+    "color": ""
+  },
+  {
+    "id": "OGFS04",
+    "name": "Bambu PVA",
+    "vendor": "Bambu Lab",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "OGFS06",
+    "name": "Bambu Support for ABS",
+    "vendor": "Bambu Lab",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "OGFS03",
+    "name": "Bambu Support For PA/PET",
+    "vendor": "Bambu Lab",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "OGFS02",
+    "name": "Bambu Support For PLA",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFS05",
+    "name": "Bambu Support For PLA/PETG",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFS01",
+    "name": "Bambu Support G",
+    "vendor": "Bambu Lab",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "OGFS00",
+    "name": "Bambu Support W",
+    "vendor": "Bambu Lab",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFU04",
+    "name": "Bambu TPU 85A",
+    "vendor": "Bambu Lab",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFU03",
+    "name": "Bambu TPU 90A",
+    "vendor": "Bambu Lab",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "OGFU01",
+    "name": "Bambu TPU 95A",
+    "vendor": "Bambu Lab",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "OGFU00",
+    "name": "Bambu TPU 95A HF",
+    "vendor": "Bambu Lab",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFU02",
+    "name": "Bambu TPU for AMS",
+    "vendor": "Bambu Lab",
+    "type": "TPU-AMS",
+    "color": ""
+  },
+  {
+    "id": "BABB00",
+    "name": "BETA ABS",
+    "vendor": "BETA",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "BASB00",
+    "name": "BETA ASA",
+    "vendor": "BETA",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "BHIB00",
+    "name": "BETA HIPS",
+    "vendor": "BETA",
+    "type": "HIPS",
+    "color": ""
+  },
+  {
+    "id": "BPAB00",
+    "name": "BETA PAHT-CF",
+    "vendor": "BETA",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "BPBB00",
+    "name": "BETA PEBA 90A",
+    "vendor": "BETA",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "BPGB00",
+    "name": "BETA PETG",
+    "vendor": "BETA",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "BPGB02",
+    "name": "BETA PETG Fluorescence",
+    "vendor": "BETA",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "BPGB03",
+    "name": "BETA PETG Glitter",
+    "vendor": "BETA",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "BPGB04",
+    "name": "BETA PETG Glow",
+    "vendor": "BETA",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "BPGB05",
+    "name": "BETA PETG Gradient",
+    "vendor": "BETA",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "BPGB01",
+    "name": "BETA PETG Heat Color Change",
+    "vendor": "BETA",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "BPGB06",
+    "name": "BETA PETG HF",
+    "vendor": "BETA",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "BPGB07",
+    "name": "BETA PETG Marble",
+    "vendor": "BETA",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "BPGB08",
+    "name": "BETA PETG Matte",
+    "vendor": "BETA",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "BPGB09",
+    "name": "BETA PETG Metallic",
+    "vendor": "BETA",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "BPGB10",
+    "name": "BETA PETG Transparent",
+    "vendor": "BETA",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "BPGB11",
+    "name": "BETA PETG UV Color Change",
+    "vendor": "BETA",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "BPGB12",
+    "name": "BETA PETG-CF",
+    "vendor": "BETA",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "BPGB13",
+    "name": "BETA PETG-GF",
+    "vendor": "BETA",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "BPLB00",
+    "name": "BETA PLA Basic",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB02",
+    "name": "BETA PLA Chameleon",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB04",
+    "name": "BETA PLA Fluorescence",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB05",
+    "name": "BETA PLA Glitter",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB06",
+    "name": "BETA PLA Glow",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB07",
+    "name": "BETA PLA Gradient",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB03",
+    "name": "BETA PLA Heat Color Change",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB20",
+    "name": "BETA PLA High Speed",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB18",
+    "name": "BETA PLA High Temp",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB08",
+    "name": "BETA PLA Marble",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB09",
+    "name": "BETA PLA Matte",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB10",
+    "name": "BETA PLA Metal",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB11",
+    "name": "BETA PLA Metallic",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB12",
+    "name": "BETA PLA PRO",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB13",
+    "name": "BETA PLA Silk",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB01",
+    "name": "BETA PLA Silk+",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB14",
+    "name": "BETA PLA Transparent",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB15",
+    "name": "BETA PLA UV Color Change",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB19",
+    "name": "BETA PLA Wood",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB16",
+    "name": "BETA PLA Youth",
+    "vendor": "BETA",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "BPLB17",
+    "name": "BETA PLA-CF",
+    "vendor": "BETA",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "BTUB00",
+    "name": "BETA TPU 90A",
+    "vendor": "BETA",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "BTUB02",
+    "name": "BETA TPU 95A",
+    "vendor": "BETA",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "BTUB03",
+    "name": "BETA TPU 98A",
+    "vendor": "BETA",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "BTUB01",
+    "name": "BETA TPU Matte",
+    "vendor": "BETA",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "CXABSB01",
+    "name": "COEX ABS",
+    "vendor": "COEX 3D",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "CXABPB09",
+    "name": "COEX ABS PRIME",
+    "vendor": "COEX 3D",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "CXASAB04",
+    "name": "COEX ASA PRIME",
+    "vendor": "COEX 3D",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "CXPACB23",
+    "name": "COEX NYLEX PA6-CF",
+    "vendor": "COEX 3D",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "CXPAUB21",
+    "name": "COEX NYLEX UNFILLED",
+    "vendor": "COEX 3D",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "CXPCTB15",
+    "name": "COEX PCTG PRIME",
+    "vendor": "COEX 3D",
+    "type": "PCTG",
+    "color": ""
+  },
+  {
+    "id": "CXPETB13",
+    "name": "COEX PETG",
+    "vendor": "COEX 3D",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "CXPLAB02",
+    "name": "COEX PLA",
+    "vendor": "COEX 3D",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "CXPLAB08",
+    "name": "COEX PLA PRIME",
+    "vendor": "COEX 3D",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "CXPLSB03",
+    "name": "COEX PLA+Silk",
+    "vendor": "COEX 3D",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "CX30DB20",
+    "name": "COEX TPE 30D",
+    "vendor": "COEX 3D",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "CX40DB20",
+    "name": "COEX TPE 40D",
+    "vendor": "COEX 3D",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "CX60DB19",
+    "name": "COEX TPE 60D",
+    "vendor": "COEX 3D",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "CX60AB17",
+    "name": "COEX TPU 60A",
+    "vendor": "COEX 3D",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "CoLiDo ABS",
+    "vendor": "CoLiDo",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "CoLiDo Generic ABS",
+    "vendor": "CoLiDo",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "CoLiDo Generic PETG",
+    "vendor": "CoLiDo",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFA99",
+    "name": "CoLiDo Generic PLA",
+    "vendor": "CoLiDo",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "CoLiDo Generic TPU",
+    "vendor": "CoLiDo",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "CoLiDo PETG",
+    "vendor": "CoLiDo",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFA99",
+    "name": "CoLiDo PLA",
+    "vendor": "CoLiDo",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA99",
+    "name": "CoLiDo PLA Silk",
+    "vendor": "CoLiDo",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA99",
+    "name": "CoLiDo PLA+",
+    "vendor": "CoLiDo",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "07001",
+    "name": "Creality Generic ABS",
+    "vendor": "Creality",
+    "type": "ABS",
+    "color": "\"\""
+  },
+  {
+    "id": "19001",
+    "name": "Creality Generic ASA",
+    "vendor": "Creality",
+    "type": "ASA",
+    "color": "\"\""
+  },
+  {
+    "id": "11001",
+    "name": "Creality Generic PA",
+    "vendor": "Creality",
+    "type": "PA",
+    "color": "\"\""
+  },
+  {
+    "id": "06001",
+    "name": "Creality Generic PETG",
+    "vendor": "Creality",
+    "type": "PETG",
+    "color": "\"\""
+  },
+  {
+    "id": "10001",
+    "name": "Creality Generic TPU",
+    "vendor": "Creality",
+    "type": "TPU",
+    "color": "\"\""
+  },
+  {
+    "id": "03001",
+    "name": "Creality Hyper ABS",
+    "vendor": "Creality",
+    "type": "ABS",
+    "color": "\"\""
+  },
+  {
+    "id": "01001",
+    "name": "Creality Hyper PLA",
+    "vendor": "Creality",
+    "type": "PLA",
+    "color": "\"\""
+  },
+  {
+    "id": "02001",
+    "name": "Creality Hyper PLA-CF",
+    "vendor": "Creality",
+    "type": "PLA-CF",
+    "color": "\"\""
+  },
+  {
+    "id": "05001",
+    "name": "Creality Silk PLA",
+    "vendor": "Creality",
+    "type": "PLA",
+    "color": "\"\""
+  },
+  {
+    "id": "P510cfb0",
+    "name": "Cubicon ABS",
+    "vendor": "Cubicon",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "P510cfb1",
+    "name": "Cubicon ABS-A100",
+    "vendor": "Cubicon",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "P510cfb2",
+    "name": "Cubicon ABSk",
+    "vendor": "Cubicon",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "P510cfd0",
+    "name": "Cubicon PA-CF",
+    "vendor": "Cubicon",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "P510cfd0",
+    "name": "Cubicon PC",
+    "vendor": "Cubicon",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "P510cfc0",
+    "name": "Cubicon PETG",
+    "vendor": "Cubicon",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "P510cfa0",
+    "name": "Cubicon PLA",
+    "vendor": "Cubicon",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "P510cfa1",
+    "name": "Cubicon PLA+",
+    "vendor": "Cubicon",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "P510cfa2",
+    "name": "Cubicon PLAi21",
+    "vendor": "Cubicon",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "DeltaMaker Brand PLA",
+    "vendor": "DeltaMaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFB01",
+    "name": "Elas ASA",
+    "vendor": "Elas",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "OGFG00",
+    "name": "Elas PETG Basic",
+    "vendor": "Elas",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "OGFA00",
+    "name": "Elas PLA Basic",
+    "vendor": "Elas",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFA00",
+    "name": "Elas PLA Pro",
+    "vendor": "Elas",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "EABSB00",
+    "name": "Elegoo ABS",
+    "vendor": "Elegoo",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "OGFE06",
+    "name": "Elegoo ASA",
+    "vendor": "Elegoo",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "EPAHTB00",
+    "name": "Elegoo PAHT-CF",
+    "vendor": "Elegoo",
+    "type": "PAHT",
+    "color": ""
+  },
+  {
+    "id": "EPCB00",
+    "name": "Elegoo PC",
+    "vendor": "Elegoo",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "EPCB00",
+    "name": "Elegoo PC-FR",
+    "vendor": "Elegoo",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "EPETGB00",
+    "name": "Elegoo PETG",
+    "vendor": "Elegoo",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "OGFE02",
+    "name": "Elegoo PETG PRO",
+    "vendor": "Elegoo",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "EPETGB00",
+    "name": "Elegoo PETG Translucent",
+    "vendor": "Elegoo",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "OGFE03",
+    "name": "Elegoo PETG-CF",
+    "vendor": "Elegoo",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "EPETGB00",
+    "name": "Elegoo PETG-GF",
+    "vendor": "Elegoo",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "OGFE04",
+    "name": "Elegoo PLA",
+    "vendor": "Elegoo",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFE04",
+    "name": "Elegoo PLA Basic",
+    "vendor": "Elegoo",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFE04",
+    "name": "Elegoo PLA Galaxy",
+    "vendor": "Elegoo",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFE04",
+    "name": "Elegoo PLA Marble",
+    "vendor": "Elegoo",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "EPLAMB00",
+    "name": "Elegoo PLA Matte",
+    "vendor": "Elegoo",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFE04",
+    "name": "Elegoo PLA PRO",
+    "vendor": "Elegoo",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "EPLASB00",
+    "name": "Elegoo PLA Silk",
+    "vendor": "Elegoo",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFE04",
+    "name": "Elegoo PLA Sparkle",
+    "vendor": "Elegoo",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFE04",
+    "name": "Elegoo PLA Wood",
+    "vendor": "Elegoo",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFE04",
+    "name": "Elegoo PLA+",
+    "vendor": "Elegoo",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "EPLACFB00",
+    "name": "Elegoo PLA-CF",
+    "vendor": "Elegoo",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "OGFE01",
+    "name": "Elegoo Rapid PETG",
+    "vendor": "Elegoo",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "OGFE01",
+    "name": "Elegoo Rapid PETG+",
+    "vendor": "Elegoo",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "OGFE05",
+    "name": "Elegoo Rapid PLA+",
+    "vendor": "Elegoo",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "ETPUB00",
+    "name": "Elegoo Rapid TPU 95A",
+    "vendor": "Elegoo",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "OGFE07",
+    "name": "Elegoo TPU 95A",
+    "vendor": "Elegoo",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB98",
+    "name": "Generic ASA",
+    "vendor": "Elegoo",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Generic PETG PRO",
+    "vendor": "Elegoo",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Generic PLA Matte",
+    "vendor": "Elegoo",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFSEP017",
+    "name": "Eolas Prints ABS",
+    "vendor": "Eolas Prints",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFSEP018",
+    "name": "Eolas Prints ASA",
+    "vendor": "Eolas Prints",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFSEP010",
+    "name": "Eolas Prints PETG",
+    "vendor": "Eolas Prints",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFSEP012",
+    "name": "Eolas Prints PETG Transition",
+    "vendor": "Eolas Prints",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFSEP011",
+    "name": "Eolas Prints PETG UV Resistant",
+    "vendor": "Eolas Prints",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFSEP008",
+    "name": "Eolas Prints PLA Antibacterial",
+    "vendor": "Eolas Prints",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFSEP005",
+    "name": "Eolas Prints PLA High Speed",
+    "vendor": "Eolas Prints",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFSEP006",
+    "name": "Eolas Prints PLA INGEO 850",
+    "vendor": "Eolas Prints",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFSEP007",
+    "name": "Eolas Prints PLA INGEO 870",
+    "vendor": "Eolas Prints",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFSEP002",
+    "name": "Eolas Prints PLA Matte",
+    "vendor": "Eolas Prints",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFSEP004",
+    "name": "Eolas Prints PLA Neon",
+    "vendor": "Eolas Prints",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFSEP001",
+    "name": "Eolas Prints PLA Premium",
+    "vendor": "Eolas Prints",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFSEP003",
+    "name": "Eolas Prints PLA Silk",
+    "vendor": "Eolas Prints",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFSEP009",
+    "name": "Eolas Prints PLA Transition",
+    "vendor": "Eolas Prints",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFSEP015",
+    "name": "Eolas Prints TPU D60 UV Resistant",
+    "vendor": "Eolas Prints",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFSEP013",
+    "name": "Eolas Prints TPU Flex 93A",
+    "vendor": "Eolas Prints",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFSEP014",
+    "name": "Eolas Prints TPU Flex D53",
+    "vendor": "Eolas Prints",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFSEP016",
+    "name": "Eolas Prints TPU Transition",
+    "vendor": "Eolas Prints",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "EFL91",
+    "name": "Eryone ABS",
+    "vendor": "Eryone",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "EFL81",
+    "name": "Eryone ABS-CF",
+    "vendor": "Eryone",
+    "type": "ABS-CF",
+    "color": ""
+  },
+  {
+    "id": "EFL92",
+    "name": "Eryone ASA",
+    "vendor": "Eryone",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "EFL82",
+    "name": "Eryone ASA-CF",
+    "vendor": "Eryone",
+    "type": "ASA-CF",
+    "color": ""
+  },
+  {
+    "id": "EFL71",
+    "name": "Eryone PA",
+    "vendor": "Eryone",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "EFL72",
+    "name": "Eryone PA-CF",
+    "vendor": "Eryone",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "EFL73",
+    "name": "Eryone PA-GF",
+    "vendor": "Eryone",
+    "type": "PA-GF",
+    "color": ""
+  },
+  {
+    "id": "EFL93",
+    "name": "Eryone PETG",
+    "vendor": "Eryone",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "EFL43",
+    "name": "Eryone PETG-CF",
+    "vendor": "Eryone",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "EFL90",
+    "name": "Eryone PLA",
+    "vendor": "Eryone",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "EFL40",
+    "name": "Eryone PLA-CF",
+    "vendor": "Eryone",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "EFL43",
+    "name": "Eryone PP",
+    "vendor": "Eryone",
+    "type": "PP",
+    "color": ""
+  },
+  {
+    "id": "EFL33",
+    "name": "Eryone PP-CF",
+    "vendor": "Eryone",
+    "type": "PP-CF",
+    "color": ""
+  },
+  {
+    "id": "EFL941",
+    "name": "Eryone Silk PLA",
+    "vendor": "Eryone",
+    "type": "PLA Silk",
+    "color": ""
+  },
+  {
+    "id": "EFL95",
+    "name": "Eryone TPU",
+    "vendor": "Eryone",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "ESN02",
+    "name": "eSUN ePLA-LW",
+    "vendor": "eSUN",
+    "type": "PLA-AERO",
+    "color": ""
+  },
+  {
+    "id": "ESN03",
+    "name": "eSUN PETG",
+    "vendor": "eSUN",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "OGFL03",
+    "name": "eSUN PLA+",
+    "vendor": "eSUN",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFL04",
+    "name": "eSUN PLA-Basic",
+    "vendor": "eSUN",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFL06",
+    "name": "eSUN PLA-Marble",
+    "vendor": "eSUN",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFL05",
+    "name": "eSUN PLA-Matte",
+    "vendor": "eSUN",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "FDPLAST01",
+    "name": "FDplast ABS",
+    "vendor": "FDplast",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "FDPLAST02",
+    "name": "FDplast HIPS",
+    "vendor": "FDplast",
+    "type": "HIPS",
+    "color": ""
+  },
+  {
+    "id": "FDPLAST03",
+    "name": "FDplast PETG",
+    "vendor": "FDplast",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "FDPLAST04",
+    "name": "FDplast PLA",
+    "vendor": "FDplast",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "FDPLAST05",
+    "name": "FDplast SBS",
+    "vendor": "FDplast",
+    "type": "SBS",
+    "color": ""
+  },
+  {
+    "id": "FDPLAST06",
+    "name": "FDplast TPU",
+    "vendor": "FDplast",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "FILL3D006",
+    "name": "FILL3D PA",
+    "vendor": "FILL3D",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "FILL3D003",
+    "name": "FILL3D PETG",
+    "vendor": "FILL3D",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "FILL3D007",
+    "name": "FILL3D PETG CF",
+    "vendor": "FILL3D",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "FILL3D002",
+    "name": "FILL3D PLA Basic",
+    "vendor": "FILL3D",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "FILL3D001",
+    "name": "FILL3D PLA Turbo",
+    "vendor": "FILL3D",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "FILL3D004",
+    "name": "FILL3D PP",
+    "vendor": "FILL3D",
+    "type": "PP",
+    "color": ""
+  },
+  {
+    "id": "FILL3D005",
+    "name": "FILL3D PPCF",
+    "vendor": "FILL3D",
+    "type": "PP",
+    "color": ""
+  },
+  {
+    "id": "FFF02",
+    "name": "Flashforge ABS",
+    "vendor": "Flashforge",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "FFF03",
+    "name": "Flashforge PETG",
+    "vendor": "Flashforge",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "FFF01",
+    "name": "Flashforge PLA",
+    "vendor": "Flashforge",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FlyingBear ABS",
+    "vendor": "FlyingBear",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFN98",
+    "name": "FlyingBear PA-CF",
+    "vendor": "FlyingBear",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "FlyingBear PC",
+    "vendor": "FlyingBear",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "FlyingBear PETG",
+    "vendor": "FlyingBear",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "FlyingBear PETG Basic",
+    "vendor": "FlyingBear",
+    "type": "PETG Basic",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "FlyingBear PLA",
+    "vendor": "FlyingBear",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "FlyingBear PLA Basic",
+    "vendor": "FlyingBear",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "FlyingBear PLA Hyper",
+    "vendor": "FlyingBear",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "FlyingBear TPU",
+    "vendor": "FlyingBear",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "FlyingBear TPU Basic",
+    "vendor": "FlyingBear",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Flashforge ASA-CF",
+    "vendor": "FusRock",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Flashforge PA12-CF",
+    "vendor": "FusRock",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Flashforge PA6-CF",
+    "vendor": "FusRock",
+    "type": "PA6-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Flashforge PA66-CF",
+    "vendor": "FusRock",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Flashforge PET-CF",
+    "vendor": "FusRock",
+    "type": "PET-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Flashforge PPA-CF",
+    "vendor": "FusRock",
+    "type": "PPA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Flashforge PPA-GF",
+    "vendor": "FusRock",
+    "type": "PPA-GF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Flashforge PPS-CF",
+    "vendor": "FusRock",
+    "type": "PPS-CF",
+    "color": ""
+  },
+  {
+    "id": "OGFR00",
+    "name": "FusRock ABS-GF",
+    "vendor": "FusRock",
+    "type": "ABS-GF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FusRock Generic NexPA-CF25",
+    "vendor": "FusRock",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FusRock Generic PAHT-CF",
+    "vendor": "FusRock",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FusRock Generic PAHT-GF",
+    "vendor": "FusRock",
+    "type": "PAHT-GF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FusRock Generic PET-CF",
+    "vendor": "FusRock",
+    "type": "PET-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FusRock Generic PET-GF",
+    "vendor": "FusRock",
+    "type": "PET-GF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FusRock Generic S-Multi",
+    "vendor": "FusRock",
+    "type": "S-Multi",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "FusRock Generic S-PAHT",
+    "vendor": "FusRock",
+    "type": "S-PAHT",
+    "color": ""
+  },
+  {
+    "id": "OGFGG300",
+    "name": "GreenGate3D PETG",
+    "vendor": "GreenGate3D",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "HATCHBOX ABS",
+    "vendor": "HATCHBOX",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "HATCHBOX PETG",
+    "vendor": "HATCHBOX",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "HATCHBOX PLA",
+    "vendor": "HATCHBOX",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "FlyingBear PLA Hyper",
+    "vendor": "InfiMech",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "InfiMech ABS",
+    "vendor": "InfiMech",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFN98",
+    "name": "InfiMech PA-CF",
+    "vendor": "InfiMech",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "InfiMech PC",
+    "vendor": "InfiMech",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "InfiMech PETG",
+    "vendor": "InfiMech",
+    "type": "PETG Basic",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "InfiMech PLA",
+    "vendor": "InfiMech",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "InfiMech PLA Basic",
+    "vendor": "InfiMech",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "InfiMech PLA Hyper",
+    "vendor": "InfiMech",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "InfiMech TPU",
+    "vendor": "InfiMech",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "InfiMech TPU Basic",
+    "vendor": "InfiMech",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "IQM1",
+    "name": "Fiberthree PACF Pro P1",
+    "vendor": "iQ Materials",
+    "type": "PACF Pro",
+    "color": "#000000"
+  },
+  {
+    "id": "IQM7",
+    "name": "Fiberthree PACF Pro P2",
+    "vendor": "iQ Materials",
+    "type": "PACF Pro",
+    "color": "#000000"
+  },
+  {
+    "id": "IQM1",
+    "name": "Grauts HPP4GF25 P1",
+    "vendor": "iQ Materials",
+    "type": "HPP4GF25",
+    "color": "#000000"
+  },
+  {
+    "id": "IQM2",
+    "name": "Material4Print ABS Natur P1",
+    "vendor": "iQ Materials",
+    "type": "ABS Material4Print Natur",
+    "color": "#FFFFFF"
+  },
+  {
+    "id": "IQM3",
+    "name": "Polymaker PETG Polymax black P1",
+    "vendor": "iQ Materials",
+    "type": "PETG Polymax",
+    "color": "#000000"
+  },
+  {
+    "id": "IQM1011",
+    "name": "VXL90 TiQ2 P2",
+    "vendor": "iQ Materials",
+    "type": "VXL90 Xioneer",
+    "color": "#FFFFFF"
+  },
+  {
+    "id": "LHF_abs",
+    "name": "LHS ABS",
+    "vendor": "LH Stinger",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "LHF_asa",
+    "name": "LHS ASA",
+    "vendor": "LH Stinger",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "LHF_pccf",
+    "name": "LHS PC CF",
+    "vendor": "LH Stinger",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "LHF_pctg",
+    "name": "LHS PCTG",
+    "vendor": "LH Stinger",
+    "type": "PCTG",
+    "color": ""
+  },
+  {
+    "id": "LHF_petg",
+    "name": "LHS PETG",
+    "vendor": "LH Stinger",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "LHF_pla",
+    "name": "LHS PLA",
+    "vendor": "LH Stinger",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "LHF_ptpu_pl",
+    "name": "LHS TPU",
+    "vendor": "LH Stinger",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "LHF_ftpuf",
+    "name": "LHS TPU Foamy 78A",
+    "vendor": "LH Stinger",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "NIT01",
+    "name": "NIT ABS",
+    "vendor": "NIT",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "NIT03",
+    "name": "NIT PETG",
+    "vendor": "NIT",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "NIT02",
+    "name": "NIT PLA",
+    "vendor": "NIT",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFNMK00",
+    "name": "Numakers PLA+",
+    "vendor": "Numakers",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFB00",
+    "name": "Arena ABS",
+    "vendor": "Orca Arena",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFN03",
+    "name": "Arena PA-CF",
+    "vendor": "Orca Arena",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFN04",
+    "name": "Arena PAHT-CF",
+    "vendor": "Orca Arena",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFC00",
+    "name": "Arena PC",
+    "vendor": "Orca Arena",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFT01",
+    "name": "Arena PET-CF",
+    "vendor": "Orca Arena",
+    "type": "PET-CF",
+    "color": ""
+  },
+  {
+    "id": "GFG00",
+    "name": "Arena PETG Basic",
+    "vendor": "Orca Arena",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFG50",
+    "name": "Arena PETG-CF",
+    "vendor": "Orca Arena",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "GFA00",
+    "name": "Arena PLA Basic",
+    "vendor": "Orca Arena",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA03",
+    "name": "Arena PLA Impact",
+    "vendor": "Orca Arena",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA07",
+    "name": "Arena PLA Marble",
+    "vendor": "Orca Arena",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA01",
+    "name": "Arena PLA Matte",
+    "vendor": "Orca Arena",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA02",
+    "name": "Arena PLA Metal",
+    "vendor": "Orca Arena",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA05",
+    "name": "Arena PLA Silk",
+    "vendor": "Orca Arena",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA08",
+    "name": "Arena PLA Sparkle",
+    "vendor": "Orca Arena",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA09",
+    "name": "Arena PLA Tough",
+    "vendor": "Orca Arena",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA50",
+    "name": "Arena PLA-CF",
+    "vendor": "Orca Arena",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFS01",
+    "name": "Arena Support G",
+    "vendor": "Orca Arena",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "GFS00",
+    "name": "Arena Support W",
+    "vendor": "Orca Arena",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFU01",
+    "name": "Arena TPU 95A",
+    "vendor": "Orca Arena",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFG98",
+    "name": "OrcaArena Generic PETG-CF",
+    "vendor": "Orca Arena",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Other ABS",
+    "vendor": "Other",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFN98",
+    "name": "Other PA-CF",
+    "vendor": "Other",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFC99",
+    "name": "Other PC",
+    "vendor": "Other",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "Other PETG",
+    "vendor": "Other",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Other PLA",
+    "vendor": "Other",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Other PLA Hyper",
+    "vendor": "Other",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "Other TPU",
+    "vendor": "Other",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Overture ABS",
+    "vendor": "Overture",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "OVTABS08",
+    "name": "Overture ABS Basic",
+    "vendor": "Overture",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFOT006",
+    "name": "Overture Air PLA",
+    "vendor": "Overture",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFOT009",
+    "name": "Overture ASA",
+    "vendor": "Overture",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFOT003",
+    "name": "Overture Easy PLA",
+    "vendor": "Overture",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFL05",
+    "name": "Overture Matte PLA",
+    "vendor": "Overture",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFL04",
+    "name": "Overture PLA",
+    "vendor": "Overture",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFOT001",
+    "name": "Overture PLA Pro",
+    "vendor": "Overture",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFOT004",
+    "name": "Overture Rock PLA",
+    "vendor": "Overture",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFOT002",
+    "name": "Overture Silk PLA",
+    "vendor": "Overture",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFOT005",
+    "name": "Overture Super PLA+",
+    "vendor": "Overture",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFOT008",
+    "name": "Overture TPU",
+    "vendor": "Overture",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Peopoly Lancer ABS-GF",
+    "vendor": "Peopoly",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Peopoly Lancer PET-CF",
+    "vendor": "Peopoly",
+    "type": "PET-CF",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Peopoly Lancer PETG-C",
+    "vendor": "Peopoly",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "Peopoly Lancer PLA-C",
+    "vendor": "Peopoly",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFL52",
+    "name": "Fiberon PA12-CF",
+    "vendor": "Polymaker",
+    "type": "PA-CF",
+    "color": ""
+  },
+  {
+    "id": "OGFL50",
+    "name": "Fiberon PA6-CF",
+    "vendor": "Polymaker",
+    "type": "PA6-CF",
+    "color": ""
+  },
+  {
+    "id": "OGFL51",
+    "name": "Fiberon PA6-GF",
+    "vendor": "Polymaker",
+    "type": "PA-GF",
+    "color": ""
+  },
+  {
+    "id": "OGFL53",
+    "name": "Fiberon PA612-CF",
+    "vendor": "Polymaker",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "OGFL54",
+    "name": "Fiberon PET-CF",
+    "vendor": "Polymaker",
+    "type": "PET-CF",
+    "color": ""
+  },
+  {
+    "id": "OGFL06",
+    "name": "Fiberon PETG-ESD",
+    "vendor": "Polymaker",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "OGFL55",
+    "name": "Fiberon PETG-rCF",
+    "vendor": "Polymaker",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "OGFPM016",
+    "name": "Panchroma CoPE",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFPM001",
+    "name": "Panchroma PLA",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFPM008",
+    "name": "Panchroma PLA Celestial",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFPM007",
+    "name": "Panchroma PLA Galaxy",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFPM010",
+    "name": "Panchroma PLA Glow",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFPM011",
+    "name": "Panchroma PLA Luminous",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFPM003",
+    "name": "Panchroma PLA Marble",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFPM002",
+    "name": "Panchroma PLA Matte",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFPM012",
+    "name": "Panchroma PLA Metallic",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFPM013",
+    "name": "Panchroma PLA Neon",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFPM005",
+    "name": "Panchroma PLA Satin",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFPM004",
+    "name": "Panchroma PLA Silk",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFPM009",
+    "name": "Panchroma PLA Starlight",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFPM015",
+    "name": "Panchroma PLA Temp Shift",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFPM006",
+    "name": "Panchroma PLA Translucent",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFPM014",
+    "name": "Panchroma PLA UV Shift",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFB60",
+    "name": "PolyLite ABS",
+    "vendor": "Polymaker",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "OGFB61",
+    "name": "PolyLite ASA",
+    "vendor": "Polymaker",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "OGFG60",
+    "name": "PolyLite PETG",
+    "vendor": "Polymaker",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFL99",
+    "name": "PolyLite PLA",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFPM019",
+    "name": "PolyLite PLA Pro",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Polymaker Generic CoPA",
+    "vendor": "Polymaker",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "Polymaker Generic S1",
+    "vendor": "Polymaker",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "OGFPM017",
+    "name": "Polymaker HT-PLA",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFPM018",
+    "name": "Polymaker HT-PLA-GF",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "PMPE01",
+    "name": "Polymaker PETG",
+    "vendor": "Polymaker",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "PMPL03",
+    "name": "Polymaker PLA Pro",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "OGFL00-1",
+    "name": "PolyTerra Dual PLA",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL01",
+    "name": "PolyTerra J1 PLA",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFL01",
+    "name": "PolyTerra PLA",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "1417031127011",
+    "name": "Snapmaker PLA Lite",
+    "vendor": "Polymaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "Prusa Generic ASA @CORE One 0.6",
+    "name": "Prusa Generic ASA",
+    "vendor": "Prusa Polymers",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "Prusament ASA @CORE One 0.6",
+    "name": "Prusament ASA",
+    "vendor": "Prusa Polymers",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "Prusament PA-CF @CORE One 0.6",
+    "name": "Prusament PA-CF",
+    "vendor": "Prusa Polymers",
+    "type": "PA",
+    "color": ""
+  },
+  {
+    "id": "Prusament PC Blend @CORE One 0.6",
+    "name": "Prusament PC Blend",
+    "vendor": "Prusa Polymers",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "Prusament PC-CF @CORE One 0.6",
+    "name": "Prusament PC-CF",
+    "vendor": "Prusa Polymers",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "Prusament PETG @CORE One 0.6",
+    "name": "Prusament PETG",
+    "vendor": "Prusa Polymers",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "Prusament PLA @CORE One 0.6",
+    "name": "Prusament PLA",
+    "vendor": "Prusa Polymers",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "Prusament PVB @CORE One 0.6",
+    "name": "Prusament PVB",
+    "vendor": "Prusa Polymers",
+    "type": "PVB",
+    "color": ""
+  },
+  {
+    "id": "Prusament rPLA @CORE One 0.6",
+    "name": "Prusament rPLA",
+    "vendor": "Prusa Polymers",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_14",
+    "name": "QIDI ABS Odorless",
+    "vendor": "QIDI",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_11",
+    "name": "QIDI ABS Rapido",
+    "vendor": "QIDI",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_13",
+    "name": "QIDI ABS Rapido Metal",
+    "vendor": "QIDI",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_12",
+    "name": "QIDI ABS-GF",
+    "vendor": "QIDI",
+    "type": "ABS-GF",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_18",
+    "name": "QIDI ASA",
+    "vendor": "QIDI",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_19",
+    "name": "QIDI ASA-Aero",
+    "vendor": "QIDI",
+    "type": "ASA-AERO",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_20",
+    "name": "QIDI ASA-CF",
+    "vendor": "QIDI",
+    "type": "ASA-CF",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_27",
+    "name": "QIDI PA12-CF",
+    "vendor": "QIDI",
+    "type": "PA12-CF",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_30",
+    "name": "QIDI PAHT-CF",
+    "vendor": "QIDI",
+    "type": "PAHT-CF",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_31",
+    "name": "QIDI PAHT-GF",
+    "vendor": "QIDI",
+    "type": "PAHT-GF",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_34",
+    "name": "QIDI PC-ABS-FR",
+    "vendor": "QIDI",
+    "type": "PC-ABS-FR",
+    "color": ""
+  },
+  {
+    "id": "QD_3_1_34",
+    "name": "QIDI PC/ABS-FR",
+    "vendor": "QIDI",
+    "type": "PC-ABS-FR",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_36",
+    "name": "QIDI PEBA 95A",
+    "vendor": "QIDI",
+    "type": "PEBA",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_37",
+    "name": "QIDI PET-CF",
+    "vendor": "QIDI",
+    "type": "PET-CF",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_38",
+    "name": "QIDI PET-GF",
+    "vendor": "QIDI",
+    "type": "PET-GF",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_39",
+    "name": "QIDI PETG Basic",
+    "vendor": "QIDI",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_41",
+    "name": "QIDI PETG Rapido",
+    "vendor": "QIDI",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_40",
+    "name": "QIDI PETG Tough",
+    "vendor": "QIDI",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_45",
+    "name": "QIDI PETG Translucent",
+    "vendor": "QIDI",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_42",
+    "name": "QIDI PETG-CF",
+    "vendor": "QIDI",
+    "type": "PETG-CF",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_43",
+    "name": "QIDI PETG-GF",
+    "vendor": "QIDI",
+    "type": "PETG-GF",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_7",
+    "name": "QIDI PLA Basic",
+    "vendor": "QIDI",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_8",
+    "name": "QIDI PLA Matte Basic",
+    "vendor": "QIDI",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_1",
+    "name": "QIDI PLA Rapido",
+    "vendor": "QIDI",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_2",
+    "name": "QIDI PLA Rapido Matte",
+    "vendor": "QIDI",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_3",
+    "name": "QIDI PLA Rapido Metal",
+    "vendor": "QIDI",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_4",
+    "name": "QIDI PLA Rapido Silk",
+    "vendor": "QIDI",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_5",
+    "name": "QIDI PLA-CF",
+    "vendor": "QIDI",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_44",
+    "name": "QIDI PPS-CF",
+    "vendor": "QIDI",
+    "type": "PPS-CF",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_46",
+    "name": "QIDI PPS-GF",
+    "vendor": "QIDI",
+    "type": "PPS-GF",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_32",
+    "name": "QIDI Support For PAHT",
+    "vendor": "QIDI",
+    "type": "PAHT-S",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_33",
+    "name": "QIDI Support For PET/PA",
+    "vendor": "QIDI",
+    "type": "PA-S",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_50",
+    "name": "QIDI TPU 95A-HF",
+    "vendor": "QIDI",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_49",
+    "name": "QIDI TPU-Aero",
+    "vendor": "QIDI",
+    "type": "TPU-AERO",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_15",
+    "name": "QIDI TPU-GF",
+    "vendor": "QIDI",
+    "type": "TPU-GF",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_24",
+    "name": "QIDI UltraPA",
+    "vendor": "QIDI",
+    "type": "UltraPA",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_26",
+    "name": "QIDI UltraPA-CF25",
+    "vendor": "QIDI",
+    "type": "UltraPA-CF25",
+    "color": ""
+  },
+  {
+    "id": "QD_1_1_6",
+    "name": "QIDI WOOD Rapido",
+    "vendor": "QIDI",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "RatRig PunkFil ABS",
+    "vendor": "RatRig",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "RatRig PunkFil PETG",
+    "vendor": "RatRig",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFB99",
+    "name": "RatRig PunkFil PETG CF",
+    "vendor": "RatRig",
+    "type": "PETG-CF10",
+    "color": ""
+  },
+  {
+    "id": "4227461134",
+    "name": "Snapmaker Breakaway Support For PLA",
+    "vendor": "Snapmaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "14170311270",
+    "name": "Snapmaker PLA Matte",
+    "vendor": "Snapmaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "141703112701",
+    "name": "Snapmaker PLA SnapSpeed",
+    "vendor": "Snapmaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFSNL08",
+    "name": "SUNLU PETG",
+    "vendor": "SUNLU",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFSNL06",
+    "name": "SUNLU PLA Marble",
+    "vendor": "SUNLU",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFSNL02",
+    "name": "SUNLU PLA Matte",
+    "vendor": "SUNLU",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFSNL03",
+    "name": "SUNLU PLA+",
+    "vendor": "SUNLU",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFSNL04",
+    "name": "SUNLU PLA+ 2.0",
+    "vendor": "SUNLU",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFSNL05",
+    "name": "SUNLU Silk PLA+",
+    "vendor": "SUNLU",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFSNL07",
+    "name": "SUNLU Wood PLA",
+    "vendor": "SUNLU",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFB00",
+    "name": "Tiertime ABS",
+    "vendor": "Tiertime",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB01",
+    "name": "Tiertime ASA",
+    "vendor": "Tiertime",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFN05",
+    "name": "Tiertime PA6-CF",
+    "vendor": "Tiertime",
+    "type": "PA6-CF",
+    "color": ""
+  },
+  {
+    "id": "GFC00",
+    "name": "Tiertime PC",
+    "vendor": "Tiertime",
+    "type": "PC",
+    "color": ""
+  },
+  {
+    "id": "GFT01",
+    "name": "Tiertime PET-CF",
+    "vendor": "Tiertime",
+    "type": "PET-CF",
+    "color": ""
+  },
+  {
+    "id": "GFG00",
+    "name": "Tiertime PETG",
+    "vendor": "Tiertime",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFA00",
+    "name": "Tiertime PLA",
+    "vendor": "Tiertime",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA50",
+    "name": "Tiertime PLA-CF",
+    "vendor": "Tiertime",
+    "type": "PLA-CF",
+    "color": ""
+  },
+  {
+    "id": "GFS04",
+    "name": "Tiertime PVA",
+    "vendor": "Tiertime",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "GFU01",
+    "name": "Tiertime TPU 95A",
+    "vendor": "Tiertime",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "VLMNT01",
+    "name": "Valment PLA",
+    "vendor": "Valment",
+    "type": "PLA",
+    "color": "#124943"
+  },
+  {
+    "id": "VLMNT04",
+    "name": "Valment PLA Galaxy",
+    "vendor": "Valment",
+    "type": "PLA",
+    "color": "#124943"
+  },
+  {
+    "id": "VLMNT02",
+    "name": "Valment PLA Silk",
+    "vendor": "Valment",
+    "type": "PLA",
+    "color": "#124943"
+  },
+  {
+    "id": "VLMNT03",
+    "name": "Valment PLA-CF",
+    "vendor": "Valment",
+    "type": "PLA-CF",
+    "color": "#124943"
+  },
+  {
+    "id": "GFB00",
+    "name": "WonderMaker ABS",
+    "vendor": "WonderMaker",
+    "type": "ABS",
+    "color": ""
+  },
+  {
+    "id": "GFB01",
+    "name": "WonderMaker ASA",
+    "vendor": "WonderMaker",
+    "type": "ASA",
+    "color": ""
+  },
+  {
+    "id": "GFT01",
+    "name": "WonderMaker PET-CF",
+    "vendor": "WonderMaker",
+    "type": "PET-CF",
+    "color": ""
+  },
+  {
+    "id": "GFG00",
+    "name": "WonderMaker PETG Basic",
+    "vendor": "WonderMaker",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFA00",
+    "name": "WonderMaker PLA Basic",
+    "vendor": "WonderMaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA07",
+    "name": "WonderMaker PLA Marble",
+    "vendor": "WonderMaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA01",
+    "name": "WonderMaker PLA Matte",
+    "vendor": "WonderMaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA02",
+    "name": "WonderMaker PLA Metal",
+    "vendor": "WonderMaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA05",
+    "name": "WonderMaker PLA Silk",
+    "vendor": "WonderMaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFA16",
+    "name": "WonderMaker PLA Wood",
+    "vendor": "WonderMaker",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFS04",
+    "name": "WonderMaker PVA",
+    "vendor": "WonderMaker",
+    "type": "PVA",
+    "color": ""
+  },
+  {
+    "id": "GFU01",
+    "name": "WonderMaker TPU 95A",
+    "vendor": "WonderMaker",
+    "type": "TPU",
+    "color": ""
+  },
+  {
+    "id": "GFG99",
+    "name": "YUMI PETG",
+    "vendor": "Yumi",
+    "type": "PETG",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "YUMI PLA Bowden",
+    "vendor": "Yumi",
+    "type": "PLA",
+    "color": ""
+  },
+  {
+    "id": "GFU99",
+    "name": "YUMI PLA Direct Drive",
+    "vendor": "Yumi",
+    "type": "PLA",
+    "color": ""
+  }
+]

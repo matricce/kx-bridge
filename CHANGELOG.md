@@ -9,9 +9,10 @@
   plugin accepts. Time-lapses, layer-aligned first-layer scan and WebRTC
   live streaming work against a (self-hosted or cloud) Obico server.
   **Note:** the spaghetti-detection ML model is trained on side-view
-  cameras (Ender/Voron); with the Kobra X's top-down camera it currently
-  detects no print failures. Stream / time-lapse / telemetry work — the
-  AI side is not production-ready yet.
+  cameras (Ender/Voron); how well it works with the Kobra X's top-down
+  camera is still to be evaluated empirically (it already looked
+  promising in our tests). Stream, time-lapse and telemetry work — the
+  failure-detection side stays flagged as experimental for now.
 - **Multi-language UI (PR #37 by @gangoke):** Inline translations have
   moved into JSON files; a globe-icon dropdown lets you switch language.
   Browser locale is auto-detected; manual choice persists in

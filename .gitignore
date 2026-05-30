@@ -15,3 +15,5 @@ config/config.ini
 config/*.ini
 !config/config.ini.example
 data/
+
+!data/orca_filaments.json
