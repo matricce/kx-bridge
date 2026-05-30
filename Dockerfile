@@ -7,6 +7,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY kobrax_moonraker_bridge.py .
 COPY web/ ./web/
+# Statische Daten (orca_filaments.json etc.) liegen in /app/static/, NICHT in
+# /app/data/ — letzteres wird vom User als Volume gemountet (Runtime-State).
+COPY data/ ./static/
 COPY config_loader.py .
 COPY env_loader.py .
 COPY kobrax_client.py .

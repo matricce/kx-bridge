@@ -166,6 +166,77 @@ def list_printers() -> list[dict]:
     return printers
 
 
+def list_filament_profiles() -> dict[int, dict]:
+    """Liest die [filament_profiles]-Sektion aus config.ini.
+
+    Format pro AMS-Slot (slot_N_id + slot_N_vendor):
+      [filament_profiles]
+      slot_0_id     = OGFL01
+      slot_0_vendor = Polymaker
+      slot_1_id     = OGFG23
+      slot_1_vendor = Polymaker
+
+    Gibt einen Dict {slot_index: {"id": ..., "vendor": ...}} zurück.
+    Leere/fehlende Slots werden NICHT aufgenommen — das Default-Mapping
+    (per filament_type) in der Bridge bleibt dann aktiv.
+    """
+    path = _find_config_file()
+    if not path:
+        return {}
+    cfg = configparser.ConfigParser()
+    cfg.read(path, encoding="utf-8")
+    if not cfg.has_section("filament_profiles"):
+        return {}
+    result: dict[int, dict] = {}
+    for key, value in cfg.items("filament_profiles"):
+        # Erwartet: slot_<idx>_id oder slot_<idx>_vendor
+        if not key.startswith("slot_"):
+            continue
+        parts = key.split("_", 2)
+        if len(parts) < 3:
+            continue
+        try:
+            slot_idx = int(parts[1])
+        except ValueError:
+            continue
+        field = parts[2]
+        if field not in ("id", "vendor"):
+            continue
+        if not value.strip():
+            continue
+        result.setdefault(slot_idx, {})[field] = value.strip()
+    # Leere Einträge (nur vendor ohne id oder umgekehrt) trotzdem behalten —
+    # der Aufrufer prüft selbst was er nutzt.
+    return result
+
+
+def save_filament_profiles(profiles: dict[int, dict]) -> bool:
+    """Schreibt die übergebenen Slot-Profile in die [filament_profiles]-
+    Sektion der config.ini. Existierende Einträge werden komplett ersetzt.
+
+    profiles: {slot_index: {"id": "OGFL01", "vendor": "Polymaker"}}
+    """
+    path = _find_config_file()
+    if not path:
+        return False
+    cfg = configparser.ConfigParser()
+    cfg.read(path, encoding="utf-8")
+    # Sektion neu aufbauen — entfernt damit auch alte/verwaiste Slots
+    if cfg.has_section("filament_profiles"):
+        cfg.remove_section("filament_profiles")
+    if profiles:
+        cfg["filament_profiles"] = {}
+        for slot_idx in sorted(profiles.keys()):
+            entry = profiles[slot_idx] or {}
+            if entry.get("id"):
+                cfg["filament_profiles"][f"slot_{slot_idx}_id"] = entry["id"]
+            if entry.get("vendor"):
+                cfg["filament_profiles"][f"slot_{slot_idx}_vendor"] = entry["vendor"]
+    with open(path, "w", encoding="utf-8") as f:
+        cfg.write(f)
+    return True
+
+
 def get(key: str, default: str = "") -> str:
     return os.environ.get(key, default)
 

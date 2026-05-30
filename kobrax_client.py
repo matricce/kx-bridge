@@ -545,9 +545,15 @@ class KobraXClient:
             f"Connection: close\r\n\r\n"
         ).encode()
 
-        sock = socket.create_connection((self.host, 18910), timeout=30)
+        # Connect-Timeout kurz (LAN). Während sendall() darf der Socket so
+        # lange brauchen wie nötig — bei großen Dateien (>100 MB) und
+        # langsamerem WLAN am Drucker dauert das Schieben sonst >30 s und
+        # würde den Connect-Timeout fälschlich auslösen. Read-Timeout danach
+        # generös (Drucker verarbeitet die Datei bevor er antwortet).
+        sock = socket.create_connection((self.host, 18910), timeout=10)
+        sock.settimeout(None)  # blocking während Send
         sock.sendall(headers + body)
-        sock.settimeout(120)  # große GCode-Dateien brauchen Zeit bis der Drucker antwortet
+        sock.settimeout(180)
         response = b""
         try:
             while True:

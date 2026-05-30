@@ -534,6 +534,155 @@ class GCodeStore:
         return [dict(r) for r in rows]
 
 
+class CameraCache:
+    """Zentraler Kamera-Demuxer.
+
+    Hält EINEN ffmpeg-Prozess offen, der den FLV-Stream vom Drucker liest
+    und parallel zwei Outputs erzeugt:
+      - MJPEG @ 2fps → letzter Frame im RAM für /api/camera/snapshot
+      - MPEG-TS (-c:v copy) → Fanout an alle /api/camera/h264-Subscriber
+
+    Damit:
+      * Nur EINE FLV-Verbindung zum Drucker (löst Single-Client-Limit / 429)
+      * Snapshot ist instant (Speicher-Read, kein ffmpeg-Spawn pro Request)
+      * Mehrere parallele H.264-Konsumenten möglich (Plugin + Web-UI + …)
+
+    Lazy-Start beim ersten Konsumenten, Auto-Restart bei ffmpeg-Crash.
+    """
+
+    JPEG_SOI = b"\xff\xd8"
+    JPEG_EOI = b"\xff\xd9"
+    TS_CHUNK = 65536
+
+    def __init__(self):
+        self._url: str = ""
+        self.latest_jpeg: bytes = b""
+        self.latest_jpeg_ts: float = 0.0
+        self.h264_subscribers: "set[asyncio.Queue[bytes]]" = set()
+        self._proc_jpeg: "asyncio.subprocess.Process | None" = None
+        self._proc_h264: "asyncio.subprocess.Process | None" = None
+        self._task_jpeg: "asyncio.Task | None" = None
+        self._task_h264: "asyncio.Task | None" = None
+        self._lock = asyncio.Lock()
+
+    def set_url(self, url: str):
+        self._url = url
+
+    async def ensure_running(self):
+        if self._proc_jpeg is None or self._proc_jpeg.returncode is not None:
+            self._task_jpeg = asyncio.create_task(self._run_jpeg_loop())
+        if self._proc_h264 is None or self._proc_h264.returncode is not None:
+            self._task_h264 = asyncio.create_task(self._run_h264_loop())
+
+    def _input_args(self, url: str) -> list[str]:
+        args = ["-fflags", "nobuffer", "-flags", "low_delay"]
+        if url.lower().startswith("rtsp://"):
+            args += ["-probesize", "32", "-analyzeduration", "0", "-rtsp_transport", "tcp"]
+        else:
+            args += ["-probesize", "500000", "-analyzeduration", "500000"]
+        return args
+
+    async def _run_jpeg_loop(self):
+        """Hält einen ffmpeg-Prozess am Leben der MJPEG@2fps in den Cache schreibt."""
+        while True:
+            url = self._url
+            if not url:
+                await asyncio.sleep(2.0)
+                continue
+            try:
+                self._proc_jpeg = await asyncio.create_subprocess_exec(
+                    _find_ffmpeg(), "-loglevel", "quiet",
+                    *self._input_args(url), "-i", url,
+                    "-vf", "fps=2",
+                    "-f", "image2pipe", "-vcodec", "mjpeg", "-q:v", "3",
+                    "-flush_packets", "1", "pipe:1",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+            except Exception as e:
+                log.warning(f"CameraCache: ffmpeg-jpeg start fehlgeschlagen: {e}")
+                await asyncio.sleep(3.0)
+                continue
+
+            buf = b""
+            try:
+                while True:
+                    chunk = await self._proc_jpeg.stdout.read(self.TS_CHUNK)
+                    if not chunk:
+                        break
+                    buf += chunk
+                    # extract complete JPEG frames
+                    while True:
+                        start = buf.find(self.JPEG_SOI)
+                        if start == -1:
+                            buf = b""
+                            break
+                        end = buf.find(self.JPEG_EOI, start + 2)
+                        if end == -1:
+                            buf = buf[start:]
+                            break
+                        self.latest_jpeg = buf[start:end + 2]
+                        self.latest_jpeg_ts = time.time()
+                        buf = buf[end + 2:]
+            except Exception as e:
+                log.debug(f"CameraCache: jpeg-loop unterbrochen: {e}")
+            finally:
+                try:
+                    self._proc_jpeg.kill()
+                except Exception:
+                    pass
+                self._proc_jpeg = None
+            await asyncio.sleep(2.0)  # restart delay
+
+    async def _run_h264_loop(self):
+        """Hält einen ffmpeg-Prozess am Leben der MPEG-TS an alle Subscriber fanoutet."""
+        while True:
+            url = self._url
+            if not url:
+                await asyncio.sleep(2.0)
+                continue
+            try:
+                self._proc_h264 = await asyncio.create_subprocess_exec(
+                    _find_ffmpeg(), "-loglevel", "quiet",
+                    *self._input_args(url), "-i", url,
+                    "-c:v", "copy", "-an",
+                    "-f", "mpegts", "pipe:1",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+            except Exception as e:
+                log.warning(f"CameraCache: ffmpeg-h264 start fehlgeschlagen: {e}")
+                await asyncio.sleep(3.0)
+                continue
+
+            try:
+                while True:
+                    chunk = await self._proc_h264.stdout.read(self.TS_CHUNK)
+                    if not chunk:
+                        break
+                    # Fanout: nicht-blockierend pro Subscriber, langsame Clients
+                    # bekommen ihren ältesten Chunk verworfen (Queue voll → drop).
+                    for q in list(self.h264_subscribers):
+                        if q.full():
+                            try:
+                                q.get_nowait()
+                            except Exception:
+                                pass
+                        try:
+                            q.put_nowait(chunk)
+                        except Exception:
+                            pass
+            except Exception as e:
+                log.debug(f"CameraCache: h264-loop unterbrochen: {e}")
+            finally:
+                try:
+                    self._proc_h264.kill()
+                except Exception:
+                    pass
+                self._proc_h264 = None
+            await asyncio.sleep(2.0)
+
+
 class KobraXBridge:
     def __init__(self, client: KobraXClient, args=None, store=None, printer_id: str = "1", all_bridges=None):
         self.client = client
@@ -541,6 +690,18 @@ class KobraXBridge:
         self._printer_id = printer_id
         self._all_bridges = all_bridges if all_bridges is not None else {}
         self.ws_clients: set[web.WebSocketResponse] = set()
+        # In-Memory KV-Store für Moonraker /server/database/item (moonraker-obico,
+        # mainsail-presets etc.). Nicht persistent — überlebt keinen Restart.
+        self._moonraker_kv_store: dict[str, dict] = {}
+        # Slot→Orca-Filament-Profile-Mapping (aus config.ini [filament_profiles]).
+        # Format: {slot_idx: {"id": "OGFL01", "vendor": "Polymaker"}}.
+        # Wird in _build_lane_data verwendet, damit OrcaSlicer die konkrete
+        # Marke ("PolyTerra PLA — Polymaker") statt nur "Generic PLA" anzeigt.
+        try:
+            import config_loader as _cl
+            self._filament_profiles: dict[int, dict] = _cl.list_filament_profiles()
+        except Exception:
+            self._filament_profiles = {}
         self._last_state: dict = {}
         self._state = {
           "nozzle_temp":        0.0,
@@ -582,6 +743,7 @@ class KobraXBridge:
         self._serve_dir_path: str = self._store._gcode_dir
         self._current_job_id: str = ""
         self._camera_autostarted: bool = False
+        self.camera_cache: CameraCache = CameraCache()
 
         self._thumbnail_b64: str = ""
         self._ace_dry_presets: dict[str, dict] = self._load_ace_dry_presets_config()
@@ -815,6 +977,7 @@ class KobraXBridge:
             self._state["upload_url"] = urls["fileUploadurl"]
         if urls.get("rtspUrl"):
             self._state["camera_url"] = urls["rtspUrl"]
+            self.camera_cache.set_url(urls["rtspUrl"])
         fan = d.get("fan_speed_pct")
         if fan is not None:
             self._state["fan_speed"] = int(fan)
@@ -1321,13 +1484,22 @@ class KobraXBridge:
             else:
               color_hex = "FFFFFFFF"
             material = slot.get("type", "PLA").upper()
-            tray_info_idx = self._TRAY_INFO_IDX.get(material, "OGFL99")
+            # User-Override aus config.ini [filament_profiles].slot_N_id
+            # bekommt Vorrang vor dem Default-Mapping nach material-Type.
+            # Vendor wird mitgesendet (tray_sub_brands + filament_vendor),
+            # damit ein gepatchter OrcaSlicer den Match nach Marke + Type +
+            # Farbe machen kann (analog SnapmakerPrinterAgent).
+            user_profile = self._filament_profiles.get(slot_index) or {}
+            tray_info_idx = user_profile.get("id") or self._TRAY_INFO_IDX.get(material, "OGFL99")
+            vendor = user_profile.get("vendor", "")
             tray_array.append({
               "id": str(slot_id),
               "tag_uid": "0000000000000000",
               "tray_info_idx": tray_info_idx,
               "tray_type": material,
               "tray_color": color_hex,
+              "tray_sub_brands": vendor,
+              "filament_vendor": vendor,  # OrcaSlicer-Patch-Ready (Snapmaker-Stil)
             })
           else:
             tray_array.append({
@@ -1445,6 +1617,9 @@ class KobraXBridge:
                 "progress":  s["progress"],
                 "is_active": s["print_state"] == "printing",
                 "file_path": s["filename"],
+                # file_position approximiert: fraction × est_total_size.
+                # Genauer Wert kommt aus dem Drucker nicht, Obico nutzt es nur als Anzeige.
+                "file_position": int(s["progress"] * 1_000_000) if s["progress"] else 0,
             },
             "toolhead": {
                 "position":         [0, 0, 0, 0],
@@ -1453,6 +1628,60 @@ class KobraXBridge:
                 "estimated_print_time": s["print_duration"],
             },
             "mmu": self._build_mmu_object(),
+            # ── Moonraker-Kompatibilität für moonraker-obico ──
+            "heaters": {
+                "available_heaters": ["extruder", "heater_bed"],
+                "available_sensors": [],
+                "available_monitors": [],
+            },
+            "webhooks": {
+                "state":         "ready",
+                "state_message": "Printer is ready",
+            },
+            # speed_factor: 1=silent(0.5) / 2=standard(1.0) / 3=high(1.3) / 4=ultra(1.5)
+            "gcode_move": {
+                "speed_factor":   {1: 0.5, 2: 1.0, 3: 1.3, 4: 1.5}.get(int(s.get("print_speed_mode") or 2), 1.0),
+                "extrude_factor": 1.0,
+                "speed":          0,
+                "gcode_position": [0, 0, 0, 0],
+                "absolute_coordinates": True,
+                "absolute_extrude":     True,
+                "homing_origin":  [0, 0, 0, 0],
+                "position":       [0, 0, 0, 0],
+            },
+            "fan": {
+                "speed": (int(s.get("fan_speed") or 0)) / 100.0,
+                "rpm":   None,
+            },
+            # history (object): Obico abonniert es als Objekt; das eigentliche
+            # /server/history/list-Endpoint liefert die echte Liste separat.
+            "history": {
+                "job_totals": {
+                    "total_jobs":  0,
+                    "total_time":  0,
+                    "total_print_time": 0,
+                    "total_filament_used": 0.0,
+                    "longest_job": 0,
+                    "longest_print": 0,
+                },
+                "current_job": None,
+            },
+            # Pseudo-Klipper-Macros für moonraker-obico:
+            # - _OBICO_LAYER_CHANGE meldet die aktuelle Layer-Nr. Obico nutzt das
+            #   für "first layer scan"-Trigger und layer-aligned Time-Lapse-Frames.
+            #   Wir bedienen das aus dem MQTT-Stream (s["curr_layer"]).
+            # - TIMELAPSE_TAKE_FRAME signalisiert, dass die aktuelle Pause vom
+            #   Time-Lapse stammt (sonst würde Obico die Pause als User-Pause
+            #   interpretieren). Wir setzen is_paused=False, weil unsere Pausen
+            #   nie Time-Lapse-Pausen sind.
+            "gcode_macro _OBICO_LAYER_CHANGE": {
+                "current_layer":         int(s.get("curr_layer") or 0),
+                "first_layer_scanning":  False,
+                "first_layer_scan_enabled": False,
+            },
+            "gcode_macro TIMELAPSE_TAKE_FRAME": {
+                "is_paused": False,
+            },
         }
 
     # -------------------------------------------------------------------------
@@ -1543,14 +1772,101 @@ class KobraXBridge:
         slots = []
         for i, s in enumerate(self._ams_slots):
             gidx = int(s.get("global_index", i))
+            profile = self._filament_profiles.get(gidx) or {}
             slots.append({
                 "slot_index":  gidx,
                 "material":    s.get("type", ""),
                 "color_hex":   "#{:02X}{:02X}{:02X}".format(*s.get("color", [0,0,0])[:3]),
                 "status":      "loaded" if s.get("status") == 5 else "empty",
                 "nozzle_temp": 0,
+                # Aktueller User-Override aus config.ini [filament_profiles]
+                "filament_id":     profile.get("id", ""),
+                "filament_vendor": profile.get("vendor", ""),
             })
         return self._json_cors({"result": slots})
+
+    async def handle_kx_filament_profiles(self, request):
+        """Liefert die statische Liste der OrcaSlicer-Filament-Profile
+        (aus bridge/data/orca_filaments.json — vom Generator-Script
+        tools/gen_orca_filament_list.py erzeugt).
+
+        Optional Filter via ?type=PLA / ?vendor=Polymaker.
+        Frontend nutzt das für die Slot-Profile-Dropdown.
+        """
+        type_filter = request.rel_url.query.get("type", "").upper().strip()
+        vendor_filter = request.rel_url.query.get("vendor", "").strip()
+        data_path = self._find_orca_filaments_json()
+        if not data_path or not os.path.isfile(data_path):
+            return self._json_cors({"result": []})
+        try:
+            with open(data_path, encoding="utf-8") as f:
+                profiles = json.load(f)
+        except Exception as e:
+            log.warning(f"orca_filaments.json read error: {e}")
+            return self._json_cors({"result": []})
+        if type_filter:
+            profiles = [p for p in profiles if p.get("type", "").upper() == type_filter]
+        if vendor_filter:
+            profiles = [p for p in profiles if p.get("vendor", "") == vendor_filter]
+        return self._json_cors({"result": profiles})
+
+    def _find_orca_filaments_json(self) -> str | None:
+        """Findet die statische JSON-Datei. Liegt analog zu web/ unter _WEB_BASE/data/
+        — in allen 3 Deployment-Modi:
+          • Dev:     bridge/data/orca_filaments.json
+          • Docker:  /app/data/orca_filaments.json (statisch im Image, NICHT das
+                     Volume-data/ das Runtime-State enthält — siehe Dockerfile)
+          • Onefile: sys._MEIPASS/data/orca_filaments.json
+        Wenn das Volume-mounted /app/data/ den static-data überdeckt, liegt eine
+        Kopie auch unter _WEB_BASE/data/ (= /app/ im Docker = derselbe Pfad).
+        Bei Konflikt: zweite Suche unter ../bridge/data/ als Fallback für Dev-Setups."""
+        candidates = [
+            # Docker: COPY bridge/data → /app/static/ (data/ ist Volume → überdeckt)
+            os.path.join(_WEB_BASE, "static", "orca_filaments.json"),
+            os.path.join(_WEB_BASE, "data", "orca_filaments.json"),
+        ]
+        here = os.path.dirname(os.path.abspath(__file__))
+        candidates.append(os.path.join(here, "data", "orca_filaments.json"))
+        candidates.append(os.path.join(here, "..", "bridge", "data", "orca_filaments.json"))
+        for c in candidates:
+            if os.path.isfile(c):
+                return c
+        return None
+
+    async def handle_kx_filament_slot_profile(self, request):
+        """POST /kx/filament/slots/<idx>/profile — speichert oder löscht
+        ein User-Override-Mapping für einen einzelnen AMS-Slot.
+
+        Body: {"id": "OGFL01", "vendor": "Polymaker"}
+              {"id": ""} → Mapping entfernen → Default-Fallback aktiv
+        """
+        try:
+            slot_idx = int(request.match_info.get("idx", "-1"))
+        except ValueError:
+            return self._json_cors({"error": "bad slot index"}, status=400)
+        if slot_idx < 0:
+            return self._json_cors({"error": "bad slot index"}, status=400)
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
+        new_id = (data.get("id") or "").strip()
+        new_vendor = (data.get("vendor") or "").strip()
+        if new_id:
+            self._filament_profiles[slot_idx] = {"id": new_id, "vendor": new_vendor}
+        else:
+            self._filament_profiles.pop(slot_idx, None)
+        # Persistieren in config.ini
+        try:
+            import config_loader as _cl
+            _cl.save_filament_profiles(self._filament_profiles)
+        except Exception as e:
+            log.warning(f"save_filament_profiles failed: {e}")
+            return self._json_cors({"error": str(e)}, status=500)
+        return self._json_cors({"result": "ok",
+                                "slot_index": slot_idx,
+                                "id": new_id,
+                                "vendor": new_vendor})
 
     async def handle_kx_history(self, request):
         limit  = int(request.rel_url.query.get("limit", 50))
@@ -1847,6 +2163,92 @@ class KobraXBridge:
                 "permissions": "rw",
             })
         return web.json_response({"result": files})
+
+    # ── Moonraker-Stubs für moonraker-obico ──────────────────────────────────
+    async def handle_access_api_key(self, request):
+        """Moonraker /access/api_key — wir haben keine Auth, geben einen Dummy zurück.
+        moonraker-obico stellt sonst eine WARNING ins Log."""
+        return web.json_response({"result": "kx-bridge-no-auth-required"})
+
+    async def handle_machine_update_status(self, request):
+        """Moonraker /machine/update/status — Obico zeigt installierte Plugins damit."""
+        return web.json_response({
+            "result": {
+                "busy":         False,
+                "github_rate_limit":     60,
+                "github_requests_remaining": 60,
+                "github_limit_reset_time":   time.time() + 3600,
+                "version_info": {},
+            }
+        })
+
+    async def handle_history_list(self, request):
+        """Moonraker /server/history/list — Job-Historie aus dem GCodeStore.
+
+        moonraker-obico nutzt nur das letzte Element (limit=1, order=desc)."""
+        try:
+            limit = int(request.rel_url.query.get("limit", "50"))
+        except ValueError:
+            limit = 50
+        try:
+            jobs = self._store.list_jobs(limit=limit) or []
+        except Exception:
+            jobs = []
+        # Mapping auf Moonraker-Schema. Moonraker liefert start_time als Unix-
+        # Timestamp (float), nicht ISO-String — moonraker-obico parsed das mit
+        # int(start_time) und crasht sonst.
+        def _to_unix_ts(iso: str | None) -> float:
+            if not iso:
+                return 0.0
+            try:
+                from datetime import datetime
+                # Format aus GCodeStore: "2026-05-27T21:22:25Z"
+                dt = datetime.strptime(iso, "%Y-%m-%dT%H:%M:%SZ")
+                return dt.replace(tzinfo=__import__("datetime").timezone.utc).timestamp()
+            except Exception:
+                return 0.0
+        result_jobs = []
+        for j in jobs:
+            start_ts = _to_unix_ts(j.get("started_at"))
+            dur = j.get("duration_sec") or 0
+            result_jobs.append({
+                "job_id":       j.get("id"),
+                "exists":       True,
+                "end_time":     (start_ts + dur) if start_ts and dur else None,
+                "filament_used": 0.0,
+                "filename":     j.get("filename", ""),
+                "metadata":     {},
+                "print_duration": dur,
+                "status":       j.get("status") or "completed",
+                "start_time":   start_ts,
+                "total_duration": dur,
+            })
+        return web.json_response({"result": {"count": len(result_jobs), "jobs": result_jobs}})
+
+    async def handle_webcams_list(self, request):
+        """Moonraker /server/webcams/list — Obico holt die Webcam-URLs hier."""
+        return web.json_response({
+            "result": {
+                "webcams": [
+                    {
+                        "name":         "KX-Bridge",
+                        "location":     "printer",
+                        "service":      "mjpegstreamer",
+                        "enabled":      True,
+                        "icon":         "mdiWebcam",
+                        "target_fps":   5,
+                        "target_fps_idle": 2,
+                        "stream_url":   "/api/camera/stream",
+                        "snapshot_url": "/api/camera/snapshot",
+                        "flip_horizontal": False,
+                        "flip_vertical":   False,
+                        "rotation":     0,
+                        "aspect_ratio": "16:9",
+                        "extra_data":   {},
+                    }
+                ]
+            }
+        })
 
     async def handle_file_upload(self, request):
         log.info(f"Upload-Request: {request.method} {request.path_qs}  CT={request.headers.get('Content-Type','')[:60]}")
@@ -2514,13 +2916,23 @@ class KobraXBridge:
                     {"taskid": taskid, "settings": {"target_hotbed_temp": b}},
                 ))
         else:
-            # Idle: standard tempature/set with both values
-            n = int(float(nozzle)) if nozzle is not None else int(self._state["nozzle_target"])
-            b = int(float(bed))    if bed    is not None else int(self._state["bed_target"])
-            await loop.run_in_executor(None, lambda: self.client.publish(
+            # Idle: tempature/set über `web/printer`-Topic mit `type`-Feld.
+            # Live-Sniff 2026-05-29 vom Anycubic Slicer Next bestätigt:
+            #   topic = web/printer/.../tempature
+            #   data  = {"type": 0|1|2, "target_hotbed_temp": B, "target_nozzle_temp": N}
+            # type-Werte (aus Workbench-Vue): 0=Nozzle, 1=Bed, 2=beide.
+            # Ohne `type` ODER auf `slicer/printer`-Topic → Systemfehler am Drucker.
+            if nozzle is not None and bed is not None:
+                t, n, b = 2, int(float(nozzle)), int(float(bed))
+            elif nozzle is not None:
+                t, n, b = 0, int(float(nozzle)), 0
+            elif bed is not None:
+                t, n, b = 1, 0, int(float(bed))
+            else:
+                return web.json_response({"result": "ok"})
+            await loop.run_in_executor(None, lambda: self.client.publish_web(
                 "tempature", "set",
-                {"target_nozzle_temp": n, "target_hotbed_temp": b},
-                timeout=0
+                {"type": t, "target_nozzle_temp": n, "target_hotbed_temp": b},
             ))
         return web.json_response({"result": "ok"})
 
@@ -2545,34 +2957,28 @@ class KobraXBridge:
         return web.json_response({"result": "ok"})
 
     async def handle_api_camera_snapshot(self, request):
-        """Einzelner JPEG-Frame aus dem Kamera-Stream – für Obico und andere Snapshot-Clients."""
+        """Letzter JPEG-Frame aus dem CameraCache — instant aus dem RAM,
+        keine eigene ffmpeg-Instanz mehr (verhindert Single-Client-429 am
+        Drucker und ist ~1 s schneller)."""
         url = self._state.get("camera_url", "")
         if not url:
             return web.Response(status=503, text="Keine Kamera-URL bekannt")
-        is_rtsp = url.lower().startswith("rtsp://")
-        input_args = ["-fflags", "nobuffer", "-flags", "low_delay"]
-        if is_rtsp:
-            input_args += ["-probesize", "32", "-analyzeduration", "0", "-rtsp_transport", "tcp"]
-        else:
-            input_args += ["-probesize", "1000000", "-analyzeduration", "1000000"]
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                _find_ffmpeg(), "-loglevel", "quiet",
-                *input_args, "-i", url,
-                "-frames:v", "1", "-f", "mjpeg", "-q:v", "3",
-                "pipe:1",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            jpeg, _ = await asyncio.wait_for(proc.communicate(), timeout=20)
-        except asyncio.TimeoutError:
-            return web.Response(status=504, text="Snapshot-Timeout")
-        except Exception as e:
-            return web.Response(status=503, text=str(e))
+        self.camera_cache.set_url(url)
+        await self.camera_cache.ensure_running()
+        # Initialer Warmup: bis zu 5 s auf ersten Frame warten
+        deadline = time.time() + 5.0
+        while not self.camera_cache.latest_jpeg and time.time() < deadline:
+            await asyncio.sleep(0.1)
+        jpeg = self.camera_cache.latest_jpeg
         if not jpeg:
-            return web.Response(status=503, text="Kein Frame empfangen")
-        return web.Response(body=jpeg, content_type="image/jpeg",
-                            headers={"Cache-Control": "no-cache"})
+            return web.Response(status=503, text="Noch kein Frame im Cache")
+        # Wenn der letzte Frame älter als 10 s ist → der Cache-ffmpeg läuft
+        # vermutlich nicht mehr stabil, trotzdem ausliefern aber Stale-Header.
+        age = time.time() - self.camera_cache.latest_jpeg_ts
+        headers = {"Cache-Control": "no-cache"}
+        if age > 10:
+            headers["X-Frame-Age"] = f"{age:.1f}"
+        return web.Response(body=jpeg, content_type="image/jpeg", headers=headers)
 
     async def handle_camera_stream(self, request):
         """MJPEG proxy: FLV → MJPEG via ffmpeg, served as multipart/x-mixed-replace."""
@@ -2657,6 +3063,38 @@ class KobraXBridge:
             except Exception:
                 pass
 
+        return resp
+
+    async def handle_camera_h264(self, request):
+        """H.264-Passthrough als MPEG-TS, gespeist aus dem zentralen
+        CameraCache-Fanout. Erlaubt mehrere parallele Konsumenten ohne
+        zusätzliche FLV-Verbindung zum Drucker (Single-Client-Limit)."""
+        url = self._state.get("camera_url", "")
+        if not url:
+            return web.Response(status=503, text="Keine Kamera-URL bekannt")
+        self.camera_cache.set_url(url)
+        await self.camera_cache.ensure_running()
+
+        q: asyncio.Queue[bytes] = asyncio.Queue(maxsize=64)
+        self.camera_cache.h264_subscribers.add(q)
+
+        resp = web.StreamResponse(headers={
+            "Content-Type": "video/mp2t",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        })
+        await resp.prepare(request)
+        try:
+            while True:
+                chunk = await q.get()
+                try:
+                    await resp.write(chunk)
+                except (ConnectionResetError, asyncio.CancelledError):
+                    break
+        except Exception as e:
+            log.warning(f"H.264-Stream unterbrochen: {e}")
+        finally:
+            self.camera_cache.h264_subscribers.discard(q)
         return resp
 
     async def handle_serve_file(self, request):
@@ -2747,14 +3185,71 @@ class KobraXBridge:
                 "result": {"namespace": namespace, "key": key, "value": None}
             })
 
+        # mainsail/presets: Obico fragt nach Temperatur-Presets. Schema wird in
+        # find_all_thermal_presets als data['value']['presets'].values() ausgewertet,
+        # also brauchen wir mindestens {presets: {}} damit kein Crash.
+        if namespace == "mainsail":
+            if key == "presets":
+                return web.json_response({
+                    "result": {"namespace": "mainsail", "key": "presets",
+                               "value": {"presets": {}}}
+                })
+            return web.json_response({
+                "result": {"namespace": "mainsail", "key": key, "value": {}}
+            })
+
+        # obico-namespace: in-memory KV-Store für Plugin-Settings (key=printer_id etc.)
+        if namespace == "obico":
+            store = self._moonraker_kv_store.setdefault("obico", {})
+            if key and key in store:
+                return web.json_response({
+                    "result": {"namespace": "obico", "key": key, "value": store[key]}
+                })
+            return web.json_response({
+                "result": {"namespace": "obico", "key": key, "value": store if not key else None}
+            })
+
         return web.json_response(
             {"error": {"code": 404, "message": f"Namespace '{namespace}' not found"}},
             status=404
         )
 
+    async def handle_moonraker_database_post(self, request):
+        """POST /server/database/item — KV-Store-Write (von moonraker-obico verwendet).
+        moonraker-obico sendet namespace/key/value als form-urlencoded POST-params."""
+        # Versuche JSON, fallback auf form-data, fallback auf Query-Params
+        namespace = ""
+        key       = ""
+        value     = None
+        try:
+            data = await request.json()
+            if isinstance(data, dict):
+                namespace = data.get("namespace", "")
+                key       = data.get("key", "")
+                value     = data.get("value")
+        except Exception:
+            try:
+                form = await request.post()
+                namespace = form.get("namespace", "") or ""
+                key       = form.get("key", "") or ""
+                value     = form.get("value")
+            except Exception:
+                pass
+        if not namespace:
+            namespace = request.rel_url.query.get("namespace", "")
+        if not key:
+            key = request.rel_url.query.get("key", "")
+        if namespace and key:
+            store = self._moonraker_kv_store.setdefault(namespace, {})
+            store[key] = value
+            return web.json_response({
+                "result": {"namespace": namespace, "key": key, "value": value}
+            })
+        return web.json_response({"error": {"code": 400, "message": "namespace + key required"}}, status=400)
+
     async def handle_database_list(self, request):
         """OrcaSlicer prüft welche Namespaces vorhanden sind um MMU-Typ zu erkennen."""
-        return web.json_response({"result": {"namespaces": ["lane_data"]}})
+        return web.json_response({"result": {"namespaces": ["lane_data", "mainsail", "obico"]}})
 
     def _get_ams_slots_fresh(self):
         """Frische Slot-Daten per getInfo holen, Fallback auf gecachte."""
@@ -3213,6 +3708,130 @@ class KobraXBridge:
         return web.Response(body=ico, content_type="image/x-icon")
 
     # -------------------------------------------------------------------------
+    # Klipper G-Code-Script Emulation für moonraker-obico
+    # -------------------------------------------------------------------------
+
+    async def _exec_gcode_script(self, script: str) -> str:
+        """Mappt eine Klipper- oder Marlin-G-Code-Zeile auf einen MQTT-Befehl
+        an den Kobra X. Unterstützt:
+        - PAUSE / M25, RESUME / M24, CANCEL_PRINT / M0/M1/M524/ABORT
+        - M104 S<temp>                         → Nozzle-Temperatur
+        - M140 S<temp>                         → Bett-Temperatur
+        - SET_HEATER_TEMPERATURE HEATER=extruder TARGET=200   (Klipper)
+        - SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=60  (Klipper)
+        Unbekannte Scripts werden mit 'ok' quittiert (Obico schickt z.B. G28
+        zum Home, das ignoriert die Bridge stillschweigend)."""
+        if not script:
+            return "ok"
+        s = script.strip().upper()
+        loop = asyncio.get_event_loop()
+
+        def _parse_marlin_temp(line: str) -> int | None:
+            """Aus 'M104 S200' oder 'M140 S60' den Temperatur-Wert ziehen."""
+            try:
+                return int(line.split("S", 1)[1].split()[0])
+            except Exception:
+                return None
+
+        def _parse_klipper_set_heater(line: str) -> tuple[str | None, int | None]:
+            """Aus 'SET_HEATER_TEMPERATURE HEATER=extruder TARGET=143' die
+            Heater-ID + Target rausziehen. Heater ist 'extruder' oder
+            'heater_bed', Target ist int. Liefert (None,None) bei Fehler."""
+            heater = None
+            target = None
+            for part in line.split():
+                if part.startswith("HEATER="):
+                    heater = part.split("=", 1)[1].strip().lower()
+                elif part.startswith("TARGET="):
+                    try:
+                        target = int(float(part.split("=", 1)[1]))
+                    except Exception:
+                        pass
+            return heater, target
+
+        async def _set_temps(nozzle: int | None, bed: int | None):
+            """Setzt Nozzle/Bed-Temperatur über den richtigen MQTT-Pfad —
+            druckend: print/update mit taskid, idle: tempature/set mit beiden."""
+            is_printing = self._state.get("print_state") in ("printing", "paused")
+            if is_printing:
+                taskid = self._state.get("taskid", "")
+                if nozzle is not None:
+                    await loop.run_in_executor(None, lambda: self.client.publish_web(
+                        "print", "update",
+                        {"taskid": taskid, "settings": {"target_nozzle_temp": int(nozzle)}},
+                    ))
+                if bed is not None:
+                    await loop.run_in_executor(None, lambda: self.client.publish_web(
+                        "print", "update",
+                        {"taskid": taskid, "settings": {"target_hotbed_temp": int(bed)}},
+                    ))
+            else:
+                # Idle: tempature/set via web/printer-Topic mit type-Feld
+                # (Live-Sniff 2026-05-29). type: 0=Nozzle, 1=Bed, 2=beide.
+                if nozzle is not None and bed is not None:
+                    t, n, b = 2, int(nozzle), int(bed)
+                elif nozzle is not None:
+                    t, n, b = 0, int(nozzle), 0
+                elif bed is not None:
+                    t, n, b = 1, 0, int(bed)
+                else:
+                    return
+                await loop.run_in_executor(None, lambda: self.client.publish_web(
+                    "tempature", "set",
+                    {"type": t, "target_nozzle_temp": n, "target_hotbed_temp": b},
+                ))
+
+        try:
+            if s in ("PAUSE", "M25"):
+                await loop.run_in_executor(None, self.client.pause_print)
+            elif s in ("RESUME", "M24"):
+                await loop.run_in_executor(None, self.client.resume_print)
+            elif s in ("CANCEL_PRINT", "M0", "M1", "M524", "ABORT"):
+                await loop.run_in_executor(None, self.client.stop_print)
+            elif s.startswith("M104 "):
+                t = _parse_marlin_temp(s)
+                if t is not None:
+                    log.info(f"gcode.script: Nozzle-Target {t}°C (M104)")
+                    await _set_temps(t, None)
+            elif s.startswith("M140 "):
+                t = _parse_marlin_temp(s)
+                if t is not None:
+                    log.info(f"gcode.script: Bed-Target {t}°C (M140)")
+                    await _set_temps(None, t)
+            elif s.startswith("SET_HEATER_TEMPERATURE"):
+                heater, target = _parse_klipper_set_heater(s)
+                if target is not None and heater:
+                    if heater == "extruder":
+                        log.info(f"gcode.script: Nozzle-Target {target}°C (Klipper)")
+                        await _set_temps(target, None)
+                    elif heater in ("heater_bed", "bed"):
+                        log.info(f"gcode.script: Bed-Target {target}°C (Klipper)")
+                        await _set_temps(None, target)
+                    else:
+                        log.debug(f"gcode.script: unbekannter Heater '{heater}' ignoriert")
+            else:
+                # Unbekanntes Script: stillschweigend OK quittieren.
+                log.debug(f"gcode.script ignored: {s[:60]}")
+        except Exception as e:
+            log.warning(f"gcode.script {s[:30]}: {e}")
+        return "ok"
+
+    async def handle_printer_gcode_script(self, request):
+        """HTTP POST /printer/gcode/script — Klipper-G-Code-Wrapper (siehe _exec_gcode_script)."""
+        script = ""
+        if request.method == "POST":
+            try:
+                body = await request.json()
+                if isinstance(body, dict):
+                    script = body.get("script", "") or ""
+            except Exception:
+                pass
+        if not script:
+            script = request.rel_url.query.get("script", "")
+        result = await self._exec_gcode_script(script)
+        return web.json_response({"result": result})
+
+    # -------------------------------------------------------------------------
     # WebSocket handler
     # -------------------------------------------------------------------------
 
@@ -3324,6 +3943,67 @@ class KobraXBridge:
                 result = {"system_info": {"cpu_info": {"cpu_desc": "Kobra X Bridge"}}}
             elif method == "server.files.list":
                 result = []
+            # ── moonraker-obico passthru-Targets ──
+            elif method == "printer.gcode.script":
+                script = (params.get("script") or "").strip().upper() if isinstance(params, dict) else ""
+                result = await self._exec_gcode_script(script)
+            elif method in ("server.connection.identify",):
+                # Obico identifiziert sich beim Connect. Connection-ID egal.
+                result = {"connection_id": 1}
+            elif method == "connection.register_remote_method":
+                # Obico registriert obico_remote_event-Callback. Wir akzeptieren leer.
+                result = "ok"
+            elif method == "server.webcams.list":
+                # WS-Variante des HTTP-Endpoints
+                result = {"webcams": [{
+                    "name": "KX-Bridge", "location": "printer", "service": "mjpegstreamer",
+                    "enabled": True, "stream_url": "/api/camera/stream",
+                    "snapshot_url": "/api/camera/snapshot",
+                    "flip_horizontal": False, "flip_vertical": False, "rotation": 0,
+                    "target_fps": 5, "aspect_ratio": "16:9",
+                }]}
+            elif method == "server.history.list":
+                # Reuse HTTP-Handler-Logik (Moonraker-Schema mit Unix-TS).
+                try:
+                    jobs = self._store.list_jobs(limit=50) or []
+                except Exception:
+                    jobs = []
+                from datetime import datetime, timezone as _tz
+                def _ts(iso):
+                    try:
+                        return datetime.strptime(iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=_tz.utc).timestamp()
+                    except Exception:
+                        return 0.0
+                result = {"count": len(jobs), "jobs": [
+                    {"job_id": j.get("id"), "exists": True, "filename": j.get("filename",""),
+                     "status": j.get("status") or "completed",
+                     "print_duration": j.get("duration_sec") or 0,
+                     "total_duration": j.get("duration_sec") or 0,
+                     "start_time": _ts(j.get("started_at")),
+                     "end_time":   (_ts(j.get("started_at")) + (j.get("duration_sec") or 0)) if j.get("started_at") and j.get("duration_sec") else None,
+                     "filament_used": 0.0, "metadata": {}}
+                    for j in jobs
+                ]}
+            elif method == "machine.update.status":
+                result = {"busy": False, "version_info": {}}
+            elif method == "server.files.metadata":
+                # Obico fragt nach Metadaten zu einer Datei (filename in params)
+                fname = (params or {}).get("filename") if isinstance(params, dict) else None
+                meta = {}
+                if fname:
+                    try:
+                        rec = self._store.get_file_by_filename(fname) if hasattr(self._store, "get_file_by_filename") else None
+                    except Exception:
+                        rec = None
+                    if rec:
+                        meta = {
+                            "filename": rec.get("filename"),
+                            "size":     rec.get("size_bytes") or 0,
+                            "modified": time.time(),
+                            "estimated_time": rec.get("est_print_time_sec") or 0,
+                            "thumbnails": [],
+                        }
+                result = meta
             else:
                 log.debug(f"Unbekannte RPC-Methode: {method}")
                 result = {}
@@ -3469,6 +4149,13 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_post("/printer/print/resume",      bridge.handle_print_resume)
     r.add_post("/printer/print/cancel",      bridge.handle_print_cancel)
 
+    # Moonraker-Stubs für moonraker-obico
+    r.add_get("/access/api_key",             bridge.handle_access_api_key)
+    r.add_get("/machine/update/status",      bridge.handle_machine_update_status)
+    r.add_get("/server/history/list",        bridge.handle_history_list)
+    r.add_get("/server/webcams/list",        bridge.handle_webcams_list)
+    r.add_post("/printer/gcode/script",      bridge.handle_printer_gcode_script)
+
     # OctoPrint compatibility (OrcaSlicer probes this + uploads here)
     r.add_get("/api/version",                bridge.handle_octoprint_version)
     r.add_post("/api/files/local",           bridge.handle_file_upload)
@@ -3476,6 +4163,7 @@ def build_app(bridge: KobraXBridge) -> web.Application:
 
     # Moonraker database (OrcaSlicer AMS-Sync)
     r.add_get("/server/database/item",       bridge.handle_moonraker_database)
+    r.add_post("/server/database/item",      bridge.handle_moonraker_database_post)
     r.add_get("/server/database/list",       bridge.handle_database_list)
 
     # New API endpoints
@@ -3493,6 +4181,7 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_post("/api/temperature",         bridge.handle_api_temperature)
     r.add_get("/api/camera",               bridge.handle_api_camera)
     r.add_get("/api/camera/stream",        bridge.handle_camera_stream)
+    r.add_get("/api/camera/h264",          bridge.handle_camera_h264)
     r.add_get("/api/camera/snapshot",      bridge.handle_api_camera_snapshot)
     r.add_post("/api/camera/start",        bridge.handle_api_camera_start)
     r.add_post("/api/camera/stop",         bridge.handle_api_camera_stop)
@@ -3515,6 +4204,8 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_get("/kx/files/{file_id}/download", bridge.handle_kx_file_download)
     r.add_post("/kx/files/{file_id}/verify", bridge.handle_kx_file_verify)
     r.add_get("/kx/filament/slots",        bridge.handle_kx_filament_slots)
+    r.add_get("/kx/filament/profiles",     bridge.handle_kx_filament_profiles)
+    r.add_post("/kx/filament/slots/{idx}/profile", bridge.handle_kx_filament_slot_profile)
     r.add_get("/kx/history",               bridge.handle_kx_history)
     r.add_get("/kx/ui/{name:.*}",          bridge.handle_kx_ui_asset)
     r.add_get("/kx/files/{id}/objects",    bridge.handle_kx_file_objects)

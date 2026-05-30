@@ -361,6 +361,10 @@ function applyLang(){
   // Slot-Edit-Dialog
   setText('lbl-slot-color',T.slot_edit_color);
   setText('lbl-slot-material',T.slot_edit_material);
+  setText('lbl-slot-profile',T.slot_edit_profile);
+  setText('slot-profile-hint',T.slot_edit_profile_hint);
+  var defOpt=document.getElementById('slot-profile-default-opt');
+  if(defOpt) defOpt.textContent=T.slot_edit_profile_default;
   setText('btn-slot-edit-save',T.slot_edit_save);
   updateSlotEditFeedButton();
   var mi=document.getElementById('slot-edit-mat');if(mi)mi.setAttribute('placeholder',T.slot_edit_custom);
@@ -370,7 +374,11 @@ function applyLang(){
   setText('file-ready-btn',T.file_ready_btn);
   setText('file-slots-btn',T.file_slots_btn);
   setText('file-cancel-btn',T.file_cancel_btn);
-  setText('file-cancel-btn',T.file_cancel_btn);
+  // GCode-Browser-Karten: Texte sind via innerHTML eingebacken,
+  // bei Sprachwechsel komplett neu rendern.
+  if(typeof renderStore==='function' && typeof storeFiles!=='undefined'){
+    try{ renderStore(); }catch(e){}
+  }
 }
 function setText(id,txt){var el=document.getElementById(id);if(el)el.textContent=txt;}
 
@@ -904,6 +912,42 @@ function updateSlotEditFeedButton(){
   btn.style.display='';
   btn.textContent=_slotEditLoaded?tr('slot_edit_unload'):tr('slot_edit_load');
 }
+var _orcaFilamentCache=null;  // [{id,name,vendor,type,color}, …]
+function _loadOrcaFilaments(cb){
+  if(_orcaFilamentCache){ cb(_orcaFilamentCache); return; }
+  fetch(_apiUrl('/kx/filament/profiles')).then(function(r){return r.json();}).then(function(d){
+    _orcaFilamentCache=d.result||[];
+    cb(_orcaFilamentCache);
+  }).catch(function(){ cb([]); });
+}
+function _fillSlotProfileDropdown(material, currentId){
+  var sel=document.getElementById('slot-edit-profile');
+  if(!sel) return;
+  _loadOrcaFilaments(function(profiles){
+    // Type-Filter: nur Profile vom passenden material zeigen (z.B. PLA → alle PLA-Varianten)
+    var matU=(material||'').toUpperCase().trim();
+    var matched=profiles.filter(function(p){
+      var pt=(p.type||'').toUpperCase();
+      // PLA-CF, PLA-SILK etc. zählen auch zu PLA
+      return matU==='' || pt===matU || pt.startsWith(matU+'-') || pt.startsWith(matU+' ');
+    });
+    sel.innerHTML='<option value="">'+tr('slot_edit_profile_default')+'</option>';
+    // Gruppieren nach Vendor
+    var byVendor={};
+    matched.forEach(function(p){ (byVendor[p.vendor]=byVendor[p.vendor]||[]).push(p); });
+    Object.keys(byVendor).sort().forEach(function(v){
+      var g=document.createElement('optgroup'); g.label=v;
+      byVendor[v].forEach(function(p){
+        var o=document.createElement('option');
+        o.value=p.id; o.dataset.vendor=p.vendor;
+        o.textContent=p.name;
+        if(p.id===currentId) o.selected=true;
+        g.appendChild(o);
+      });
+      sel.appendChild(g);
+    });
+  });
+}
 function openSlotEdit(i){
   var slot=(window._amsSlots||[])[i]||{};
   var globalIdx=slot.global_index!=null?slot.global_index:(slot.index!=null?slot.index:i);
@@ -923,6 +967,16 @@ function openSlotEdit(i){
       +'style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);cursor:pointer;font-size:12px;'
       +(m===mat?'background:var(--accent);color:#fff':'background:var(--raised);color:var(--txt2)')+'">'+m+'</button>';
   }).join('');
+  // OrcaSlicer-Profil-Dropdown: aktuellen User-Override für diesen Slot
+  // aus /kx/filament/slots holen (enthält filament_id+filament_vendor).
+  // Mit dem material-Filter (PLA→PLA*) wird die Liste auf passende Profile reduziert.
+  fetch(_apiUrl('/kx/filament/slots')).then(function(r){return r.json();}).then(function(d){
+    var arr=d.result||[];
+    var entry=arr.find(function(x){return x.slot_index===globalIdx;})||{};
+    window._slotProfileMap=window._slotProfileMap||{};
+    window._slotProfileMap[globalIdx]={id:entry.filament_id||'',vendor:entry.filament_vendor||''};
+    _fillSlotProfileDropdown(mat, entry.filament_id||'');
+  }).catch(function(){ _fillSlotProfileDropdown(mat,''); });
   updateSlotEditFeedButton();
   document.getElementById('slot-edit-modal').classList.add('open');
 }
@@ -967,6 +1021,9 @@ function cancelReadyFile(){
 function selectMatPreset(m){
   document.getElementById('slot-edit-mat').value=m;
   highlightMatBtn(m);
+  // Filament-Profile-Dropdown an neues Material anpassen
+  // (vorherige Selektion zurücksetzen — andere Material-Profile passen nicht)
+  _fillSlotProfileDropdown(m, '');
 }
 function highlightMatBtn(val){
   document.querySelectorAll('.mat-preset-btn').forEach(function(b){
@@ -974,6 +1031,8 @@ function highlightMatBtn(val){
     b.style.background=on?'var(--accent)':'var(--raised)';
     b.style.color=on?'#fff':'var(--txt2)';
   });
+  // Auch bei manueller Eingabe ins Material-Textfeld: Dropdown refreshen.
+  if(val) _fillSlotProfileDropdown(val, '');
 }
 function hexToRgb(hex){
   var r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
@@ -983,11 +1042,30 @@ function saveSlotEdit(){
   var hex=document.getElementById('slot-edit-color').value;
   var mat=document.getElementById('slot-edit-mat').value.trim().toUpperCase()||'PLA';
   var color=hexToRgb(hex);
-  post('/api/ams/set_slot',{index:_slotEditIndex,type:mat,color:color})
+  var slotIdx=_slotEditIndex;
+  // OrcaSlicer-Profil-Override: parallel persistieren (Profile bleiben auch
+  // erhalten wenn der User nur Farbe/Material ändert)
+  var profSel=document.getElementById('slot-edit-profile');
+  var newProfId=profSel?profSel.value:'';
+  var newProfVendor='';
+  if(profSel && profSel.selectedOptions && profSel.selectedOptions[0]){
+    newProfVendor=profSel.selectedOptions[0].dataset.vendor||'';
+  }
+  fetch(_apiUrl('/kx/filament/slots/'+slotIdx+'/profile'),{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id:newProfId,vendor:newProfVendor})
+  }).then(function(r){return r.json();}).then(function(){
+    window._slotProfileMap=window._slotProfileMap||{};
+    if(newProfId){ window._slotProfileMap[slotIdx]={id:newProfId,vendor:newProfVendor}; }
+    else delete window._slotProfileMap[slotIdx];
+  }).catch(function(e){clog('Profil-Speichern fehlgeschlagen: '+e,'msg-err');});
+  post('/api/ams/set_slot',{index:slotIdx,type:mat,color:color})
     .then(function(r){return r.json();})
     .then(function(r){
       closeSlotEdit();
-      clog(tr('slot_edit_ok')+' '+(_slotEditIndex+1)+': '+mat+' '+hex,'msg-ok');
+      var profSuffix=newProfId?(' ['+newProfId+']'):'';
+      clog(tr('slot_edit_ok')+' '+(slotIdx+1)+': '+mat+' '+hex+profSuffix,'msg-ok');
     })
     .catch(function(e){clog('Fehler: '+e,'msg-err');});
 }

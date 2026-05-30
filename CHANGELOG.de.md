@@ -1,5 +1,63 @@
 # Changelog
 
+## [0.9.17] – 2026-05-30
+
+### Neu
+- **🧪 Obico-Anbindung (experimentell):** Die Bridge spielt jetzt einen
+  Moonraker, der vom [moonraker-obico](https://github.com/TheSpaghettiDetective/moonraker-obico)
+  Plugin akzeptiert wird. Damit funktionieren Time-Lapse, Layer-aligned
+  First-Layer-Scan und WebRTC-Live-Stream gegen einen (selbst gehosteten oder
+  Cloud-) Obico-Server. **Hinweis:** Das KI-Modell zur Spaghetti-Erkennung
+  ist auf seitliche Kamera-Winkel (Ender/Voron) trainiert — beim Kobra X
+  mit Top-Down-Kamera erkennt es derzeit keine Druckfehler. Das ist deshalb
+  noch nicht produktiv nutzbar, aber Stream/Time-Lapse/Telemetrie laufen.
+- **Mehrsprachiges UI (PR #37 von @gangoke):** Inline-Translations sind raus,
+  stattdessen wechselbares Sprach-Dropdown mit Globe-Icon. Auto-Auswahl nach
+  Browser-Locale, manuelle Wahl wird im LocalStorage gemerkt. Sprachen: 🇩🇪 🇬🇧
+  🇪🇸 🇨🇳 (ES + ZH-CN sind KI-übersetzt und noch nicht von Muttersprachlern
+  geprüft).
+- **OrcaSlicer-Filament-Profil pro AMS-Slot:** Im Slot-Bearbeiten-Dialog kannst
+  du jetzt ein konkretes OrcaSlicer-Profil (z.B. „PolyTerra PLA — Polymaker")
+  pro Slot wählen — die Bridge sendet diese Information beim AMS-Sync mit,
+  statt nur „Generic PLA". Die Profil-Liste wird aus dem OrcaSlicer-Source
+  generiert (~1000 Profile, 43 Hersteller). Damit OrcaSlicer den Hint
+  vollständig respektiert, wird ein passender Patch im OrcaSlicer-KX-Build
+  folgen.
+- **H.264-Direkt-Stream:** Neuer Endpunkt `/api/camera/h264` liefert den
+  Drucker-Kamera-Stream ohne Re-Encoding als MPEG-TS — Latenz drastisch
+  reduziert, Bridge-CPU bei Obico-Stream von ~13 % auf ~3 %.
+
+### Fixes
+- **Temperatur-Setzen über Bridge-UI / Obico löste Drucker-Systemfehler aus:**
+  Per Live-MQTT-Sniff vom Anycubic Slicer Next korrigiert — der Befehl
+  `tempature/set` braucht ein `type`-Feld (0=Nozzle, 1=Bett, 2=beide) und
+  muss über das `web/printer/…`-Topic, nicht `slicer/printer/…`. Nozzle/Bett
+  über die Bridge heizen jetzt sauber.
+- **Große GCode-Uploads (>50 MB) brachen mit Timeout ab:** Der
+  Connect-Timeout vom Socket lief auch während des `sendall()` — bei ~200 MB
+  über LAN brauchte das Schieben mehr als die 30 s und wurde fälschlich als
+  Connect-Timeout abgebrochen. Jetzt sind Connect-, Send- und Read-Phase
+  separat getimeoutet.
+- **Kamera-Snapshot war langsam und konnte sich mit dem Live-Stream blockieren:**
+  Die Bridge hält nun einen zentralen Kamera-Cache (ein einziger ffmpeg-Prozess
+  zieht vom Drucker, alle Konsumenten teilen sich den Stream). Snapshots
+  kommen in ~1.3 ms aus dem RAM statt nach 1-2 s per neuer ffmpeg-Instanz.
+  Behebt außerdem das Single-Client-Limit am Drucker (HTTP 429 bei parallelen
+  Zugriffen).
+- **Sprachwechsel aktualisierte den GCode-Browser nicht:** Die in die
+  File-Karten eingebackenen Texte („Drucken", „Schätzung", „Download") blieben
+  in der alten Sprache. Beim Sprachwechsel werden die Karten jetzt neu
+  gerendert.
+- **GCode Web-Upload + Download + Verify-Dialog (PR #32 von @gangoke):**
+  Dateien können direkt im Browser hoch/runtergeladen werden, mit
+  Warn-Dialog wenn ein nicht durch OrcaSlicer hochgeladener GCode gestartet
+  wird.
+
+### CI/Build
+- Multi-Arch Docker-Image (amd64 + arm64) per Gitea-Actions automatisiert.
+- Release-Build über lokalen CodeBuilder für alle drei Targets
+  (linux-amd64, linux-arm64, windows.exe).
+
 ## [0.9.16] – 2026-05-22
 
 ### Neu
