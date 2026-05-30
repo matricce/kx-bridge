@@ -182,7 +182,7 @@
   "fd_no_slots_msg": "Keine belegten AMS-Slots.{br}Druck trotzdem starten?",
   "fd_slot": "Slot",
   "fd_no_matching_material": "Kein passendes Material",
-  "fd_used": "GENUTZT",
+  "fd_used": "BELEGT",
   "add_printer": "Drucker hinzufügen",
   "apd_lbl_ip": "Drucker-IP",
   "apd_lbl_name": "Name (optional)",
