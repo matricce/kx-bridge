@@ -285,9 +285,9 @@ function applyLang(){
   setText('d-lbl-light',T.lbl_light);
   setText('d-lbl-nozzle',T.label_nozzle);
   setText('d-lbl-bed',T.label_bed);
-  // Dashboard buttons
-  setText('d-btn-pause',T.btn_pause);
-  setText('d-btn-resume',T.btn_resume);
+  // Dashboard buttons — Pause-Button wird zur Toggle-Action; Resume-Beschriftung
+  // wird in updatePauseResumeBtn() je nach Druckerzustand gesetzt.
+  updatePauseResumeBtn();
   setText('d-btn-cancel',T.btn_cancel);
   setText('cam-toggle-btn',camOn?T.btn_cam_stop:T.btn_cam_start);
   setText('cam-placeholder-txt',T.cam_placeholder);
@@ -612,11 +612,14 @@ function applyState(){
     }else{frb.style.display='none';}
   }
   // skip-button (mid-print) – nur sichtbar wenn aktuell gedruckt wird
+  var printing=(s.print_state==='printing'||s.print_state==='paused');
   var skipBtn=document.getElementById('d-btn-skip');
-  if(skipBtn){
-    var printing=(s.print_state==='printing'||s.print_state==='paused');
-    skipBtn.style.display=printing?'':'none';
-  }
+  if(skipBtn) skipBtn.style.display=printing?'':'none';
+  // Pause/Stopp-Buttons nur bei aktivem Druck zeigen (sonst verwirrend wenn
+  // der Drucker idle ist). Pause-Button rendert sich passend zum State um.
+  var ctrlBtns=document.getElementById('d-ctrl-btns');
+  if(ctrlBtns) ctrlBtns.style.display=printing?'':'none';
+  updatePauseResumeBtn();
 
   // header
   var b=document.getElementById('h-badge');
@@ -778,10 +781,17 @@ function applyState(){
         var activity=(slot.activity||'');
         var pct=empty?T.ams_empty:(slot.consumables_percent!=null?slot.consumables_percent+'%':'–');
         var slotLabel=T.label_slot+' '+(globalIdx+1);
+        var profile=(window._slotProfileMap||{})[globalIdx];
+        var vendorBadge='';
+        if(!empty && profile && profile.vendor){
+          var tt=(profile.name||'')+(profile.id?' ('+profile.id+')':'');
+          vendorBadge='<div class="slot-label" style="font-size:9px;color:var(--accent);font-weight:600;margin-top:1px" title="'+tt+'">'+profile.vendor+'</div>';
+        }
         html+='<div class="ams-slot'+(active?' active':'')+(loaded?' loaded':'')+(activity?' '+activity:'')+(empty?' empty':'')
           +'" style="--slot-color:'+col+';opacity:'+(empty?0.4:1)+';cursor:pointer" onclick="openSlotEdit('+i+')">'
           +'<div class="slot-circle" style="background:'+col+'"></div>'
           +'<div class="slot-material">'+(empty?'–':(slot.type||slot.material_type||'–'))+'</div>'
+          +vendorBadge
           +'<div class="slot-label">'+slotLabel+'</div>'
           +'<div class="slot-label" style="font-size:10px;color:var(--txt2)">'+pct+'</div>'
           +'<div style="font-size:9px;color:var(--txt2);margin-top:2px">✏</div>'
@@ -920,9 +930,16 @@ function _loadOrcaFilaments(cb){
     cb(_orcaFilamentCache);
   }).catch(function(){ cb([]); });
 }
-function _fillSlotProfileDropdown(material, currentId){
+function _profileKey(vendor, name){
+  // Eindeutiger Selector: (vendor, name). IDs aus orca_filaments.json sind
+  // NICHT eindeutig (z.B. 136 Profile mit OGFL99). Wir kodieren beide in den
+  // <option>-Value-String mit | als Trenner.
+  return (vendor||'')+'|'+(name||'');
+}
+function _fillSlotProfileDropdown(material, currentVendor, currentName){
   var sel=document.getElementById('slot-edit-profile');
   if(!sel) return;
+  var wantKey=_profileKey(currentVendor, currentName);
   _loadOrcaFilaments(function(profiles){
     // Type-Filter: nur Profile vom passenden material zeigen (z.B. PLA → alle PLA-Varianten)
     var matU=(material||'').toUpperCase().trim();
@@ -939,9 +956,12 @@ function _fillSlotProfileDropdown(material, currentId){
       var g=document.createElement('optgroup'); g.label=v;
       byVendor[v].forEach(function(p){
         var o=document.createElement('option');
-        o.value=p.id; o.dataset.vendor=p.vendor;
+        o.value=_profileKey(p.vendor, p.name);
+        o.dataset.vendor=p.vendor;
+        o.dataset.name=p.name;
+        o.dataset.id=p.id || '';
         o.textContent=p.name;
-        if(p.id===currentId) o.selected=true;
+        if(o.value===wantKey) o.selected=true;
         g.appendChild(o);
       });
       sel.appendChild(g);
@@ -968,15 +988,18 @@ function openSlotEdit(i){
       +(m===mat?'background:var(--accent);color:#fff':'background:var(--raised);color:var(--txt2)')+'">'+m+'</button>';
   }).join('');
   // OrcaSlicer-Profil-Dropdown: aktuellen User-Override für diesen Slot
-  // aus /kx/filament/slots holen (enthält filament_id+filament_vendor).
-  // Mit dem material-Filter (PLA→PLA*) wird die Liste auf passende Profile reduziert.
+  // aus /kx/filament/slots holen (enthält vendor+name+id).
   fetch(_apiUrl('/kx/filament/slots')).then(function(r){return r.json();}).then(function(d){
     var arr=d.result||[];
     var entry=arr.find(function(x){return x.slot_index===globalIdx;})||{};
     window._slotProfileMap=window._slotProfileMap||{};
-    window._slotProfileMap[globalIdx]={id:entry.filament_id||'',vendor:entry.filament_vendor||''};
-    _fillSlotProfileDropdown(mat, entry.filament_id||'');
-  }).catch(function(){ _fillSlotProfileDropdown(mat,''); });
+    window._slotProfileMap[globalIdx]={
+      id:    entry.filament_id||'',
+      vendor:entry.filament_vendor||'',
+      name:  entry.filament_name||'',
+    };
+    _fillSlotProfileDropdown(mat, entry.filament_vendor||'', entry.filament_name||'');
+  }).catch(function(){ _fillSlotProfileDropdown(mat,'',''); });
   updateSlotEditFeedButton();
   document.getElementById('slot-edit-modal').classList.add('open');
 }
@@ -1023,7 +1046,7 @@ function selectMatPreset(m){
   highlightMatBtn(m);
   // Filament-Profile-Dropdown an neues Material anpassen
   // (vorherige Selektion zurücksetzen — andere Material-Profile passen nicht)
-  _fillSlotProfileDropdown(m, '');
+  _fillSlotProfileDropdown(m, '', '');
 }
 function highlightMatBtn(val){
   document.querySelectorAll('.mat-preset-btn').forEach(function(b){
@@ -1032,7 +1055,7 @@ function highlightMatBtn(val){
     b.style.color=on?'#fff':'var(--txt2)';
   });
   // Auch bei manueller Eingabe ins Material-Textfeld: Dropdown refreshen.
-  if(val) _fillSlotProfileDropdown(val, '');
+  if(val) _fillSlotProfileDropdown(val, '', '');
 }
 function hexToRgb(hex){
   var r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
@@ -1043,31 +1066,55 @@ function saveSlotEdit(){
   var mat=document.getElementById('slot-edit-mat').value.trim().toUpperCase()||'PLA';
   var color=hexToRgb(hex);
   var slotIdx=_slotEditIndex;
-  // OrcaSlicer-Profil-Override: parallel persistieren (Profile bleiben auch
-  // erhalten wenn der User nur Farbe/Material ändert)
   var profSel=document.getElementById('slot-edit-profile');
-  var newProfId=profSel?profSel.value:'';
-  var newProfVendor='';
-  if(profSel && profSel.selectedOptions && profSel.selectedOptions[0]){
-    newProfVendor=profSel.selectedOptions[0].dataset.vendor||'';
-  }
+  var sel=profSel && profSel.selectedOptions && profSel.selectedOptions[0];
+  // Primärer Selector: (vendor, name). id ist nur Hint (aus dem JSON-data-attr
+  // mitgegeben — Backend lookt sie nochmal selber nach um veraltete Hints zu
+  // korrigieren).
+  var newProfVendor=sel?(sel.dataset.vendor||''):'';
+  var newProfName  =sel?(sel.dataset.name  ||''):'';
+  var newProfId    =sel?(sel.dataset.id    ||''):'';
+  // Sequenziell speichern: erst Profil-Override (config.ini), dann Material/Farbe
+  // (MQTT zum Drucker). Sonst können beide Pfade sich überholen und der Slot-State
+  // ist beim nächsten Re-Open inkonsistent.
   fetch(_apiUrl('/kx/filament/slots/'+slotIdx+'/profile'),{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({id:newProfId,vendor:newProfVendor})
-  }).then(function(r){return r.json();}).then(function(){
+    body:JSON.stringify({vendor:newProfVendor, name:newProfName, id:newProfId})
+  })
+  .then(function(r){return r.json();})
+  .then(function(){
     window._slotProfileMap=window._slotProfileMap||{};
-    if(newProfId){ window._slotProfileMap[slotIdx]={id:newProfId,vendor:newProfVendor}; }
-    else delete window._slotProfileMap[slotIdx];
-  }).catch(function(e){clog('Profil-Speichern fehlgeschlagen: '+e,'msg-err');});
-  post('/api/ams/set_slot',{index:slotIdx,type:mat,color:color})
-    .then(function(r){return r.json();})
-    .then(function(r){
-      closeSlotEdit();
-      var profSuffix=newProfId?(' ['+newProfId+']'):'';
-      clog(tr('slot_edit_ok')+' '+(slotIdx+1)+': '+mat+' '+hex+profSuffix,'msg-ok');
-    })
-    .catch(function(e){clog('Fehler: '+e,'msg-err');});
+    if(newProfVendor && newProfName){
+      window._slotProfileMap[slotIdx]={id:newProfId, vendor:newProfVendor, name:newProfName};
+    } else {
+      delete window._slotProfileMap[slotIdx];
+    }
+    return post('/api/ams/set_slot',{index:slotIdx,type:mat,color:color});
+  })
+  .then(function(r){return r?r.json():null;})
+  .then(function(){
+    // Slot-Map refreshen damit die Karte sofort den Vendor zeigt.
+    return fetch(_apiUrl('/kx/filament/slots')).then(function(r){return r.json();});
+  })
+  .then(function(d){
+    var arr=(d && d.result)||[];
+    window._slotProfileMap={};
+    arr.forEach(function(e){
+      if(e.filament_vendor && e.filament_name){
+        window._slotProfileMap[e.slot_index]={
+          id:    e.filament_id||'',
+          vendor:e.filament_vendor,
+          name:  e.filament_name,
+        };
+      }
+    });
+    closeSlotEdit();
+    var profSuffix=newProfName?(' ['+newProfVendor+' '+newProfName+']'):'';
+    clog(tr('slot_edit_ok')+' '+(slotIdx+1)+': '+mat+' '+hex+profSuffix,'msg-ok');
+    if(typeof poll==='function') poll();
+  })
+  .catch(function(e){clog('Fehler: '+e,'msg-err');});
 }
 document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('s-printer-ip').addEventListener('input',function(){
@@ -1164,6 +1211,21 @@ var pollTimer;
 (function(){
   var ms=parseInt(localStorage.getItem('pollInterval')||'2000');
   initPrinters();
+  // Slot-Profile-Map initial laden, sonst zeigen die Karten beim ersten
+  // Render keine Vendor-Badge obwohl in der config.ini ein Override steht.
+  fetch(_apiUrl('/kx/filament/slots')).then(function(r){return r.json();}).then(function(d){
+    var arr=(d && d.result)||[];
+    window._slotProfileMap={};
+    arr.forEach(function(e){
+      if(e.filament_vendor && e.filament_name){
+        window._slotProfileMap[e.slot_index]={
+          id:    e.filament_id||'',
+          vendor:e.filament_vendor,
+          name:  e.filament_name,
+        };
+      }
+    });
+  }).catch(function(){});
   poll();pollTimer=setInterval(poll,ms);
 })();
 
@@ -1172,7 +1234,28 @@ function printAction(a){
   post('/printer/print/'+a,{}).then(function(){clog('Druck: '+a,'msg-ok');poll()})
     .catch(function(e){clog('Fehler: '+e,'msg-err')});
 }
-function confirmCancel(){if(confirm('Druck wirklich abbrechen?'))printAction('cancel')}
+function togglePauseResume(){
+  // Druckt → pause; Pausiert → resume. Status kommt aus dem zuletzt gepollten
+  // print_state in S; bei Unklarheit (kein State) Pause als Default.
+  var state=(S && S.print_state)||'';
+  if(state==='paused') printAction('resume');
+  else                 printAction('pause');
+}
+function updatePauseResumeBtn(){
+  var btn=document.getElementById('d-btn-pause');
+  if(!btn) return;
+  var state=(S && S.print_state)||'';
+  if(state==='paused'){
+    btn.textContent=T.btn_resume||'▶ Weiter';
+    btn.classList.add('btn-resume');
+    btn.classList.remove('btn-pause');
+  } else {
+    btn.textContent=T.btn_pause||'⏸ Pause';
+    btn.classList.add('btn-pause');
+    btn.classList.remove('btn-resume');
+  }
+}
+function confirmCancel(){if(confirm(T.confirm_cancel||'Druck wirklich abbrechen?'))printAction('cancel')}
 
 // ── Axis motion ──
 // axis codes: 0=X, 1=Y, 2=Z

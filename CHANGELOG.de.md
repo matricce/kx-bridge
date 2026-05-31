@@ -1,5 +1,74 @@
 # Changelog
 
+## [0.9.18] – 2026-05-31
+
+### Neu
+- **🎉 Filament-Material und -Farbe pro AMS-Slot aus der Bridge an den
+  Drucker senden:** Im Slot-Edit-Dialog gewählte Werte gehen jetzt
+  tatsächlich an den Drucker und werden persistent übernommen — am
+  Drucker-Display siehst du sofort dieselbe Belegung wie in der Bridge-UI.
+  In 0.9.17 wurde der Befehl über das falsche MQTT-Topic
+  (`slicer/printer/…`) gesendet, der Drucker hat ihn stillschweigend
+  ignoriert. Jetzt geht er über `web/printer/…` wie der Anycubic
+  Slicer Next es macht (verifiziert via Live-MQTT-Sniff +
+  Workbench-Vue-Source). **Achtung:** der aktiv geladene Slot kann
+  während des Drucks nicht umgeschrieben werden — vorher ausziehen.
+- **Mehrsprachiges UI – spanische Übersetzung von Muttersprachler
+  überarbeitet (PR #40 von @pezfisk):** fehlende Akzente
+  (impresión, cámara, después, animación, …), Begriffe vereinheitlicht
+  (Pause → Pausa, Start → Iniciar, Layer → Capa). Plus neues
+  `README.es.md` und Cross-Links in den drei READMEs.
+- **Z-Höhen-Anzeige in Obico** funktioniert jetzt. Der Drucker liefert
+  keine echte Z-Position via MQTT (per Live-Sniff bestätigt), die Bridge
+  schätzt sie aus `curr_layer × layer_height + first_layer_height`.
+  Layer-Heights kommen aus dem GCode-Header beim Upload, persistiert
+  im GCode-Store; Fallback aus dem OrcaSlicer-Default-Filename
+  (`…_0.2_…gcode`). `/server/files/metadata` liefert zusätzlich
+  `object_height` (Gesamt-Z), damit Obicos `mmProgress`-Widget
+  `aktuelles Z / Gesamt-Z` anzeigt.
+- **Slot-Karte zeigt den OrcaSlicer-Profil-Vendor** unter dem Material
+  (z.B. „PLA / Polymaker"), mit Profil-Namen + interner ID als
+  Tooltip. So ist auf einen Blick erkennbar welcher Slot-Override
+  aktiv ist.
+
+### Fixes
+- **Slot-Profil-Auswahl im AMS-Dialog (Issue #39 von @harrygeier):**
+  drei separate Bugs in 0.9.17 sorgten dafür dass die gewählte Marke
+  nach dem Speichern verschwand und beim erneuten Öffnen ein falsches
+  Material angezeigt wurde.
+  - `multiColorBox/setInfo` über das falsche MQTT-Topic — siehe oben.
+  - Speichern lief in zwei parallelen Requests (Profil-Override +
+    Material/Farbe) → Race-Bedingung. Läuft jetzt sequenziell und
+    reloaded den lokalen State bevor der Dialog geschlossen wird.
+  - OrcaSlicer-Filament-IDs sind nicht eindeutig — `orca_filaments.json`
+    hat 68 duplikate IDs, `OGFL99` allein ist 136 Vendor-Profilen
+    zugeordnet (Erkenntnis von @gangoke). Der primäre Selector ist
+    jetzt `(vendor, name)` — über alle 1002 Profile eindeutig.
+- **MQTT-Reconnect (Issue #33 von @icebear):** wurde der Drucker über
+  Nacht ausgeschaltet, schlug die Bridge nach 5 Reconnect-Versuchen
+  (~60 s gesamt) endgültig fehl — Filament-Sync ging morgens noch
+  (weil das HTTP ist), aber Print-Start scheiterte mit
+  „connection refused", User musste die Bridge selbst neu starten.
+  Reader-Thread reconnectet jetzt **endlos** (Backoff cappt bei 60 s)
+  bis der Drucker wieder antwortet, mit DEBUG-Logging nach den ersten
+  5 Versuchen damit das Log nicht über Nacht zugemüllt wird.
+- **„Unknown child pid"-Warnungen im Log:** beim Killen der Kamera-
+  `ffmpeg`-Prozesse fehlte das `wait()` — Children blieben als
+  Zombies und asyncio meldete sie alle ~20 s. Gefixt im CameraCache
+  + `/api/camera/stream`.
+
+### UI-Aufräumen
+- **Pause-Button als Toggle:** druckt der Drucker → `⏸ Pause`, ist
+  pausiert → `▶ Weiter`. Der separate „Weiter"-Button entfällt.
+- **Pause + Stopp komplett ausgeblendet wenn Drucker idle** — bei
+  Standby waren beide Buttons vorher dauerhaft sichtbar, was beim
+  Idle-Drucker verwirrend wirkte.
+
+### Build
+- **GCode-Store-Migration:** neue Spalten `layer_height` +
+  `first_layer_height` in `gcode_files` (automatisch beim ersten
+  Start von 0.9.18 angelegt).
+
 ## [0.9.17] – 2026-05-30
 
 ### Neu

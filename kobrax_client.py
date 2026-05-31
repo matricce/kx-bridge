@@ -179,9 +179,23 @@ class KobraXClient:
     def connect(self):
         self._do_connect()
         self._running = True
-        t = threading.Thread(target=self._read_loop, daemon=True)
-        t.start()
+        self._ensure_reader()
         time.sleep(0.3)
+
+    def _ensure_reader(self):
+        """Stellt sicher dass der Reader-Thread lebt. Wenn der Reader nach einer
+        früheren disconnect/reconnect-Sequenz oder einem unbehandelten Fehler
+        gestorben ist, würden empfangene Replies sonst nie ankommen — publish()
+        würde dann zwar senden, aber auf Antworten ewig warten."""
+        if not self._running:
+            return  # gewollter disconnect
+        t = getattr(self, "_reader_thread", None)
+        if t is not None and t.is_alive():
+            return
+        self._reader_thread = threading.Thread(
+            target=self._read_loop, daemon=True, name="kobrax-mqtt-reader",
+        )
+        self._reader_thread.start()
 
     def disconnect(self):
         self._running = False
@@ -191,20 +205,34 @@ class KobraXClient:
             pass
 
     def _reconnect(self):
+        """Persistenter Reconnect: versucht endlos weiter bis der Drucker wieder
+        antwortet oder disconnect() gerufen wurde. Backoff cappt bei 60 s. Die
+        ersten 5 Versuche loggen als WARNING (akute Verbindungsstörung), danach
+        nur DEBUG um Log-Spam bei langem Drucker-Ausfall (z.B. über Nacht
+        ausgeschaltet) zu vermeiden."""
         log.warning("Verbindung verloren – reconnect…")
         try:
             self._sock.close()
         except Exception:
             pass
-        for delay in [2, 4, 8, 15, 30]:
+        delays = [2, 4, 8, 15, 30, 60]
+        attempt = 0
+        while self._running:
+            delay = delays[min(attempt, len(delays) - 1)]
             try:
                 self._do_connect()
-                log.info("Reconnect erfolgreich")
+                log.info("Reconnect erfolgreich (nach %d Versuchen)", attempt + 1)
                 return True
             except Exception as e:
-                log.warning("Reconnect fehlgeschlagen (%s), warte %ss…", e, delay)
-                time.sleep(delay)
-        return False
+                attempt += 1
+                lvl = log.warning if attempt <= 5 else log.debug
+                lvl("Reconnect fehlgeschlagen (%s, Versuch %d), warte %ss…", e, attempt, delay)
+                # Geteiltes Sleep damit disconnect() den Loop schneller bricht.
+                slept = 0.0
+                while slept < delay and self._running:
+                    time.sleep(min(0.5, delay - slept))
+                    slept += 0.5
+        return False  # nur wenn disconnect() gerufen wurde
 
     def _subscribe(self, topic: str):
         with self._lock:
@@ -348,6 +376,9 @@ class KobraXClient:
     # -- Publish + request/response ------------------------------------------
 
     def publish(self, msg_type: str, action: str, data=None, timeout: float = 5.0) -> dict | None:
+        # Falls Reader-Thread aus historischen Gründen tot ist, wiederbeleben —
+        # sonst würden Replies nie ankommen und event.wait() läuft ins Timeout.
+        self._ensure_reader()
         msgid   = str(uuid.uuid4())
         payload = json.dumps({
             "type":      msg_type,
@@ -413,6 +444,7 @@ class KobraXClient:
 
     def publish_web(self, msg_type: str, action: str, data=None) -> None:
         """Fire-and-forget publish on the web/printer topic (used for runtime updates during print)."""
+        self._ensure_reader()
         msgid   = str(uuid.uuid4())
         payload = json.dumps({
             "type":      msg_type,
@@ -429,7 +461,14 @@ class KobraXClient:
             with self._lock:
                 self._sock.sendall(_build_publish(topic, payload))
         except Exception as e:
-            log.error("web send error: %s", e)
+            log.error("web send error: %s, reconnecting…", e)
+            # Reconnect triggern (analog zu publish()); ohne Retry weil
+            # fire-and-forget — der nächste Aufruf wird auf den frischen Socket
+            # treffen.
+            try:
+                self._reconnect()
+            except Exception:
+                pass
 
     # -- High-level commands -------------------------------------------------
 

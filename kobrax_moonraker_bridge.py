@@ -226,6 +226,35 @@ def _parse_gcode_estimated_time(data: bytes) -> int:
     return secs
 
 
+def _parse_gcode_layer_heights(data: bytes) -> tuple[float, float]:
+    """Liest (layer_height, initial_layer_height) aus dem OrcaSlicer-/PrusaSlicer-
+    GCode-Header. Beide sind als Konfigblock am Ende des GCode hinterlegt.
+
+    Beispiel-Zeilen:
+      ; layer_height = 0.2
+      ; initial_layer_print_height = 0.2
+
+    Liefert (0.0, 0.0) wenn nicht gefunden — Aufrufer entscheidet was er macht
+    (typisch: keinen Z-Wert anzeigen)."""
+    import re
+    head = data[:16384].decode("utf-8", errors="ignore")
+    tail = data[-65536:].decode("utf-8", errors="ignore")
+    search = head + "\n" + tail
+    def _grab(pat):
+        m = re.search(pat, search)
+        if not m:
+            return 0.0
+        try:
+            return float(m.group(1))
+        except Exception:
+            return 0.0
+    layer_h   = _grab(r";\s*layer_height\s*=\s*([0-9.]+)")
+    first_h   = (_grab(r";\s*initial_layer_print_height\s*=\s*([0-9.]+)") or
+                 _grab(r";\s*first_layer_height\s*=\s*([0-9.]+)") or
+                 layer_h)
+    return layer_h, first_h
+
+
 def _extract_thumbnail(data: bytes) -> str:
     """Extrahiert Base64-PNG-Thumbnail aus GCode (OrcaSlicer-Format)."""
     try:
@@ -386,7 +415,13 @@ class GCodeStore:
             except Exception:
                 pass
             # Migration: Spalten objects_skip_parts + svg_image (Part-Skip-Feature, v0.9.10)
-            for col, typ in (("objects_skip_parts", "TEXT"), ("svg_image", "TEXT")):
+            # Plus layer_height / first_layer_height (Obico Z-Höhe, v0.9.18)
+            for col, typ in (
+                ("objects_skip_parts", "TEXT"),
+                ("svg_image", "TEXT"),
+                ("layer_height", "REAL"),
+                ("first_layer_height", "REAL"),
+            ):
                 try:
                     self._conn.execute(f"ALTER TABLE gcode_files ADD COLUMN {col} {typ}")
                     self._conn.commit()
@@ -402,7 +437,9 @@ class GCodeStore:
     def save_file(self, file_id: str, filename: str, data: bytes,
                   est_time_sec: int = 0, thumbnail_b64: str = "",
                   gcode_filaments: list | None = None,
-                  web_unverified: bool = False) -> str:
+                  web_unverified: bool = False,
+                  layer_height: float = 0.0,
+                  first_layer_height: float = 0.0) -> str:
         """Speichert GCode-Datei auf Disk und in DB. Gibt Pfad zurück."""
         safe_name = os.path.basename(filename)
         path = os.path.join(self._gcode_dir, safe_name)
@@ -413,9 +450,9 @@ class GCodeStore:
             filaments_json = json.dumps(gcode_filaments) if gcode_filaments else None
             self._conn.execute(
                 """INSERT OR REPLACE INTO gcode_files
-                   (id, filename, path, size_bytes, uploaded_at, thumbnail_b64, est_print_time_sec, gcode_filaments, web_unverified)
-                   VALUES (?,?,?,?,?,?,?,?,?)""",
-                (file_id, filename, path, len(data), now, thumbnail_b64 or None, est_time_sec or None, filaments_json, 1 if web_unverified else 0)
+                   (id, filename, path, size_bytes, uploaded_at, thumbnail_b64, est_print_time_sec, gcode_filaments, web_unverified, layer_height, first_layer_height)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (file_id, filename, path, len(data), now, thumbnail_b64 or None, est_time_sec or None, filaments_json, 1 if web_unverified else 0, layer_height or None, first_layer_height or None)
             )
             self._conn.commit()
         return path
@@ -627,10 +664,17 @@ class CameraCache:
             except Exception as e:
                 log.debug(f"CameraCache: jpeg-loop unterbrochen: {e}")
             finally:
-                try:
-                    self._proc_jpeg.kill()
-                except Exception:
-                    pass
+                # Kill + Wait — sonst bleibt der Child-Prozess als Zombie und
+                # asyncio meldet "Unknown child pid …" beim nächsten reaper-Tick.
+                if self._proc_jpeg is not None:
+                    try:
+                        self._proc_jpeg.kill()
+                    except Exception:
+                        pass
+                    try:
+                        await self._proc_jpeg.wait()
+                    except Exception:
+                        pass
                 self._proc_jpeg = None
             await asyncio.sleep(2.0)  # restart delay
 
@@ -675,10 +719,15 @@ class CameraCache:
             except Exception as e:
                 log.debug(f"CameraCache: h264-loop unterbrochen: {e}")
             finally:
-                try:
-                    self._proc_h264.kill()
-                except Exception:
-                    pass
+                if self._proc_h264 is not None:
+                    try:
+                        self._proc_h264.kill()
+                    except Exception:
+                        pass
+                    try:
+                        await self._proc_h264.wait()
+                    except Exception:
+                        pass
                 self._proc_h264 = None
             await asyncio.sleep(2.0)
 
@@ -717,6 +766,12 @@ class KobraXBridge:
           "remain_time":        0,
           "curr_layer":         0,
           "total_layers":       0,
+          # Layer-Heights pro aktuell laufender Datei (aus dem GCode-Header
+          # geparst). Wird im Upload-Pfad + beim _fetch_from_store gesetzt.
+          # Obico nutzt currentZ aus gcode_position[2] — die Bridge rechnet
+          # currentZ aus curr_layer + diesen Werten in build_print_payload.
+          "layer_height":       0.0,
+          "first_layer_height": 0.0,
           "printer_name":       env_loader.get("BRIDGE_PRINTER_NAME", "Anycubic Kobra X"),
           "firmware_version":   "unknown",
           "upload_url":         "",
@@ -903,6 +958,8 @@ class KobraXBridge:
             self._state["print_duration"] = 0
             self._state["remain_time"] = 0
             self._state["slicer_time"] = 0
+            self._state["layer_height"] = 0.0
+            self._state["first_layer_height"] = 0.0
             self._thumbnail_b64 = ""
         self._state["filename"]       = d.get("filename", self._state["filename"])
         if "progress" in d:
@@ -1489,9 +1546,19 @@ class KobraXBridge:
             # Vendor wird mitgesendet (tray_sub_brands + filament_vendor),
             # damit ein gepatchter OrcaSlicer den Match nach Marke + Type +
             # Farbe machen kann (analog SnapmakerPrinterAgent).
+            # Zwei-Schicht-Resolution für den Filament-Hint an OrcaSlicer:
+            #   1. User-Wahl (config.ini [filament_profiles]) — exakte Kontrolle
+            #   2. Generic-Fallback (_TRAY_INFO_IDX) pro Material-Typ — kein
+            #      Vendor-Hint, OrcaSlicer trifft dann sein eigenes Generic-Preset
             user_profile = self._filament_profiles.get(slot_index) or {}
-            tray_info_idx = user_profile.get("id") or self._TRAY_INFO_IDX.get(material, "OGFL99")
-            vendor = user_profile.get("vendor", "")
+            if user_profile.get("name"):
+                vendor    = user_profile.get("vendor", "")
+                fila_name = user_profile.get("name", "")
+                tray_info_idx = user_profile.get("id") or self._TRAY_INFO_IDX.get(material, "OGFL99")
+            else:
+                vendor    = ""
+                fila_name = ""
+                tray_info_idx = self._TRAY_INFO_IDX.get(material, "OGFL99")
             tray_array.append({
               "id": str(slot_id),
               "tag_uid": "0000000000000000",
@@ -1499,7 +1566,17 @@ class KobraXBridge:
               "tray_type": material,
               "tray_color": color_hex,
               "tray_sub_brands": vendor,
-              "filament_vendor": vendor,  # OrcaSlicer-Patch-Ready (Snapmaker-Stil)
+              "filament_vendor": vendor,
+              # Für den OrcaSlicer-Empfangs-Patch (Variante 2,
+              # MoonrakerPrinterAgent.cpp): `filament_id` direkt
+              # übernehmen (exakt), sonst `preset`-Name per
+              # find_preset() auflösen. tray_info_idx ist im Orca-
+              # Datenmodell nicht eindeutig (z.B. OGFL99 für 136
+              # Profile), aber der Bare-Name aus orca_filaments.json
+              # ist eindeutig — find_preset() parsed @-Suffixe weg.
+              "filament_id": tray_info_idx,
+              "preset":      fila_name,
+              "filament_name": fila_name,  # ältere Aliase
             })
           else:
             tray_array.append({
@@ -1518,6 +1595,68 @@ class KobraXBridge:
         "ams_exist_bits": format(ams_exist_bits, "X"),
         "tray_exist_bits": format(tray_exist_bits, "X"),
       }
+
+    @staticmethod
+    def _layer_height_from_filename(fname: str) -> float:
+        """OrcaSlicer-Default-Filename-Pattern: `<plate>_<material>_<layer>_<dur>.gcode`
+        z.B. `adapter_e27_plate(01)_PLA_0.2_41m1s.gcode` → 0.2.
+
+        Fallback wenn der GCode-Header nicht geparst wurde (z.B. Datei direkt am
+        Slicer gestartet, oder vor v0.9.18 hochgeladen). Liefert 0.0 wenn das
+        Pattern nicht greift."""
+        import re
+        if not fname:
+            return 0.0
+        m = re.search(r"_(0\.\d+)_(\d+[hms])", fname)
+        if not m:
+            return 0.0
+        try:
+            return float(m.group(1))
+        except Exception:
+            return 0.0
+
+    def _estimate_current_z(self) -> float:
+        """Schätzt die aktuelle Z-Höhe aus curr_layer + Layer-Heights.
+
+        Der Drucker liefert keine echte Z-Position via MQTT, aber Obico
+        (moonraker-obico/printer.py:267) liest currentZ aus `gcode_position[2]`.
+        Wir rechnen das mit der layer_height aus dem GCode-Header zurück:
+          z = first_layer_height + (curr_layer - 1) * layer_height
+
+        Werte werden im Upload-Pfad gesetzt und nur bei Druckabbruch/-ende
+        zurückgesetzt (Slot-/Farbänderungen ändern nichts daran). Falls die
+        Werte fehlen (z.B. weil der Druck direkt am Slicer gestartet wurde
+        ohne Upload über die Bridge), wird einmalig aus dem GCode-Store
+        nachgeladen. Liefert 0.0 wenn nichts bekannt — Obico zeigt dann
+        keinen Z-Wert."""
+        s = self._state
+        layer_h = float(s.get("layer_height") or 0.0)
+        first_h = float(s.get("first_layer_height") or 0.0)
+        fname = s.get("filename", "")
+        if not layer_h and fname:
+            try:
+                gf = self._store.get_file_by_name(fname)
+                if gf:
+                    layer_h = float(gf.get("layer_height") or 0.0)
+                    first_h = float(gf.get("first_layer_height") or layer_h)
+            except Exception:
+                pass
+        if not layer_h and fname:
+            # Letzter Fallback: OrcaSlicer-Default-Filename enthält die Layer-Height
+            layer_h = self._layer_height_from_filename(fname)
+            if layer_h and not first_h:
+                first_h = layer_h
+        if layer_h:
+            # cache in state damit nicht jeder Build wieder den Store fragt
+            s["layer_height"] = layer_h
+            s["first_layer_height"] = first_h
+        if not layer_h:
+            return 0.0
+        curr = int(s.get("curr_layer") or 0)
+        if curr <= 0:
+            return 0.0
+        # Layer 1 = first_layer_height, Layer 2 = first + layer_h, …
+        return round(first_h + max(0, curr - 1) * layer_h, 3)
 
     # -------------------------------------------------------------------------
     # WebSocket push
@@ -1639,15 +1778,18 @@ class KobraXBridge:
                 "state_message": "Printer is ready",
             },
             # speed_factor: 1=silent(0.5) / 2=standard(1.0) / 3=high(1.3) / 4=ultra(1.5)
+            # Aktuelle Z-Höhe für Obico aus curr_layer + Layer-Heights schätzen
+            # (Drucker liefert keine echte Z-Position per MQTT). gcode_position[2]
+            # ist der Wert den moonraker-obico in printer.py als currentZ liest.
             "gcode_move": {
                 "speed_factor":   {1: 0.5, 2: 1.0, 3: 1.3, 4: 1.5}.get(int(s.get("print_speed_mode") or 2), 1.0),
                 "extrude_factor": 1.0,
                 "speed":          0,
-                "gcode_position": [0, 0, 0, 0],
+                "gcode_position": [0, 0, self._estimate_current_z(), 0],
                 "absolute_coordinates": True,
                 "absolute_extrude":     True,
                 "homing_origin":  [0, 0, 0, 0],
-                "position":       [0, 0, 0, 0],
+                "position":       [0, 0, self._estimate_current_z(), 0],
             },
             "fan": {
                 "speed": (int(s.get("fan_speed") or 0)) / 100.0,
@@ -1780,8 +1922,10 @@ class KobraXBridge:
                 "status":      "loaded" if s.get("status") == 5 else "empty",
                 "nozzle_temp": 0,
                 # Aktueller User-Override aus config.ini [filament_profiles]
+                # — (vendor,name) ist eindeutig, id ist nur Hint.
                 "filament_id":     profile.get("id", ""),
                 "filament_vendor": profile.get("vendor", ""),
+                "filament_name":   profile.get("name", ""),
             })
         return self._json_cors({"result": slots})
 
@@ -1795,15 +1939,7 @@ class KobraXBridge:
         """
         type_filter = request.rel_url.query.get("type", "").upper().strip()
         vendor_filter = request.rel_url.query.get("vendor", "").strip()
-        data_path = self._find_orca_filaments_json()
-        if not data_path or not os.path.isfile(data_path):
-            return self._json_cors({"result": []})
-        try:
-            with open(data_path, encoding="utf-8") as f:
-                profiles = json.load(f)
-        except Exception as e:
-            log.warning(f"orca_filaments.json read error: {e}")
-            return self._json_cors({"result": []})
+        profiles = self._load_orca_filaments()
         if type_filter:
             profiles = [p for p in profiles if p.get("type", "").upper() == type_filter]
         if vendor_filter:
@@ -1837,8 +1973,15 @@ class KobraXBridge:
         """POST /kx/filament/slots/<idx>/profile — speichert oder löscht
         ein User-Override-Mapping für einen einzelnen AMS-Slot.
 
-        Body: {"id": "OGFL01", "vendor": "Polymaker"}
-              {"id": ""} → Mapping entfernen → Default-Fallback aktiv
+        Primärer Selector ist (vendor, name) — die ID ist im Orca-Datenmodell
+        nicht eindeutig (136 Profile teilen sich z.B. 'OGFL99'). Die ID wird
+        aus orca_filaments.json beim Speichern nachgeschlagen und als Hint
+        mitgeführt für OrcaSlicer's `tray_info_idx`.
+
+        Body: {"vendor": "Polymaker", "name": "PolyTerra PLA"}
+              {"vendor": "", "name": ""} → Mapping entfernen
+              (Backwards-Kompat: {"id":..., "vendor":...} wird akzeptiert,
+              aber `name` ist seit v0.9.18 der primäre Selector.)
         """
         try:
             slot_idx = int(request.match_info.get("idx", "-1"))
@@ -1850,10 +1993,18 @@ class KobraXBridge:
             data = await request.json()
         except Exception:
             data = {}
-        new_id = (data.get("id") or "").strip()
         new_vendor = (data.get("vendor") or "").strip()
-        if new_id:
-            self._filament_profiles[slot_idx] = {"id": new_id, "vendor": new_vendor}
+        new_name   = (data.get("name")   or "").strip()
+        new_id     = (data.get("id")     or "").strip()  # Backwards-Kompat-Hint
+        if new_vendor and new_name:
+            # ID aus JSON lookup'en (nicht aus dem Request-Body, der könnte
+            # veraltet sein oder ein Generic-Fallback).
+            looked_up_id = self._lookup_filament_id(new_vendor, new_name)
+            self._filament_profiles[slot_idx] = {
+                "vendor": new_vendor,
+                "name":   new_name,
+                "id":     looked_up_id or new_id,
+            }
         else:
             self._filament_profiles.pop(slot_idx, None)
         # Persistieren in config.ini
@@ -1863,10 +2014,36 @@ class KobraXBridge:
         except Exception as e:
             log.warning(f"save_filament_profiles failed: {e}")
             return self._json_cors({"error": str(e)}, status=500)
+        entry = self._filament_profiles.get(slot_idx, {})
         return self._json_cors({"result": "ok",
                                 "slot_index": slot_idx,
-                                "id": new_id,
-                                "vendor": new_vendor})
+                                "vendor": entry.get("vendor", ""),
+                                "name":   entry.get("name", ""),
+                                "id":     entry.get("id", "")})
+
+    def _load_orca_filaments(self) -> list[dict]:
+        """Lädt orca_filaments.json einmalig in den Cache. Bei wiederholten
+        Aufrufen wird die Liste aus dem RAM geliefert."""
+        if getattr(self, "_orca_filaments_cache", None) is not None:
+            return self._orca_filaments_cache
+        self._orca_filaments_cache = []
+        data_path = self._find_orca_filaments_json()
+        if not data_path or not os.path.isfile(data_path):
+            return self._orca_filaments_cache
+        try:
+            with open(data_path, encoding="utf-8") as f:
+                self._orca_filaments_cache = json.load(f) or []
+        except Exception as e:
+            log.warning(f"orca_filaments.json read error: {e}")
+        return self._orca_filaments_cache
+
+    def _lookup_filament_id(self, vendor: str, name: str) -> str:
+        """Sucht in orca_filaments.json die filament_id zu einem (vendor,name)-
+        Tupel. Liefert '' wenn nicht gefunden."""
+        for p in self._load_orca_filaments():
+            if p.get("vendor") == vendor and p.get("name") == name:
+                return p.get("id", "")
+        return ""
 
     async def handle_kx_history(self, request):
         limit  = int(request.rel_url.query.get("limit", 50))
@@ -2164,6 +2341,52 @@ class KobraXBridge:
             })
         return web.json_response({"result": files})
 
+    async def handle_files_metadata(self, request):
+        """Moonraker /server/files/metadata — moonraker-obico-Plugin holt das
+        einmal pro Druck und liest daraus `object_height` (für `currentZ`-
+        Anzeige im Obico-UI: `mmProgress` braucht maxZ), `layer_count`,
+        `layer_height` und `first_layer_height` (für die Layer-Berechnung).
+
+        Quelle: aktueller `_state` + GCode-Store-Eintrag wenn vorhanden.
+        Wenn Layer-Heights weder im State noch im Store sind, Fallback auf die
+        OrcaSlicer-Default-Filename-Heuristik (`_layer_height_from_filename`)."""
+        filename = request.rel_url.query.get("filename", "") or self._state.get("filename", "")
+        if not filename:
+            return web.json_response({"result": {}})
+        s = self._state
+        layer_h = float(s.get("layer_height") or 0.0)
+        first_h = float(s.get("first_layer_height") or 0.0)
+        total_layers = int(s.get("total_layers") or 0)
+        est_time = int(s.get("slicer_time") or 0)
+        size_bytes = 0
+        try:
+            gf = self._store.get_file_by_name(filename) or {}
+            if not layer_h:
+                layer_h = float(gf.get("layer_height") or 0.0)
+                first_h = float(gf.get("first_layer_height") or layer_h)
+            if not total_layers:
+                total_layers = int(gf.get("layer_count") or 0)
+            if not est_time:
+                est_time = int(gf.get("est_print_time_sec") or 0)
+            size_bytes = int(gf.get("size_bytes") or 0)
+        except Exception:
+            pass
+        if not layer_h:
+            layer_h = self._layer_height_from_filename(filename)
+            if layer_h and not first_h:
+                first_h = layer_h
+        object_height = round(first_h + max(0, total_layers - 1) * layer_h, 3) if (layer_h and total_layers) else 0.0
+        return web.json_response({"result": {
+            "filename":           filename,
+            "size":               size_bytes,
+            "modified":           time.time(),
+            "estimated_time":     est_time or None,
+            "layer_height":       layer_h or None,
+            "first_layer_height": first_h or None,
+            "layer_count":        total_layers or None,
+            "object_height":      object_height or None,
+        }})
+
     # ── Moonraker-Stubs für moonraker-obico ──────────────────────────────────
     async def handle_access_api_key(self, request):
         """Moonraker /access/api_key — wir haben keine Auth, geben einen Dummy zurück.
@@ -2290,6 +2513,9 @@ class KobraXBridge:
         self._state["slicer_time"] = est_time
         thumbnail_b64 = _extract_thumbnail(file_data)
         gcode_filaments = _extract_filament_info(file_data)
+        layer_h, first_h = _parse_gcode_layer_heights(file_data)
+        self._state["layer_height"] = layer_h
+        self._state["first_layer_height"] = first_h
 
         # Datei persistent im GCode-Store ablegen
         self._store.save_file(
@@ -2300,6 +2526,8 @@ class KobraXBridge:
             thumbnail_b64=thumbnail_b64,
             gcode_filaments=gcode_filaments or None,
             web_unverified=web_upload,
+            layer_height=layer_h,
+            first_layer_height=first_h,
         )
         serve_path = os.path.join(self._serve_dir_path, os.path.basename(remote_filename))
         del file_data  # RAM freigeben
@@ -2706,22 +2934,25 @@ class KobraXBridge:
             return web.json_response({"error": "color must be [r,g,b]"}, status=400)
         box_id, local_slot = self._global_to_box_slot(index)
         loop = asyncio.get_event_loop()
+        # setInfo geht über web/printer-Topic (wie tempature/set). Per
+        # Workbench-Vue mqtt_setInfo verifiziert — via slicer/printer/ wurden
+        # die Slot-Änderungen vom Drucker ignoriert und beim nächsten
+        # multiColorBox/report mit dem alten Material überschrieben.
         def _send():
-            resp = self.client.publish(
+            self.client.publish_web(
                 "multiColorBox", "setInfo",
                 {"multi_color_box": [{"id": box_id, "slots": [{"index": local_slot, "type": mat, "color": color}]}]},
-                timeout=5
             )
-            log.info(f"setInfo global={index} box={box_id} local_slot={local_slot} type={mat} color={color} → {resp}")
-            return resp
-        resp = await loop.run_in_executor(None, _send)
-        if resp and resp.get("code") == 200:
-            # Update cached slot immediately
-            for s in self._ams_slots:
-                if s.get("global_index") == index:
-                    s["type"]  = mat
-                    s["color"] = color
-                    break
+            log.info(f"setInfo (web) global={index} box={box_id} local_slot={local_slot} type={mat} color={color}")
+        await loop.run_in_executor(None, _send)
+        # Optimistisches Update: cached slot sofort anpassen (Drucker echoed
+        # gleich via multiColorBox/report — falls er den Befehl ignoriert,
+        # überschreibt der Report das wieder).
+        for s in self._ams_slots:
+            if s.get("global_index") == index:
+                s["type"]  = mat
+                s["color"] = color
+                break
         return web.json_response({"result": "ok"})
 
     async def handle_api_ams_feed(self, request):
@@ -3060,6 +3291,10 @@ class KobraXBridge:
         finally:
             try:
                 proc.kill()
+            except Exception:
+                pass
+            try:
+                await proc.wait()
             except Exception:
                 pass
 
@@ -4143,6 +4378,7 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_get("/printer/objects/subscribe",  bridge.handle_objects_subscribe)
     r.add_post("/printer/objects/subscribe", bridge.handle_objects_subscribe)
     r.add_get("/server/files/list",          bridge.handle_files_list)
+    r.add_get("/server/files/metadata",      bridge.handle_files_metadata)
     r.add_post("/server/files/upload",       bridge.handle_file_upload)
     r.add_post("/printer/print/start",       bridge.handle_print_start)
     r.add_post("/printer/print/pause",       bridge.handle_print_pause)
