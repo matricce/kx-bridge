@@ -8,7 +8,7 @@
 
 Eine Moonraker-kompatible Bridge, die direkt mit dem Drucker spricht.
 
-<sub>🇬🇧 <a href="README.md">English version</a></sub>
+<sub>🇬🇧 <a href="README.md">English version</a>  ·  🇪🇸 <a href="README.es.md">Versión española</a></sub>
 
 <br>
 
