@@ -8,7 +8,7 @@
 
 Un puente compatible con Moonraker que se comunica directamente con la impresora.
 
-<sub>🇩🇪 <a href="README.de.md">Versión en alemán</a></sub>
+<sub>🇬🇧 <a href="README.md">English version</a>  ·  🇩🇪 <a href="README.de.md">Deutsche Version</a></sub>
 
 <br>
 
