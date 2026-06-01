@@ -3085,13 +3085,10 @@ class KobraXBridge:
         loop = asyncio.get_event_loop()
 
         def _send():
-            return self.client.publish("multiColorBox", "setDry", payload, timeout=5)
-
-        resp = await loop.run_in_executor(None, _send)
-        if resp is None:
-            return web.json_response({"error": "No response from printer"}, status=504)
-        if int(resp.get("code", 200)) != 200:
-            return web.json_response({"error": f"Printer rejected command: {resp}"}, status=502)
+            return self.client.publish("multiColorBox", "setDry", payload, timeout=0)
+        # Fire-and-forget: setDry ACK arrives via multiColorBox/report callback.
+        # Waiting for a response on that busy push topic causes false "code:0" rejections.
+        await loop.run_in_executor(None, _send)
 
         self._state["ace_drying"] = ui_state
         self._state_dirty = True
