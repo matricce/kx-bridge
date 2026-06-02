@@ -8,6 +8,11 @@
 
 Eine Moonraker-kompatible Bridge, die direkt mit dem Drucker spricht.
 
+<sub>🧪 Ein Community-Bericht auf Reddit deutet darauf hin, dass die Bridge auch
+mit dem **Kobra S1** und **Kobra S1 Max** funktioniert — die Protokolle wirken
+kompatibel, beides ist aber weder offiziell getestet noch unterstützt.
+Feedback willkommen.</sub>
+
 <sub>🇬🇧 <a href="README.md">English version</a>  ·  🇪🇸 <a href="README.es.md">Versión española</a></sub>
 
 <br>
@@ -32,12 +37,17 @@ Eine Moonraker-kompatible Bridge, die direkt mit dem Drucker spricht.
 |---|---|
 | 🖨️ | **Druckersteuerung** — Start, Pause, Resume, Abbruch, Temperaturen, Druckgeschwindigkeit |
 | 📊 | **Live-Status** — Temperatur, Fortschritt, Layer, Restzeit, Kamera-Stream |
-| 🎨 | **AMS / Multicolor** — Filament-Slots, Per-Kanal-Remapping, MMU-Emulation für OrcaSlicer Filament-Sync |
+| 🎨 | **AMS / Multicolor** — Slots mit **Profil-Picker pro Slot** (eigene Marke aus OrcaSlicer-Profilen pro Slot zuweisen); Bridge schreibt Material und Farbe ans Drucker-Display zurück |
+| 📦 | **Eigene OrcaSlicer-Profile importieren** — ZIP aus `~/.config/OrcaSlicer/user/<id>/filament/` in die Bridge ziehen; tauchen im Slot-Dropdown unter ★ Eigene Profile auf |
+| 📷 | **Obico-Integration (experimentell)** — Time-Lapse und WebRTC-Livestream gegen einen selbst gehosteten [Obico-Server](https://github.com/TheSpaghettiDetective/obico-server) via moonraker-obico |
+| 📐 | **H.264-Direkt-Stream + Z-Höhe** — sparsamer Kamera-Pfad für Obico, aktuelle Z aus der Layer-Höhe abgeleitet (Mm-Progress-Widget) |
 | 🗂️ | **GCode-Browser** — hochgeladene Dateien mit Thumbnail, Druckhistorie, Suche & Filter |
 | 🧩 | **Multi-Printer** — mehrere Drucker in **einer** Bridge-Instanz, Umschalten per Dropdown |
 | ➕ | **Drucker hinzufügen per Klick** — nur die IP eingeben, Zugangsdaten werden automatisch importiert |
+| 🔁 | **Robuster MQTT-Reconnect** — Bridge überlebt nächtlichen Drucker-Reboot ohne manuellen Neustart |
+| 🌐 | **Mehrsprachiges UI** — DE / EN / ES / 中文, Browser-Sprache automatisch erkannt |
 | 🔄 | **Self-Update** — neue Versionen direkt im Browser installieren |
-| 🌐 | **OrcaSlicer** — volles Moonraker-Protokoll (HTTP + WebSocket), DE/EN UI |
+| 🧠 | **OrcaSlicer** — volles Moonraker-Protokoll (HTTP + WebSocket); für korrekten Vendor-Match pro Slot den [OrcaSlicer-KX-Build](#-empfohlener-slicer) nutzen |
 
 ---
 
@@ -103,18 +113,28 @@ Drucker → Verbindungstyp **Moonraker** → Host: `http://BRIDGE-IP:7125`
 
 ## 🎨 Empfohlener Slicer
 
-Für die beste Erfahrung mit der KX-Bridge bieten wir einen **gepatchten
-OrcaSlicer-Build**, der drei offene SoftFever/OrcaSlicer-PRs bündelt: das
-Anycubic-Kobra-X-Druckerprofil, einen Multicolor-G-Code-Fix und — am wichtigsten
-— einen Moonraker/Happy-Hare-Filament-Sync-Fix, der die AMS-Slot-Positionen auch
-bei einem leeren Slot in der Mitte korrekt beibehält.
+Für sauberen AMS-Filament-Sync gibt es einen **gepatchten OrcaSlicer-Build**:
 
 → **[OrcaSlicer-KX Releases](https://gitea.it-drui.de/viewit/OrcaSlicer-KX/releases/latest)** (Linux AppImage + Windows ZIP)
 
-Standard-OrcaSlicer funktioniert auch; der gepatchte Build verbessert
-hauptsächlich das AMS-Handling. Es ist ein Build von
-[OrcaSlicer](https://github.com/SoftFever/OrcaSlicer) (AGPL-3.0); der Quellcode
-ist über die verlinkten PRs verfügbar.
+**Upstream-PRs im KX-Build:**
+
+- **[PR #13372](https://github.com/SoftFever/OrcaSlicer/pull/13372)** — Moonraker / Happy-Hare AMS-Sync-Fix (Slot-Positionen bleiben auch bei leerem Slot in der Mitte korrekt)
+- **[PR #13719](https://github.com/SoftFever/OrcaSlicer/pull/13719)** — Vendor- + Name-Matching für Moonraker (liest `name` + `vendor_name` pro Slot und matched gegen deine Filament-Presets), von [@LordGuenni](https://github.com/LordGuenni)
+- **[PR #13315](https://github.com/SoftFever/OrcaSlicer/pull/13315)** — Eindeutige `filament_id` für User-Presets (neu erstellte eigene Profile bekommen eine frische ID statt das `OGFL99` vom Generic-Parent zu erben), von [@mrnoisytiger](https://github.com/mrnoisytiger)
+
+**Plus vier KX-eigene Verbesserungen on top:**
+
+- Bridge-Filament-Hint (`tray_info_idx` + Vendor) respektieren
+- Vendor-Match auch wenn das gewählte Base-Preset **nicht is_compatible** mit dem aktiven Drucker ist (so matchen Profile aus anderen Drucker-Setups trotzdem über die Marke)
+- Vendor-Match wenn `tray_info_idx` gesetzt ist, das Preset aber inkompatibel
+- Zwei-Pass-Suche: erst kompatible Presets, dann alle sichtbaren
+
+**Warum das zusammen wichtig ist:** ohne #13719 landen die AMS-Slots in OrcaSlicer alle auf `Generic PLA` / `Generic PETG`, obwohl die Bridge die konkrete Marke schon mitsendet (`name + vendor_name + gate_filament_name`). Mit dem KX-Build matched OrcaSlicer deine echten User-Presets — auch die, die du via [Eigene OrcaSlicer-Profile importieren](#-features) in die Bridge gezogen hast.
+
+Stock-Upstream-OrcaSlicer funktioniert für Slicing und Drucken weiterhin — nur das Per-Slot-Vendor-Matching beim AMS-Sync fällt dann weg. Material und Farbe pro Slot kannst du auch ohne den KX-Build über die Bridge ans Drucker-Display schreiben (das läuft über MQTT, nicht über den Slicer).
+
+OrcaSlicer-KX ist ein Build von [OrcaSlicer](https://github.com/SoftFever/OrcaSlicer) (AGPL-3.0); der Quellcode der Upstream-PRs ist auf GitHub, die KX-spezifischen Patches im OrcaSlicer-KX-Repo.
 
 ---
 
@@ -123,6 +143,13 @@ ist über die verlinkten PRs verfügbar.
 - **[Home-Assistant-Integration](https://github.com/gangoke/kobrax-lan-hass-component)**
   von [@gangoke](https://github.com/gangoke) — bindet Sensoren, Drucksteuerung,
   Licht, Kamera und das GCode-Vorschaubild als native Home-Assistant-Entitäten ein.
+- **[Obico (selbst gehostet)](https://github.com/TheSpaghettiDetective/obico-server)** —
+  die Bridge bietet eine Moonraker-kompatible API, die
+  [moonraker-obico](https://github.com/TheSpaghettiDetective/moonraker-obico)
+  akzeptiert; damit hast du Time-Lapse und WebRTC-Live-Stream gegen deinen
+  eigenen Obico-Server. Die KI-Spaghetti-Erkennung ist beim Kobra X
+  experimentell — der Top-Down-Kamerawinkel weicht von dem ab, auf den
+  das Modell trainiert wurde.
 
 > Dies sind **Community-Projekte**, die nicht von KX-Bridge betreut oder
 > supportet werden. Bei Fragen oder Problemen bitte das verlinkte Repository nutzen.

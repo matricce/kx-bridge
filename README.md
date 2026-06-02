@@ -8,6 +8,10 @@
 
 A Moonraker-compatible bridge that talks directly to the printer.
 
+<sub>🧪 A community report on Reddit suggests the bridge also works with the
+**Kobra S1** and **Kobra S1 Max** — protocols look compatible, but neither is
+officially tested or supported. Feedback welcome.</sub>
+
 <sub>🇩🇪 <a href="README.de.md">Deutsche Version</a>  ·  🇪🇸 <a href="README.es.md">Versión española</a></sub>
 
 <br>
@@ -32,12 +36,17 @@ A Moonraker-compatible bridge that talks directly to the printer.
 |---|---|
 | 🖨️ | **Printer control** — start, pause, resume, cancel, temperatures, print speed |
 | 📊 | **Live status** — temperature, progress, layers, remaining time, camera stream |
-| 🎨 | **AMS / multicolor** — filament slots, per-channel remapping, MMU emulation for OrcaSlicer filament sync |
+| 🎨 | **AMS / multicolor** — slots with per-slot **profile picker** (assign your own brand from OrcaSlicer profiles per slot); bridge writes material & colour back to the printer display |
+| 📦 | **Import your own OrcaSlicer profiles** — drag a ZIP from `~/.config/OrcaSlicer/user/<id>/filament/` into the bridge; they show up in the slot dropdown under ★ Own profiles |
+| 📷 | **Obico integration (experimental)** — Time-Lapse and WebRTC live stream against a self-hosted [Obico server](https://github.com/TheSpaghettiDetective/obico-server) via moonraker-obico |
+| 📐 | **Direct H.264 stream + Z-height** — low-CPU camera path for Obico, current Z derived from layer-height for the print-progress widget |
 | 🗂️ | **GCode browser** — uploaded files with thumbnails, print history, search & filter |
 | 🧩 | **Multi-printer** — multiple printers in **one** bridge instance, switch via dropdown |
 | ➕ | **Add a printer with one click** — just enter the IP, credentials are imported automatically |
+| 🔁 | **Robust MQTT reconnect** — bridge survives overnight printer reboots without manual restart |
+| 🌐 | **Multi-language UI** — DE / EN / ES / 中文, auto-detect browser locale |
 | 🔄 | **Self-update** — install new versions directly in the browser |
-| 🌐 | **OrcaSlicer** — full Moonraker protocol (HTTP + WebSocket), EN/DE UI |
+| 🧠 | **OrcaSlicer** — full Moonraker protocol (HTTP + WebSocket); pair with the [OrcaSlicer-KX build](#-recommended-slicer) for proper per-slot vendor matching |
 
 ---
 
@@ -103,16 +112,28 @@ Printer → Connection type **Moonraker** → Host: `http://BRIDGE-IP:7125`
 
 ## 🎨 Recommended Slicer
 
-For the best KX-Bridge experience we offer a **patched OrcaSlicer build** that
-bundles three open SoftFever/OrcaSlicer PRs: the Anycubic Kobra X printer
-profile, a multicolor G-code fix and — most importantly — a Moonraker/Happy-Hare
-filament-sync fix that keeps AMS slot positions intact even with an empty slot.
+For proper AMS filament-sync we ship a **patched OrcaSlicer build**:
 
 → **[OrcaSlicer-KX releases](https://gitea.it-drui.de/viewit/OrcaSlicer-KX/releases/latest)** (Linux AppImage + Windows ZIP)
 
-Standard OrcaSlicer also works; the patched build mainly improves AMS handling.
-It's a build of [OrcaSlicer](https://github.com/SoftFever/OrcaSlicer) (AGPL-3.0);
-source is available via the linked PRs.
+**Upstream PRs bundled in the KX build:**
+
+- **[PR #13372](https://github.com/SoftFever/OrcaSlicer/pull/13372)** — Moonraker / Happy-Hare AMS sync fix (slot positions stay correct even with empty slots)
+- **[PR #13719](https://github.com/SoftFever/OrcaSlicer/pull/13719)** — Vendor + Name matching for Moonraker (reads `name` + `vendor_name` per slot and matches against the user's filament presets), by [@LordGuenni](https://github.com/LordGuenni)
+- **[PR #13315](https://github.com/SoftFever/OrcaSlicer/pull/13315)** — Unique `filament_id` for user presets (so newly created custom profiles get a fresh ID instead of inheriting `OGFL99` from the generic parent), by [@mrnoisytiger](https://github.com/mrnoisytiger)
+
+**Plus four KX-specific matching improvements on top:**
+
+- Respect the bridge filament hint (`tray_info_idx` + vendor)
+- Vendor match also when the chosen base preset is **not is_compatible** with the active printer (so a profile copied from a different machine still matches by vendor)
+- Vendor match when `tray_info_idx` is set but its preset is incompatible
+- Two-pass lookup: first compatible presets, then all visible ones
+
+**Why this matters:** without #13719 the AMS slots in OrcaSlicer all fall back to `Generic PLA` / `Generic PETG` even though the bridge already sends the concrete brand (`name + vendor_name + gate_filament_name`). With the KX build OrcaSlicer matches your actual user presets — including profiles you imported into the bridge via the [Import your own OrcaSlicer profiles](#-features) flow.
+
+Stock upstream OrcaSlicer still works for slicing and printing — you just lose the per-slot brand matching on AMS sync. Slot material + colour can still be pushed bridge → printer either way (that goes over MQTT, not via the slicer).
+
+OrcaSlicer-KX is a build of [OrcaSlicer](https://github.com/SoftFever/OrcaSlicer) (AGPL-3.0); source for each upstream PR is on GitHub, KX-specific patches live in the OrcaSlicer-KX repo.
 
 ---
 
@@ -121,6 +142,12 @@ source is available via the linked PRs.
 - **[Home Assistant integration](https://github.com/gangoke/kobrax-lan-hass-component)**
   by [@gangoke](https://github.com/gangoke) — exposes sensors, print controls,
   light, camera and the GCode thumbnail as native Home Assistant entities.
+- **[Obico (self-hosted)](https://github.com/TheSpaghettiDetective/obico-server)** —
+  the bridge exposes a Moonraker-compatible surface that
+  [moonraker-obico](https://github.com/TheSpaghettiDetective/moonraker-obico)
+  accepts, so you get Time-Lapse and WebRTC live streaming against your own
+  Obico server. The AI failure-detection side is experimental on the Kobra X
+  (top-down camera angle differs from what the model was trained on).
 
 > These are **community projects**, not maintained or supported by KX-Bridge.
 > For questions or issues, please use the linked repository.

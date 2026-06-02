@@ -8,6 +8,10 @@
 
 Un puente compatible con Moonraker que se comunica directamente con la impresora.
 
+<sub>🧪 Un usuario en Reddit ha reportado que el puente también funciona con la
+**Kobra S1** y la **Kobra S1 Max** — los protocolos parecen compatibles, pero
+ninguna está oficialmente probada ni soportada. Se agradece el feedback.</sub>
+
 <sub>🇬🇧 <a href="README.md">English version</a>  ·  🇩🇪 <a href="README.de.md">Deutsche Version</a></sub>
 
 <br>
@@ -32,12 +36,17 @@ Un puente compatible con Moonraker que se comunica directamente con la impresora
 |---|---|
 | 🖨️ | **Control de impresora** — iniciar, pausar, reanudar, cancelar, temperaturas, velocidad de impresión |
 | 📊 | **Estado en tiempo real** — temperatura, progreso, capas, tiempo restante, transmisión de cámara |
-| 🎨 | **AMS / multicolor** — ranuras de filamento, reasignación por canal, emulación MMU para sincronización de filamento en OrcaSlicer |
+| 🎨 | **AMS / multicolor** — ranuras con **selector de perfil por ranura** (asigna tu propia marca de los perfiles de OrcaSlicer a cada ranura); el puente escribe material y color al display de la impresora |
+| 📦 | **Importa tus propios perfiles de OrcaSlicer** — arrastra un ZIP de `~/.config/OrcaSlicer/user/<id>/filament/` al puente; aparecen en el desplegable de la ranura bajo ★ Perfiles propios |
+| 📷 | **Integración con Obico (experimental)** — Time-Lapse y stream en vivo WebRTC contra un [servidor Obico](https://github.com/TheSpaghettiDetective/obico-server) autoalojado vía moonraker-obico |
+| 📐 | **Stream H.264 directo + altura Z** — ruta de cámara de bajo consumo de CPU para Obico, Z actual derivada de la altura de capa (widget de progreso) |
 | 🗂️ | **Explorador de GCode** — archivos subidos con vistas previas, historial de impresión, búsqueda y filtros |
 | 🧩 | **Multi-impresora** — múltiples impresoras en **una** instancia del puente, cambia mediante un menú desplegable |
 | ➕ | **Añade una impresora con un clic** — solo introduce la IP, las credenciales se importan automáticamente |
+| 🔁 | **Reconexión MQTT robusta** — el puente sobrevive a reinicios nocturnos de la impresora sin reinicio manual |
+| 🌐 | **Interfaz multilingüe** — DE / EN / ES / 中文, detecta automáticamente el idioma del navegador |
 | 🔄 | **Actualización automática** — instala nuevas versiones directamente desde el navegador |
-| 🌐 | **OrcaSlicer** — protocolo Moonraker completo (HTTP + WebSocket), interfaz EN/ES |
+| 🧠 | **OrcaSlicer** — protocolo Moonraker completo (HTTP + WebSocket); usa el [build OrcaSlicer-KX](#-slicer-recomendado) para emparejamiento correcto de vendor por ranura |
 
 ---
 
@@ -103,16 +112,28 @@ Impresora → Tipo de conexión **Moonraker** → Host: `http://IP-DEL-PUENTE:71
 
 ## 🎨 Slicer recomendado
 
-Para la mejor experiencia con KX-Bridge ofrecemos una **versión modificada de OrcaSlicer** que
-incluye tres PRs abiertos de SoftFever/OrcaSlicer: el perfil de la impresora Anycubic Kobra
-X, una corrección de GCode multicolor y — lo más importante — una corrección de sincronización de
-filamento Moonraker/Happy-Hare que mantiene las posiciones de las ranuras AMS intactas incluso con una ranura vacía.
+Para una sincronización de filamento AMS correcta ofrecemos una **versión modificada de OrcaSlicer**:
 
 → **[Lanzamientos de OrcaSlicer-KX](https://gitea.it-drui.de/viewit/OrcaSlicer-KX/releases/latest)** (Linux AppImage + Windows ZIP)
 
-OrcaSlicer estándar también funciona; la versión modificada mejora principalmente el manejo de AMS.
-Es una versión basada en [OrcaSlicer](https://github.com/SoftFever/OrcaSlicer) (AGPL-3.0);
-el código fuente está disponible a través de los PRs enlazados.
+**PRs upstream incluidos en el build KX:**
+
+- **[PR #13372](https://github.com/SoftFever/OrcaSlicer/pull/13372)** — Corrección de sincronización Moonraker / Happy-Hare AMS (las posiciones de las ranuras se mantienen correctas incluso con ranuras vacías)
+- **[PR #13719](https://github.com/SoftFever/OrcaSlicer/pull/13719)** — Coincidencia de Vendor + Nombre para Moonraker (lee `name` + `vendor_name` por ranura y los empareja con los presets de filamento del usuario), por [@LordGuenni](https://github.com/LordGuenni)
+- **[PR #13315](https://github.com/SoftFever/OrcaSlicer/pull/13315)** — `filament_id` único para presets de usuario (los perfiles nuevos reciben un ID nuevo en vez de heredar `OGFL99` del padre genérico), por [@mrnoisytiger](https://github.com/mrnoisytiger)
+
+**Más cuatro mejoras específicas de KX encima:**
+
+- Respetar el hint de filamento del puente (`tray_info_idx` + vendor)
+- Coincidencia por vendor incluso cuando el preset base no es **is_compatible** con la impresora activa (así un perfil copiado de otra máquina sigue coincidiendo por vendor)
+- Coincidencia por vendor cuando `tray_info_idx` está definido pero su preset es incompatible
+- Búsqueda de dos pasadas: primero presets compatibles, luego todos los visibles
+
+**Por qué importa:** sin #13719 todas las ranuras AMS caen en `Generic PLA` / `Generic PETG` aunque el puente ya envíe la marca concreta (`name + vendor_name + gate_filament_name`). Con el build KX, OrcaSlicer coincide con tus presets de usuario reales — incluyendo los perfiles que importaste al puente vía [Importa tus propios perfiles de OrcaSlicer](#-características).
+
+OrcaSlicer upstream también funciona para rebanar e imprimir — solo pierdes la coincidencia de vendor por ranura en la sincronización AMS. El material y color por ranura se pueden empujar puente → impresora con cualquier slicer (eso va por MQTT, no por el slicer).
+
+OrcaSlicer-KX es un build de [OrcaSlicer](https://github.com/SoftFever/OrcaSlicer) (AGPL-3.0); el código fuente de cada PR upstream está en GitHub, los parches específicos de KX en el repo OrcaSlicer-KX.
 
 ---
 
@@ -121,6 +142,12 @@ el código fuente está disponible a través de los PRs enlazados.
 - **[Integración con Home Assistant](https://github.com/gangoke/kobrax-lan-hass-component)**
   por [@gangoke](https://github.com/gangoke) — expone sensores, controles de impresión,
   luz, cámara y la vista previa del GCode como entidades nativas de Home Assistant.
+- **[Obico (autoalojado)](https://github.com/TheSpaghettiDetective/obico-server)** —
+  el puente expone una API compatible con Moonraker que
+  [moonraker-obico](https://github.com/TheSpaghettiDetective/moonraker-obico)
+  acepta, así obtienes Time-Lapse y streaming en vivo WebRTC contra tu propio
+  servidor Obico. La detección de fallos por IA es experimental en la Kobra X
+  (el ángulo cenital de la cámara difiere del que el modelo fue entrenado).
 
 > Estos son **proyectos de la comunidad**, no mantenidos ni soportados por KX-Bridge.
 > Para preguntas o problemas, utiliza el repositorio enlazado.
