@@ -19,9 +19,9 @@
   are passed through to Orca on sync as user matches. Works over HTTP
   so the bridge can run in Docker on a Raspi/NAS while OrcaSlicer
   lives on a desktop. Override-only profiles with just
-  `inherits: "Generic PLA @System"` + a few tweaks (e.g. "Bert - PLA")
-  are detected correctly — the bridge resolves the inherited fields
-  from the system parent.
+  `inherits: "Generic PLA @System"` + a few tweaks are detected
+  correctly — the bridge resolves the inherited fields from the
+  system parent.
 
 ### Fixes
 - **AMS sync stuck on "Generic PLA":** the Orca data model has 68

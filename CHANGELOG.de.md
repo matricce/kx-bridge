@@ -19,9 +19,9 @@
   wird beim Sync an Orca als User-Match weitergegeben. Funktioniert
   über HTTP, also auch wenn die Bridge im Docker auf Raspi/NAS läuft
   und OrcaSlicer auf dem Desktop. Auch reine Override-Profile mit nur
-  `inherits: "Generic PLA @System"` + ein paar Tweaks (z.B.
-  „Bert - PLA") werden korrekt erkannt — die Bridge resolved die
-  vererbten Felder aus dem System-Parent.
+  `inherits: "Generic PLA @System"` + ein paar Tweaks werden korrekt
+  erkannt — die Bridge resolved die vererbten Felder aus dem
+  System-Parent.
 
 ### Fixes
 - **AMS-Sync landete hartnäckig auf „Generic PLA":** das Orca-
