@@ -13,6 +13,7 @@ COPY data/ ./static/
 COPY config_loader.py .
 COPY env_loader.py .
 COPY kobrax_client.py .
+COPY orca_filaments.py .
 COPY VERSION .
 COPY anycubic_slicer.crt .
 COPY anycubic_slicer.key .

@@ -312,6 +312,17 @@ function applyLang(){
   setText('modal-sec-print',T.settings_print);
   setText('modal-sec-poll',T.settings_poll);
   setText('modal-sec-version',T.settings_version);
+  // Custom-Profile-Import (Issue #41)
+  setText('modal-sec-orca-profiles',T.orca_profile_section);
+  setText('orca-profiles-hint',T.orca_profile_hint);
+  setText('lbl-orca-profiles-import',T.orca_profile_import_btn);
+  setText('lbl-slot-profile-import',T.orca_profile_import_link);
+  setText('profile-import-title',T.orca_profile_import_title);
+  setText('profile-import-dropmsg',T.orca_profile_dropmsg);
+  setText('profile-import-list-label',T.orca_profile_list_label);
+  // Hilfe-Text mit Inline-HTML — innerHTML statt setText
+  var helpEl=document.getElementById('profile-import-help');
+  if(helpEl && T.orca_profile_help_html) helpEl.innerHTML=T.orca_profile_help_html;
   setText('btn-save-settings',T.settings_save);
   setText('lbl-printer-name',T.settings_printer_name);
   setText('lbl-printer-ip',T.settings_printer_ip);
@@ -903,9 +914,108 @@ function openSettings(){
   var cl=document.getElementById('update-changelog');if(cl)cl.style.display='none';
   _updateTag='';_updateUrl='';
   document.getElementById('settings-modal').classList.add('open');
+  // Custom-Profile-Liste laden (Issue #41 — Verwaltung von User-importierten
+  // OrcaSlicer-Filament-Profilen)
+  refreshUserProfileList();
 }
 function closeSettings(){
   document.getElementById('settings-modal').classList.remove('open');
+}
+
+// ── Custom Filament Profile Import (Issue #41) ──
+function refreshUserProfileList(){
+  var listEl=document.getElementById('orca-profiles-list');
+  if(!listEl) return;
+  fetch(_apiUrl('/kx/filament/profiles/user')).then(function(r){return r.json();}).then(function(d){
+    var profs=(d && d.result)||[];
+    if(!profs.length){
+      listEl.innerHTML='<i style="color:var(--txt2)">'+(tr('orca_profile_user_empty')||'– keine –')+'</i>';
+      return;
+    }
+    listEl.innerHTML=profs.map(function(p){
+      var label=p.vendor+' / '+p.name+' ('+p.type+')';
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--border)">'
+        +'<span>★ '+label+'</span>'
+        +'<button onclick="deleteUserProfile(\''+encodeURIComponent(p.vendor)+'\',\''+encodeURIComponent(p.name)+'\')" '
+        +'style="background:none;border:none;color:var(--err);cursor:pointer;font-size:14px" title="löschen">🗑</button>'
+        +'</div>';
+    }).join('');
+  }).catch(function(){});
+}
+function deleteUserProfile(vendor, name){
+  fetch(_apiUrl('/kx/filament/profiles/user?vendor='+vendor+'&name='+name), {method:'DELETE'})
+    .then(function(r){return r.json();})
+    .then(function(){
+      _orcaFilamentCache=null;
+      refreshUserProfileList();
+      // Falls Import-Dialog offen ist, dort auch refreshen
+      refreshImportDialogList();
+    });
+}
+function openProfileImport(){
+  document.getElementById('profile-import-status').textContent='';
+  refreshImportDialogList();
+  document.getElementById('profile-import-modal').classList.add('open');
+}
+function closeProfileImport(){
+  document.getElementById('profile-import-modal').classList.remove('open');
+}
+function refreshImportDialogList(){
+  var el=document.getElementById('profile-import-list');
+  if(!el) return;
+  fetch(_apiUrl('/kx/filament/profiles/user')).then(function(r){return r.json();}).then(function(d){
+    var profs=(d && d.result)||[];
+    if(!profs.length){
+      el.innerHTML='<i style="color:var(--txt2)">'+(tr('orca_profile_user_empty')||'– keine –')+'</i>';
+      return;
+    }
+    el.innerHTML=profs.map(function(p){
+      var label=p.vendor+' / '+p.name+' ('+p.type+')';
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;border-bottom:1px solid var(--border)">'
+        +'<span>★ '+label+'</span>'
+        +'<button onclick="deleteUserProfile(\''+encodeURIComponent(p.vendor)+'\',\''+encodeURIComponent(p.name)+'\')" '
+        +'style="background:none;border:none;color:var(--err);cursor:pointer;font-size:14px" title="löschen">🗑</button>'
+        +'</div>';
+    }).join('');
+  }).catch(function(){});
+}
+function doProfileImportUpload(files){
+  if(!files || !files.length) return;
+  var status=document.getElementById('profile-import-status');
+  status.textContent=(tr('orca_profile_uploading')||'Lade hoch…');
+  status.style.color='var(--txt2)';
+  var done=0, totalAdded=0, totalSkipped=0;
+  function _one(idx){
+    if(idx>=files.length){
+      status.textContent=(tr('orca_profile_done')||'Importiert')+': '+totalAdded
+        +(totalSkipped?' / '+totalSkipped+' '+(tr('orca_profile_skipped')||'übersprungen'):'');
+      status.style.color='var(--ok)';
+      _orcaFilamentCache=null;
+      refreshImportDialogList();
+      refreshUserProfileList();
+      // Wenn Slot-Edit offen ist, Dropdown gleich neu befüllen
+      var mat=document.getElementById('slot-edit-mat');
+      if(mat && document.getElementById('slot-edit-modal').classList.contains('open')){
+        _fillSlotProfileDropdown(mat.value, '', '');
+      }
+      return;
+    }
+    var fd=new FormData();
+    fd.append('file', files[idx]);
+    fetch(_apiUrl('/kx/filament/profiles/user'), {method:'POST', body:fd})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        totalAdded += (d.added||0);
+        totalSkipped += (d.skipped||0);
+        done++;
+        _one(idx+1);
+      })
+      .catch(function(e){
+        status.textContent='Fehler: '+e;
+        status.style.color='var(--err)';
+      });
+  }
+  _one(0);
 }
 
 // ── AMS Slot Edit ──
@@ -949,21 +1059,31 @@ function _fillSlotProfileDropdown(material, currentVendor, currentName){
       return matU==='' || pt===matU || pt.startsWith(matU+'-') || pt.startsWith(matU+' ');
     });
     sel.innerHTML='<option value="">'+tr('slot_edit_profile_default')+'</option>';
-    // Gruppieren nach Vendor
+    // User-Profile (is_user) zuerst — eigene Optgroup '★ Eigene' an erster Stelle.
+    var userProfs=matched.filter(function(p){return p.is_user;});
+    var systemProfs=matched.filter(function(p){return !p.is_user;});
+    function _appendOption(g, p){
+      var o=document.createElement('option');
+      o.value=_profileKey(p.vendor, p.name);
+      o.dataset.vendor=p.vendor;
+      o.dataset.name=p.name;
+      o.dataset.id=p.id || '';
+      o.textContent=(p.is_user?'★ ':'')+p.name;
+      if(o.value===wantKey) o.selected=true;
+      g.appendChild(o);
+    }
+    if(userProfs.length){
+      var gUser=document.createElement('optgroup');
+      gUser.label='★ '+(tr('orca_profile_user_label')||'Eigene Profile');
+      userProfs.forEach(function(p){ _appendOption(gUser, p); });
+      sel.appendChild(gUser);
+    }
+    // System-Profile nach Vendor gruppieren
     var byVendor={};
-    matched.forEach(function(p){ (byVendor[p.vendor]=byVendor[p.vendor]||[]).push(p); });
+    systemProfs.forEach(function(p){ (byVendor[p.vendor]=byVendor[p.vendor]||[]).push(p); });
     Object.keys(byVendor).sort().forEach(function(v){
       var g=document.createElement('optgroup'); g.label=v;
-      byVendor[v].forEach(function(p){
-        var o=document.createElement('option');
-        o.value=_profileKey(p.vendor, p.name);
-        o.dataset.vendor=p.vendor;
-        o.dataset.name=p.name;
-        o.dataset.id=p.id || '';
-        o.textContent=p.name;
-        if(o.value===wantKey) o.selected=true;
-        g.appendChild(o);
-      });
+      byVendor[v].forEach(function(p){ _appendOption(g, p); });
       sel.appendChild(g);
     });
   });
@@ -1112,6 +1232,10 @@ function saveSlotEdit(){
     closeSlotEdit();
     var profSuffix=newProfName?(' ['+newProfVendor+' '+newProfName+']'):'';
     clog(tr('slot_edit_ok')+' '+(slotIdx+1)+': '+mat+' '+hex+profSuffix,'msg-ok');
+    // Sofortiges Re-Render mit aktuellem _slotProfileMap (poll() ist async
+    // und re-rendert beim nächsten Tick — wir wollen aber dass die Vendor-
+    // Badge JETZT direkt sichtbar wird).
+    if(typeof applyState==='function') applyState();
     if(typeof poll==='function') poll();
   })
   .catch(function(e){clog('Fehler: '+e,'msg-err');});

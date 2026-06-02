@@ -1,5 +1,64 @@
 # Changelog
 
+## [0.9.19] – 2026-06-02
+
+### New
+- **🎯 Filament sync with OrcaSlicer now picks the right preset**
+  instead of always falling back to "Generic PLA". Requires an
+  OrcaSlicer build with the
+  [PR #13719](https://github.com/SoftFever/OrcaSlicer/pull/13719)
+  receive-side patch (included in the OrcaSlicer-KX build). The bridge
+  sends `name` + `vendor_name` per AMS slot on the lane path AND
+  `gate_filament_name` per gate on the Happy-Hare MMU path (OrcaSlicer
+  switches to the HH path automatically for AMS setups).
+- **Import your own OrcaSlicer profiles into the bridge (issue #41).**
+  Settings → "OrcaSlicer Profiles" or directly in the slot-edit dialog
+  ("★ Import own profiles…") lets you upload `.json` files from
+  `~/.config/OrcaSlicer/user/<id>/filament/` — single files or as a
+  ZIP. They show up in the slot dropdown under "★ Own profiles" and
+  are passed through to Orca on sync as user matches. Works over HTTP
+  so the bridge can run in Docker on a Raspi/NAS while OrcaSlicer
+  lives on a desktop. Override-only profiles with just
+  `inherits: "Generic PLA @System"` + a few tweaks (e.g. "Bert - PLA")
+  are detected correctly — the bridge resolves the inherited fields
+  from the system parent.
+
+### Fixes
+- **AMS sync stuck on "Generic PLA":** the Orca data model has 68
+  duplicate `filament_id` values (`OGFL99` alone shared by 136
+  profiles), and the bridge often picked an ID that was not
+  `is_compatible` with the Kobra X (e.g. `GFL92` from the Kobra-2
+  profile → Orca rejected it). The generator now prioritises Kobra-X
+  variants and filters out phantom profiles (cross-vendor overrides) —
+  `orca_filaments.json` dropped from 1035 to 400 clean profiles.
+- **Slot without an explicit override now sends `Generic <type>`**
+  instead of an implicit vendor guess. Library generic profiles have
+  `compatible_printers: []` (= all printers), so they are always
+  visible and match reliably.
+- **Slot card shows the vendor right after save** without a browser
+  reload. `poll()` was async, the re-render only happened on the next
+  tick.
+- **ACE dryer toggle threw a 502 even though the dryer worked
+  (PR #42 by @gangoke):** `setDry` is now fire-and-forget like
+  `setAutoFeed`. The printer answers on that push topic with
+  `code: 0` instead of `code: 200`, which the bridge wrongly treated
+  as an error.
+
+### Data model / API
+- `orca_filaments.json` regenerated: only real vendor profiles and
+  OrcaFilamentLibrary profiles. Bambu/Polymaker/SUNLU library profiles
+  in, Qidi cross-bundles out.
+- New endpoints: `POST /kx/filament/profiles/user` (ZIP/JSON upload),
+  `GET /kx/filament/profiles/user` (list user imports),
+  `DELETE /kx/filament/profiles/user[?vendor=…&name=…]`. Persisted in
+  `<KX_DATA_DIR>/orca_filaments.user.json` (volume — survives image
+  updates).
+
+### Build
+- New module `bridge/orca_filaments.py` (shared parser helpers used by
+  the generator and the import endpoint).
+- Dockerfile + release.sh updated to include `orca_filaments.py`.
+
 ## [0.9.18] – 2026-05-31
 
 ### New
@@ -10,8 +69,8 @@
   sent over the wrong MQTT topic (`slicer/printer/…`) and the printer
   silently dropped it. It now goes via `web/printer/…` like the
   Anycubic Slicer Next does (verified by live MQTT sniff +
-  Workbench-Vue source). **Note:** the currently loaded slot can not
-  be overwritten during a print — unload it first.
+  Workbench-Vue source). **Note:** the printer must be idle, and
+  empty slots can not be labelled.
 - **Spanish translation reviewed by a native speaker (PR #40 by
   @pezfisk):** missing accents (impresión, cámara, después,
   animación, …) and term consistency (Pause → Pausa, Start →

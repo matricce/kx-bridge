@@ -1494,12 +1494,30 @@ class KobraXBridge:
         self._push_status_update()
 
     # OrcaSlicer filament preset IDs (MoonrakerPrinterAgent.cpp mapping)
+    # Default-Mapping pro Material-Typ wenn der User keinen Slot-Profil-
+    # Override gesetzt hat. Für den Kobra X bevorzugen wir Anycubic-eigene
+    # Filament-IDs aus den `@Anycubic Kobra X 0.4 nozzle`-Profilen — die
+    # sind druckerspezifisch is_compatible und werden von OrcaSlicer direkt
+    # gematched. Library-Fallbacks (OGF*) nur für Material-Typen ohne
+    # Kobra-X-spezifisches Anycubic-Profil — deren @System-Profile haben
+    # `compatible_printers: []` (= mit allen Druckern kompatibel).
     _TRAY_INFO_IDX = {
-        "PLA":      "OGFL99", "PLA-CF":   "OGFL98", "PLA SILK": "OGFL96",
-        "PETG":     "OGFG99", "PETG-CF":  "OGFG98",
-        "ABS":      "OGFB99", "ASA":      "OGFB98",
-        "TPU":      "OGFT99", "PA":       "OGFP99", "PA-CF":    "OGFP98",
-        "PC":       "OGFC99", "HIPS":     "OGFH99", "PVA":      "OGFV99",
+        # Anycubic-eigene Kobra-X-Profile
+        "PLA":      "GFPLA",
+        "PLA+":     "GFPLA+",
+        "PLA SILK": "GFPLA Silk",
+        "PETG":     "GFPETG",
+        "ABS":      "GFABS",
+        "ASA":      "GFASA",
+        "TPU":      "GFTPU 95A",
+        "PVA":      "GFPVA",
+        # Kein Anycubic-Kobra-X-Profil → Library-Fallback
+        "PLA-CF":   "OGFL98",
+        "PETG-CF":  "OGFG98",
+        "PA":       "OGFN99",
+        "PA-CF":    "OGFN98",
+        "PC":       "OGFC99",
+        "HIPS":     "OGFS98",
     }
 
     def _build_lane_data(self) -> dict:
@@ -1556,9 +1574,13 @@ class KobraXBridge:
                 fila_name = user_profile.get("name", "")
                 tray_info_idx = user_profile.get("id") or self._TRAY_INFO_IDX.get(material, "OGFL99")
             else:
-                vendor    = ""
-                fila_name = ""
-                tray_info_idx = self._TRAY_INFO_IDX.get(material, "OGFL99")
+                # Default: Library-Generic-Profil (siehe _default_filament_name) —
+                # ist mit allen Druckern kompatibel und garantiert sichtbar.
+                # Der User wählt pro Slot bewusst eine konkrete Marke wenn er
+                # eine will; Default bleibt neutral.
+                fila_name = self._default_filament_name(material)
+                vendor    = "Generic" if fila_name.startswith("Generic ") else ""
+                tray_info_idx = self._lookup_filament_id(vendor, fila_name) or self._TRAY_INFO_IDX.get(material, "OGFL99")
             tray_array.append({
               "id": str(slot_id),
               "tag_uid": "0000000000000000",
@@ -1566,17 +1588,20 @@ class KobraXBridge:
               "tray_type": material,
               "tray_color": color_hex,
               "tray_sub_brands": vendor,
+              # OrcaSlicer-Empfangs-Patch PR #13719 erwartet `name` +
+              # `vendor_name` pro Lane (Stufen-Matching: Vendor+Name → Name →
+              # filament_id_by_type). Wir senden beide Schreibweisen mit
+              # damit ältere Patch-Varianten + zukünftige Upstream-PRs beide
+              # bedient sind.
+              "name":         fila_name,
+              "vendor_name":  vendor,
+              # Aliase für ältere Patch-Varianten (Variante 2,
+              # MoonrakerPrinterAgent.cpp): filament_id direkt (exakt),
+              # sonst preset-Name per find_preset() auflösen.
+              "filament_id":     tray_info_idx,
               "filament_vendor": vendor,
-              # Für den OrcaSlicer-Empfangs-Patch (Variante 2,
-              # MoonrakerPrinterAgent.cpp): `filament_id` direkt
-              # übernehmen (exakt), sonst `preset`-Name per
-              # find_preset() auflösen. tray_info_idx ist im Orca-
-              # Datenmodell nicht eindeutig (z.B. OGFL99 für 136
-              # Profile), aber der Bare-Name aus orca_filaments.json
-              # ist eindeutig — find_preset() parsed @-Suffixe weg.
-              "filament_id": tray_info_idx,
-              "preset":      fila_name,
-              "filament_name": fila_name,  # ältere Aliase
+              "filament_name":   fila_name,
+              "preset":          fila_name,
             })
           else:
             tray_array.append({
@@ -1695,6 +1720,7 @@ class KobraXBridge:
            "TPU": 220, "PA": 260, "PC": 270, "HIPS": 220}
       num_gates = len(slots)
       gate_status, gate_material, gate_color, gate_temperature, gate_color_rgb = [], [], [], [], []
+      gate_filament_name = []
       for _global_index, slot in slots:
         occupied = slot.get("status") == 5
         gate_status.append(1 if occupied else 0)
@@ -1706,6 +1732,17 @@ class KobraXBridge:
         gate_color.append("{:02X}{:02X}{:02X}".format(*c[:3]) if occupied else "")
         gate_color_rgb.append([round(c[0]/255, 3), round(c[1]/255, 3), round(c[2]/255, 3)] if occupied else [0.0, 0.0, 0.0])
         gate_temperature.append(_TEMP.get(material, 210) if occupied else 0)
+        # gate_filament_name aus User-Override oder Material-Default für den
+        # HH-Pfad in OrcaSlicer (fetch_hh_filament_info). Wenn Orca den
+        # HH-Pfad wählt (MMU-Erkennung), wertet PR #13719 dieses Feld als
+        # Preset-Namen aus → 'Anycubic PLA' matched das druckerspezifische
+        # Preset, leerer String führte vorher auf Generic PLA.
+        if occupied:
+          user_profile = self._filament_profiles.get(_global_index) or {}
+          fila_name = user_profile.get("name") or self._default_filament_name(material)
+          gate_filament_name.append(fila_name)
+        else:
+          gate_filament_name.append("")
 
       loaded_index_map = {global_index: idx for idx, (global_index, _) in enumerate(slots)}
       active_gate = loaded_index_map.get(int(self._ams_loaded_slot), -1)
@@ -1717,12 +1754,35 @@ class KobraXBridge:
         "gate_color":         gate_color,
         "gate_temperature":   gate_temperature,
         "gate_color_rgb":     gate_color_rgb,
-        "gate_filament_name": [""] * num_gates,
+        "gate_filament_name": gate_filament_name,
         "gate_spool_id":      [-1] * num_gates,
         "ttg_map":            list(range(num_gates)),
         "tool":               active_gate,
         "gate":               active_gate,
       }
+
+    def _default_filament_name(self, material: str) -> str:
+      """Default-Name für `gate_filament_name`/`name` in lane_data wenn kein
+      User-Override gesetzt ist. Bewusste Designentscheidung: **immer
+      Generic <Typ>** als Default — das Library-Profil ist `compatible_printers:[]`
+      (= mit jedem Drucker kompatibel) und damit garantiert sichtbar.
+
+      OrcaSlicer matcht dann das neutrale Generic-Preset und der User
+      kann pro Slot eine konkrete Marke setzen wenn er das will."""
+      if not material:
+        return ""
+      mat = material.upper().strip()
+      profs = self._load_orca_filaments()
+      def _match_type(p: dict) -> bool:
+        pt = (p.get("type") or "").upper()
+        return pt == mat or pt.startswith(mat + "-") or pt.startswith(mat + " ")
+      # Library-Generic-Profil (immer is_visible+is_compatible)
+      for p in profs:
+        if p.get("vendor") == "Generic" and p.get("name", "").startswith("Generic ") and _match_type(p):
+          return p.get("name", "")
+      # Falls die Library-Generic für diesen exotischen Material-Typ fehlt,
+      # liefern wir nichts — OrcaSlicer fällt auf filament_id_by_type zurück.
+      return ""
 
     def _build_printer_objects(self) -> dict:
         s = self._state
@@ -1946,6 +2006,128 @@ class KobraXBridge:
             profiles = [p for p in profiles if p.get("vendor", "") == vendor_filter]
         return self._json_cors({"result": profiles})
 
+    async def handle_kx_filament_profiles_user_list(self, request):
+        """GET /kx/filament/profiles/user — nur die User-importierten Profile,
+        für den Settings-Tab (Verwaltung mit Lösch-Buttons)."""
+        path = self._orca_filaments_user_path()
+        if not os.path.isfile(path):
+            return self._json_cors({"result": []})
+        try:
+            with open(path, encoding="utf-8") as f:
+                user_profiles = json.load(f) or []
+        except Exception:
+            user_profiles = []
+        return self._json_cors({"result": user_profiles})
+
+    async def handle_kx_filament_profiles_import(self, request):
+        """POST /kx/filament/profiles/user — multipart-Upload mit einer
+        ZIP-Datei oder mehreren `.json`-Files aus
+        ~/.config/OrcaSlicer/user/<id>/filament/.
+
+        Bestehende User-Profile mit gleichem (vendor, name)-Key werden
+        überschrieben. Geparste Profile haben dasselbe Schema wie
+        orca_filaments.json (id, name, vendor, type, color)."""
+        import io, zipfile
+        from orca_filaments import parse_profile_bytes
+        added: list[dict] = []
+        skipped: int = 0
+        # System-Index für Inherits-Resolve: User-Profile referenzieren
+        # System-Parents via "inherits" (z.B. "Generic PLA @System"). Damit
+        # können wir filament_id/vendor/type/color aus dem System-Parent
+        # ziehen wenn das User-Profil sie selbst nicht setzt.
+        sys_idx = [p for p in self._load_orca_filaments() if not p.get("is_user")]
+        try:
+            reader = await request.multipart()
+        except Exception:
+            return self._json_cors({"error": "expected multipart"}, status=400)
+        async for part in reader:
+            if part.name not in ("file", "files", "upload"):
+                continue
+            blob = await part.read()
+            fn   = (part.filename or "").lower()
+            if fn.endswith(".zip"):
+                try:
+                    with zipfile.ZipFile(io.BytesIO(blob)) as zf:
+                        for inner in zf.namelist():
+                            if not inner.lower().endswith(".json"):
+                                continue
+                            try:
+                                with zf.open(inner) as zf_in:
+                                    p = parse_profile_bytes(zf_in.read(), source_name=inner, system_index=sys_idx)
+                            except Exception:
+                                skipped += 1
+                                continue
+                            if p:
+                                added.append(p)
+                            else:
+                                skipped += 1
+                except zipfile.BadZipFile:
+                    return self._json_cors({"error": "bad zip"}, status=400)
+            elif fn.endswith(".json"):
+                p = parse_profile_bytes(blob, source_name=fn, system_index=sys_idx)
+                if p:
+                    added.append(p)
+                else:
+                    skipped += 1
+
+        if not added:
+            return self._json_cors({"result": "ok", "added": 0, "skipped": skipped})
+
+        # Merge mit existierender User-JSON (gleicher (vendor,name) → ersetzen)
+        path = self._orca_filaments_user_path()
+        existing: list[dict] = []
+        if os.path.isfile(path):
+            try:
+                with open(path, encoding="utf-8") as f:
+                    existing = json.load(f) or []
+            except Exception:
+                existing = []
+        by_key = {(p.get("vendor"), p.get("name")): p for p in existing}
+        for p in added:
+            by_key[(p.get("vendor"), p.get("name"))] = p
+        merged = sorted(by_key.values(), key=lambda x: (x.get("vendor",""), x.get("name","")))
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(merged, f, indent=2, ensure_ascii=False)
+                f.write("\n")
+        except Exception as e:
+            return self._json_cors({"error": f"write failed: {e}"}, status=500)
+        self._invalidate_filaments_cache()
+        return self._json_cors({"result": "ok",
+                                "added": len(added),
+                                "skipped": skipped,
+                                "total_user": len(merged)})
+
+    async def handle_kx_filament_profiles_user_delete(self, request):
+        """DELETE /kx/filament/profiles/user — löscht entweder einen einzelnen
+        Eintrag (?vendor=…&name=…) oder alle wenn keine Query angegeben."""
+        vendor = request.rel_url.query.get("vendor", "").strip()
+        name   = request.rel_url.query.get("name", "").strip()
+        path = self._orca_filaments_user_path()
+        if not os.path.isfile(path):
+            return self._json_cors({"result": "ok", "removed": 0})
+        try:
+            with open(path, encoding="utf-8") as f:
+                existing = json.load(f) or []
+        except Exception:
+            existing = []
+        before = len(existing)
+        if vendor and name:
+            existing = [p for p in existing
+                        if not (p.get("vendor") == vendor and p.get("name") == name)]
+        else:
+            existing = []
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(existing, f, indent=2, ensure_ascii=False)
+                f.write("\n")
+        except Exception as e:
+            return self._json_cors({"error": str(e)}, status=500)
+        self._invalidate_filaments_cache()
+        return self._json_cors({"result": "ok",
+                                "removed": before - len(existing),
+                                "total_user": len(existing)})
+
     def _find_orca_filaments_json(self) -> str | None:
         """Findet die statische JSON-Datei. Liegt analog zu web/ unter _WEB_BASE/data/
         — in allen 3 Deployment-Modi:
@@ -2022,20 +2204,44 @@ class KobraXBridge:
                                 "id":     entry.get("id", "")})
 
     def _load_orca_filaments(self) -> list[dict]:
-        """Lädt orca_filaments.json einmalig in den Cache. Bei wiederholten
-        Aufrufen wird die Liste aus dem RAM geliefert."""
+        """Lädt System- + User-Profile aus dem Cache. System-Profile kommen
+        aus bridge/data/orca_filaments.json (Image-embedded), User-Profile
+        aus <KX_DATA_DIR>/orca_filaments.user.json (Volume-persistent —
+        überlebt Image-Updates). User-Profile bekommen ein `is_user: True`-
+        Flag damit das Frontend sie markieren kann."""
         if getattr(self, "_orca_filaments_cache", None) is not None:
             return self._orca_filaments_cache
-        self._orca_filaments_cache = []
-        data_path = self._find_orca_filaments_json()
-        if not data_path or not os.path.isfile(data_path):
-            return self._orca_filaments_cache
-        try:
-            with open(data_path, encoding="utf-8") as f:
-                self._orca_filaments_cache = json.load(f) or []
-        except Exception as e:
-            log.warning(f"orca_filaments.json read error: {e}")
+        merged: list[dict] = []
+        # System
+        sys_path = self._find_orca_filaments_json()
+        if sys_path and os.path.isfile(sys_path):
+            try:
+                with open(sys_path, encoding="utf-8") as f:
+                    merged.extend(json.load(f) or [])
+            except Exception as e:
+                log.warning(f"orca_filaments.json read error: {e}")
+        # User
+        usr_path = self._orca_filaments_user_path()
+        if usr_path and os.path.isfile(usr_path):
+            try:
+                with open(usr_path, encoding="utf-8") as f:
+                    for p in (json.load(f) or []):
+                        p["is_user"] = True
+                        merged.append(p)
+            except Exception as e:
+                log.warning(f"orca_filaments.user.json read error: {e}")
+        self._orca_filaments_cache = merged
         return self._orca_filaments_cache
+
+    def _orca_filaments_user_path(self) -> str:
+        """Pfad zur User-Profile-JSON. Liegt im Volume-Mount (KX_DATA_DIR),
+        damit Image-Updates die Daten nicht zerstören."""
+        data_dir = os.environ.get("KX_DATA_DIR") or os.path.join(_WEB_BASE, "data")
+        os.makedirs(data_dir, exist_ok=True)
+        return os.path.join(data_dir, "orca_filaments.user.json")
+
+    def _invalidate_filaments_cache(self):
+        self._orca_filaments_cache = None
 
     def _lookup_filament_id(self, vendor: str, name: str) -> str:
         """Sucht in orca_filaments.json die filament_id zu einem (vendor,name)-
@@ -4439,6 +4645,12 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_get("/kx/filament/slots",        bridge.handle_kx_filament_slots)
     r.add_get("/kx/filament/profiles",     bridge.handle_kx_filament_profiles)
     r.add_post("/kx/filament/slots/{idx}/profile", bridge.handle_kx_filament_slot_profile)
+    # Custom-Profile-Import (Issue #41) — User lädt eigene Orca-Filament-
+    # Profile als ZIP/JSON hoch (z.B. aus ~/.config/OrcaSlicer/user/<id>/filament/),
+    # weil die Bridge typischerweise nicht auf demselben Host wie OrcaSlicer läuft.
+    r.add_get("/kx/filament/profiles/user",    bridge.handle_kx_filament_profiles_user_list)
+    r.add_post("/kx/filament/profiles/user",   bridge.handle_kx_filament_profiles_import)
+    r.add_delete("/kx/filament/profiles/user", bridge.handle_kx_filament_profiles_user_delete)
     r.add_get("/kx/history",               bridge.handle_kx_history)
     r.add_get("/kx/ui/{name:.*}",          bridge.handle_kx_ui_asset)
     r.add_get("/kx/files/{id}/objects",    bridge.handle_kx_file_objects)

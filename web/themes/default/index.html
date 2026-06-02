@@ -121,6 +121,19 @@
       </div>
     </div>
 
+    <!-- OrcaSlicer-Profile (Custom-Profile-Import, Issue #41) -->
+    <div>
+      <div class="modal-section" id="modal-sec-orca-profiles">OrcaSlicer-Profile</div>
+      <div style="font-size:11px;color:var(--txt2);margin-bottom:8px" id="orca-profiles-hint">
+        Eigene Profile aus OrcaSlicer importieren (User-Dir öffnen via Help → Show Configuration Folder)
+      </div>
+      <div id="orca-profiles-list" style="margin-bottom:8px;font-size:12px;color:var(--txt2)"></div>
+      <button class="btn btn-sm" id="btn-orca-profiles-import" onclick="openProfileImport()"
+        style="background:var(--raised);color:var(--txt)">
+        ⬆ <span id="lbl-orca-profiles-import">Profile importieren</span>
+      </button>
+    </div>
+
     <div>
       <div class="modal-section" id="modal-sec-version">Version</div>
       <div class="update-row">
@@ -170,9 +183,39 @@
         <option value="" id="slot-profile-default-opt"></option>
       </select>
       <div style="font-size:11px;color:var(--txt2);margin-top:4px" id="slot-profile-hint"></div>
+      <a href="#" onclick="event.preventDefault();openProfileImport()"
+        style="display:inline-block;margin-top:6px;font-size:11px;color:var(--accent);text-decoration:none"
+        id="lbl-slot-profile-import">★ Eigene Profile importieren…</a>
     </div>
     <button class="btn" id="btn-slot-edit-feed" style="width:100%;margin-bottom:8px" onclick="slotEditFeed()"></button>
     <button class="modal-save" id="btn-slot-edit-save" onclick="saveSlotEdit()"></button>
+  </div>
+</div>
+
+<!-- ═══ ORCA-PROFILE-IMPORT-DIALOG (Issue #41) ═══ -->
+<div class="modal-overlay" id="profile-import-modal" onclick="if(event.target===this)closeProfileImport()">
+  <div class="modal-box" style="max-width:480px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-size:16px;font-weight:600" id="profile-import-title">Eigene OrcaSlicer-Profile importieren</div>
+      <button onclick="closeProfileImport()" style="background:none;border:none;color:var(--txt2);font-size:20px;cursor:pointer">×</button>
+    </div>
+    <div style="font-size:12px;color:var(--txt2);margin-bottom:12px;line-height:1.5" id="profile-import-help">
+      Lade ein <b>ZIP</b> deines OrcaSlicer-Filament-Ordners oder einzelne <b>.json</b>-Files hoch.<br>
+      In OrcaSlicer: <i>Help → Show Configuration Folder → user/&lt;id&gt;/filament/</i>
+    </div>
+    <div id="profile-import-drop" style="border:2px dashed var(--border);border-radius:8px;padding:24px;text-align:center;cursor:pointer;margin-bottom:12px"
+      ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+      ondragleave="this.style.borderColor='var(--border)'"
+      ondrop="event.preventDefault();this.style.borderColor='var(--border)';doProfileImportUpload(event.dataTransfer.files)"
+      onclick="document.getElementById('profile-import-file').click()">
+      <div style="font-size:32px;margin-bottom:8px">⬆</div>
+      <div style="font-size:13px;color:var(--txt2)" id="profile-import-dropmsg">Hierher ziehen oder klicken</div>
+      <input type="file" id="profile-import-file" accept=".zip,.json" multiple
+        style="display:none" onchange="doProfileImportUpload(this.files);this.value=''">
+    </div>
+    <div id="profile-import-status" style="font-size:12px;margin-bottom:12px;min-height:18px"></div>
+    <div style="font-size:11px;color:var(--txt2);margin-bottom:6px" id="profile-import-list-label">Aktuell importiert</div>
+    <div id="profile-import-list" style="max-height:240px;overflow-y:auto;font-size:12px"></div>
   </div>
 </div>
 
