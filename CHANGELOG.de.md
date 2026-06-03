@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.9.19.1] – 2026-06-03
+
+### Behoben
+- **Hotfix: Standalone-Binaries (Linux/Windows) der 0.9.19 wurden
+  aus einem veralteten Source-Stand gebaut** und enthielten die
+  neuen Filament-Sync-/Custom-Profile-Import-Features nicht. Das
+  Docker-Image war nicht betroffen. Diese Version baut die Binaries
+  aus dem tatsächlichen 0.9.19-Source neu.
+- **Windows-EXE zeigt die korrekte Versionsnummer** statt `vunknown`
+  (PyInstaller-Spec bettet die `VERSION`-Datei jetzt mit ein).
+
 ## [0.9.19] – 2026-06-02
 
 ### Neu

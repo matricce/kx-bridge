@@ -6,7 +6,7 @@
 # ein → zur Laufzeit über sys._MEIPASS lesbar (_WEB_BASE in der Bridge).
 from PyInstaller.utils.hooks import collect_all
 
-datas = [("web", "web"), ("data", "static"), ("VERSION", ".")]  # bridge/data/ → static/ im _MEIPASS
+datas = [("web", "web"), ("data", "static")]  # bridge/data/ → static/ im _MEIPASS
 binaries = []
 hiddenimports = []
 
