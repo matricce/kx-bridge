@@ -66,17 +66,43 @@ docker compose up -d
 
 **Binario Linux (sin Docker):**
 ```bash
-chmod +x kx-bridge && ./kx-bridge
+chmod +x kx-bridge-linux-amd64 && ./kx-bridge-linux-amd64
 ```
 
 **EXE Windows (sin Docker):**
 ```
 kx-bridge.exe
 ```
-> `config\` y `data\` se crean junto al EXE — instalación portátil.
 
-> Con los binarios de Linux y Windows, `config/` y `data/` (configuración, SQLite, almacén de GCode)
-> viven junto al programa. Copia toda la carpeta para mover la instalación.
+> ⚠️ **Certificados TLS necesarios para el binario standalone**
+>
+> El bridge habla con el MQTT de la impresora vía mTLS y necesita dos
+> ficheros de certificado **junto al binario**:
+>
+> - `anycubic_slicer.crt`
+> - `anycubic_slicer.key`
+>
+> Ambos vienen en **`anycubic-certs.zip`** en la misma página de release.
+> Descárgalo y extrae los dos ficheros en el mismo directorio que
+> `kx-bridge-linux-amd64` o `kx-bridge.exe`. Sin ellos verás
+> `Verbindung fehlgeschlagen: TLS-Zertifikate fehlen …` (0.9.19.1+) o
+> `[Errno 2] No such file or directory` (versiones anteriores).
+>
+> Estructura correcta:
+> ```
+> ~/kx-bridge/
+> ├── kx-bridge-linux-amd64   (o kx-bridge.exe)
+> ├── anycubic_slicer.crt     ← de anycubic-certs.zip
+> ├── anycubic_slicer.key     ← de anycubic-certs.zip
+> └── config/                 (se crea en el primer arranque)
+> ```
+>
+> Los usuarios de Docker no necesitan hacer esto — los certificados
+> están incluidos en la imagen.
+
+> Con los binarios de Linux y Windows, `config/` y `data/` (configuración,
+> SQLite, almacén de GCode) viven junto al programa. Copia toda la carpeta
+> para mover la instalación.
 
 **Python directamente:**
 ```bash
