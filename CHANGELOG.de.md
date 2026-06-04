@@ -1,15 +1,24 @@
 # Changelog
 
-## [0.9.19.1] – 2026-06-03
+## [0.9.19.1] – 2026-06-04
 
 ### Behoben
-- **Hotfix: Standalone-Binaries (Linux/Windows) der 0.9.19 wurden
-  aus einem veralteten Source-Stand gebaut** und enthielten die
-  neuen Filament-Sync-/Custom-Profile-Import-Features nicht. Das
-  Docker-Image war nicht betroffen. Diese Version baut die Binaries
-  aus dem tatsächlichen 0.9.19-Source neu.
-- **Windows-EXE zeigt die korrekte Versionsnummer** statt `vunknown`
-  (PyInstaller-Spec bettet die `VERSION`-Datei jetzt mit ein).
+- Standalone-Binaries (Linux/Windows) zeigten `vunknown` als Version.
+  Die `VERSION`-Datei ist jetzt ins PyInstaller-Onefile eingebettet.
+- Bei fehlenden TLS-Zertifikaten (`anycubic_slicer.crt`/`.key`) gab
+  es nur den rohen Fehler `[Errno 2] No such file or directory`. Die
+  Bridge meldet jetzt klar, wo die Dateien hingelegt werden müssen
+  und dass `anycubic-certs.zip` aus dem Gitea-Release stammt.
+
+### Geändert
+- Filament-Profil-Liste neu kuratiert: 209 statt 399 Einträge.
+  Profile die nur für drucker-spezifische Vendor-Bundles existieren
+  (z.B. Eryone Thinker X400, Artillery M1 Pro, WonderMaker ZR,
+  Tiertime, Cubicon, CoLiDo, Afinia, Snapmaker) sind rausgeflogen
+  — OrcaSlicer hätte sie im Standard-Kobra-X-Setup beim Sync
+  ohnehin nicht gefunden, weil die jeweiligen Vendor-Bundles nur
+  bei aktivem Drucker-Vendor geladen werden. Für solche Filamente
+  bleibt der Custom-Profile-Import (Issue #41) der Weg.
 
 ## [0.9.19] – 2026-06-02
 

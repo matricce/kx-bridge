@@ -154,6 +154,13 @@ class KobraXClient:
     # -- Connection ----------------------------------------------------------
 
     def _do_connect(self):
+        if not os.path.exists(CERT_FILE) or not os.path.exists(KEY_FILE):
+            raise FileNotFoundError(
+                f"TLS-Zertifikate fehlen: anycubic_slicer.crt + anycubic_slicer.key "
+                f"müssen neben der kx-bridge Binary liegen ({_SCRIPT_DIR}/). "
+                f"Lade anycubic-certs.zip vom Gitea-Release herunter und entpacke "
+                f"die Dateien dorthin."
+            )
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ctx.check_hostname = False
         ctx.verify_mode    = ssl.CERT_NONE
