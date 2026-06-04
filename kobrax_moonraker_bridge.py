@@ -3973,7 +3973,9 @@ class KobraXBridge:
     GITEA_RAW_BASE     = "https://gitea.it-drui.de/viewit/KX-Bridge-Release/raw/tag"
 
     def _read_version(self) -> str:
-        for base in (pathlib.Path(_BASE), pathlib.Path(_BASE).parent):
+        # PyInstaller-Onefile entpackt VERSION (per kx-bridge.spec datas) nach
+        # sys._MEIPASS — daher _WEB_BASE statt _BASE benutzen.
+        for base in (pathlib.Path(_WEB_BASE), pathlib.Path(_BASE), pathlib.Path(_BASE).parent):
             p = base / "VERSION"
             if p.is_file():
                 return p.read_text(encoding="utf-8").strip()
