@@ -38,6 +38,7 @@
       <option value="de">Deutsch</option>
       <option value="en">English</option>
       <option value="es">Espanol</option>
+      <option value="fr">Français</option>
       <option value="zh-cn">中文(简体)</option>
     </select>
   </div>
@@ -266,9 +267,15 @@
           <div class="pct-big"><span id="d-pct">0</span><small>%</small></div>
           <div style="display:flex;align-items:center;gap:10px;margin:8px 0">
             <div class="progress-bar" style="flex:1;margin:0"><div class="progress-fill" id="d-pbar" style="width:0%"></div></div>
-            <div class="time-block" style="padding:6px 10px;min-width:72px;text-align:center;flex-shrink:0">
-              <div class="time-label" id="d-lbl-layers"></div>
-              <div class="time-val" style="font-size:16px" id="d-layers">–</div>
+            <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+              <div class="time-block" style="padding:6px 10px;min-width:72px;text-align:center">
+                <div class="time-label" id="d-lbl-layers"></div>
+                <div class="time-val" style="font-size:16px" id="d-layers">–</div>
+              </div>
+              <div class="time-block" style="padding:4px 10px;min-width:72px;text-align:center">
+                <div class="time-label" id="d-lbl-zpos">Z</div>
+                <div class="time-val" style="font-size:13px" id="d-zpos">–</div>
+              </div>
             </div>
           </div>
           <div class="time-grid">

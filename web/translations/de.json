@@ -37,6 +37,7 @@
   "lbl_remaining": "Restzeit:",
   "lbl_slicer_time": "Slicer-Schätzung:",
   "lbl_layers": "Layer",
+  "lbl_zpos": "Z (mm)",
   "speed_silent": "🐢 Leise",
   "speed_normal": "⚡ Normal",
   "speed_sport": "🚀 Sport",

@@ -37,6 +37,7 @@
   "lbl_remaining": "剩余时间:",
   "lbl_slicer_time": "切片预估:",
   "lbl_layers": "层",
+  "lbl_zpos": "Z (mm)",
   "speed_silent": "🐢 静音",
   "speed_normal": "⚡ 标准",
   "speed_sport": "🚀 运动",

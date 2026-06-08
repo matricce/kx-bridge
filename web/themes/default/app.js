@@ -1,11 +1,12 @@
 // ── State ──
 var S={nozzle_temp:0,nozzle_target:0,bed_temp:0,bed_target:0,
   print_state:'standby',filename:'',progress:0,print_duration:0,remain_time:0,
-  curr_layer:0,total_layers:0,printer_name:'Kobra X',firmware_version:'–',
+  curr_layer:0,total_layers:0,z_mm:0,printer_name:'Kobra X',firmware_version:'–',
   camera_url:'',fan_speed:0,print_speed_mode:2,light_on:false,light_brightness:80,
   ams_slots:[],filament_mode:'toolhead',ace_units:[],ace_dry_presets:null,ace_drying:{status:0,target_temp:0,duration:0,remain_time:0,humidity:null,current_temp:null,units:[]},web_upload_warning:1};
 var tempHistory={n:[],b:[]};
 var camOn=false;
+var camUserStopped=false; // user stopped camera manually — suppress auto-restart for this print
 var currentStep=1;
 var currentPanel='dashboard';
 var aceAutoRefillPrefs=(function(){
@@ -101,6 +102,7 @@ function tr(key,fallback){
 function _langToggleLabel(lang){
   if(lang==='de')return 'Deutsch';
   if(lang==='en')return 'English';
+  if(lang==='fr')return 'Français';
   if(lang==='zh-cn')return '简体中文';
   return 'Espanol';
 }
@@ -108,10 +110,10 @@ function _langToggleLabel(lang){
 function _mapSupportedLang(lang){
   if(!lang)return '';
   var l=String(lang).toLowerCase().replace(/_/g,'-').trim();
-  if(l==='de'||l==='en'||l==='es'||l==='zh-cn')return l;
+  if(l==='de'||l==='en'||l==='es'||l==='fr'||l==='zh-cn')return l;
 
   var base=l.split('-')[0];
-  if(base==='de'||base==='en'||base==='es')return base;
+  if(base==='de'||base==='en'||base==='es'||base==='fr')return base;
 
   if(base==='zh'){
     if(l.indexOf('cn')>=0||l.indexOf('hans')>=0||l==='zh')return 'zh-cn';
@@ -282,6 +284,7 @@ function applyLang(){
   setText('d-lbl-remain',T.lbl_remaining);
   setText('d-slicer-label',T.lbl_slicer_time);
   setText('d-lbl-layers',T.lbl_layers);
+  setText('d-lbl-zpos',T.lbl_zpos);
   setText('d-lbl-light',T.lbl_light);
   setText('d-lbl-nozzle',T.label_nozzle);
   setText('d-lbl-bed',T.label_bed);
@@ -659,6 +662,7 @@ function applyState(){
 
   var layers=s.curr_layer&&s.total_layers?'L '+s.curr_layer+' / '+s.total_layers:'–';
   var dlayers=document.getElementById('d-layers');if(dlayers)dlayers.textContent=layers;
+  var dzpos=document.getElementById('d-zpos');if(dzpos)dzpos.textContent=s.z_mm>0?s.z_mm.toFixed(2)+' mm':'–';
 
   var delapsed=document.getElementById('d-elapsed');if(delapsed)delapsed.textContent=fmtTime(s.print_duration);
   var dremain=document.getElementById('d-remain');if(dremain)dremain.textContent=s.remain_time>0?fmtTime(s.remain_time):'–';
@@ -822,9 +826,13 @@ function applyState(){
   var co=document.getElementById('cam-overlay');
   if(co)co.style.display=(s.print_state==='printing'&&camOn)?'block':'none';
 
-  // auto-start camera during print
-  if(s.print_state==='printing'&&!camOn&&s.camera_url){
+  // auto-start camera during print (unless user explicitly stopped it)
+  if(s.print_state==='printing'&&!camOn&&s.camera_url&&!camUserStopped){
     camStart();
+  }
+  // reset user-stopped flag when print ends so next print auto-starts again
+  if(s.print_state!=='printing'){
+    camUserStopped=false;
   }
 
   updateConnBtn();
@@ -1437,7 +1445,8 @@ function setBed(){
 function setLight(){
   var on=document.getElementById('d-light-toggle').checked;
   post('/api/light',{on:on,brightness:80})
-    .then(function(){clog('Licht '+(on?'an, '+br+'%':'aus'),'msg-ok')})
+    .then(function(){clog('Licht '+(on?'an, 80%':'aus'),'msg-ok')})
+
     .catch(function(e){clog('Licht-Fehler: '+e,'msg-err')});
 }
 
@@ -1518,11 +1527,13 @@ function camStart(){
 
 function camStop(){
   var img=document.getElementById('cam-img');
+  img.onerror=null; // deregister error handler before clearing src to avoid spurious error toast
   post('/api/camera/stop',{}).catch(function(){});
   img.src='';
   img.style.display='none';
   document.getElementById('cam-placeholder').style.display='flex';
   camOn=false;
+  camUserStopped=true; // suppress auto-restart for remainder of this print
   document.getElementById('cam-toggle-btn').textContent=tr('btn_cam_start');
   clog(tr('log_cam_stop'),'msg-ok');
 }

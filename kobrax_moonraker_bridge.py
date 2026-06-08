@@ -222,7 +222,7 @@ def _parse_gcode_estimated_time(data: bytes) -> int:
         elif unit == "m": secs += int(val) * 60
         elif unit == "s": secs += int(val)
     if secs:
-        log.info(f"Slicer-Schätzzeit: {secs}s ({m.group(1).strip()})")
+        log.info(f"Slicer estimate: {secs}s ({m.group(1).strip()})")
     return secs
 
 
@@ -798,6 +798,7 @@ class KobraXBridge:
         self._serve_dir_path: str = self._store._gcode_dir
         self._current_job_id: str = ""
         self._camera_autostarted: bool = False
+        self._camera_user_stopped: bool = False  # User hat Kamera während Druck manuell gestoppt
         self.camera_cache: CameraCache = CameraCache()
 
         self._thumbnail_b64: str = ""
@@ -809,7 +810,7 @@ class KobraXBridge:
         # Theme-Name prüfen (keine Sonderzeichen oder Umlaute)
         raw_theme = (getattr(args, "ui_theme", None) or "default").strip()
         if not _UI_THEME_NAME_RE.match(raw_theme):
-            log.warning("Ungültiger UI-Theme-Name %r – nutze default", raw_theme)
+            log.warning("Invalid UI theme name %r – using default", raw_theme)
             raw_theme = "default"
         self._ui_theme = raw_theme
         self._index_tpl_cache: str | None = None
@@ -914,7 +915,9 @@ class KobraXBridge:
         # Zentral hier, damit es alle Druck-Startwege abdeckt (OrcaSlicer + UI).
         # _camera_autostarted verhindert Mehrfach-Trigger pro Druck.
         if kobra_state == "printing":
-            if getattr(self._args, "camera_on_print", 0) and not getattr(self, "_camera_autostarted", False):
+            if (getattr(self._args, "camera_on_print", 0)
+                    and not self._camera_autostarted
+                    and not self._camera_user_stopped):
                 self._camera_autostarted = True
                 try:
                     self.client.start_camera()
@@ -923,6 +926,7 @@ class KobraXBridge:
                     log.warning(f"Kamera-Autostart fehlgeschlagen: {e}")
         elif kobra_state in ("free", "finished", "stoped", "canceled"):
             self._camera_autostarted = False
+            self._camera_user_stopped = False  # für nächsten Druck freigeben
 
         # Job-History: Druckstart erkennen
         if kobra_state == "printing" and not self._current_job_id:
@@ -934,7 +938,7 @@ class KobraXBridge:
                         gcode_file_id=gf["id"],
                         printer_id=self._printer_id,
                     )
-                    log.info(f"Job gestartet: {self._current_job_id} für {filename}")
+                    log.info(f"Job started: {self._current_job_id} for {filename}")
 
         # Job-History: Druckende erkennen
         if kobra_state in ("finished",) and self._current_job_id:
@@ -1001,7 +1005,9 @@ class KobraXBridge:
             # Kamera-Autostart auch hier (OrcaSlicer meldet Start oft via info/report).
             # _camera_autostarted-Guard verhindert Doppel-Start mit _on_print.
             if kobra_state == "printing":
-                if getattr(self._args, "camera_on_print", 0) and not getattr(self, "_camera_autostarted", False):
+                if (getattr(self._args, "camera_on_print", 0)
+                        and not self._camera_autostarted
+                        and not self._camera_user_stopped):
                     self._camera_autostarted = True
                     try:
                         self.client.start_camera()
@@ -1010,6 +1016,7 @@ class KobraXBridge:
                         log.warning(f"Kamera-Autostart fehlgeschlagen: {e}")
             elif kobra_state in ("free", "finished", "stoped", "canceled"):
                 self._camera_autostarted = False
+                self._camera_user_stopped = False  # für nächsten Druck freigeben
         if project:
             if "filename" in project:
                 self._state["filename"] = project["filename"]
@@ -1075,7 +1082,7 @@ class KobraXBridge:
             if filename:
                 try:
                     self._store.update_file_objects(filename, objs, svg)
-                    log.info(f"Skip-Objekte für {filename}: {len(objs)} ({'mit SVG' if svg else 'ohne SVG'})")
+                    log.info(f"Skip objects for {filename}: {len(objs)} ({'with SVG' if svg else 'no SVG'})")
                 except Exception as e:
                     log.warning(f"update_file_objects fehlgeschlagen: {e}")
         self._push_status_update()
@@ -1884,6 +1891,41 @@ class KobraXBridge:
             "gcode_macro TIMELAPSE_TAKE_FRAME": {
                 "is_paused": False,
             },
+            # configfile stub — Mobileraker und andere Clients crashen ohne
+            # dieses Objekt (Missing field: configFile). Werte aus der
+            # entschlüsselten avata_main.conf (ACCFG1.0 — Kobra X Firmware).
+            "configfile": {
+                "config": {},
+                "settings": {
+                    "printer": {
+                        "kinematics":              "cartesian",
+                        "max_velocity":            450,
+                        "max_accel":               10000,
+                        "max_z_velocity":          12,
+                        "max_z_accel":             100,
+                        "square_corner_velocity":  20.0,
+                    },
+                    "extruder": {
+                        "nozzle_diameter":  0.4,
+                        "min_temp":         0,
+                        "max_temp":         320,
+                        "min_extrude_temp": 10,
+                    },
+                    "heater_bed": {
+                        "min_temp": 0,
+                        "max_temp": 120,
+                    },
+                    "stepper_x": {"position_min": -18.5, "position_max": 280},
+                    "stepper_y": {"position_min": -6.5,  "position_max": 272.5},
+                    "stepper_z": {"position_min": -4,    "position_max": 262},
+                    "virtual_sdcard": {"path": "/data/gcodes"},
+                    "pause_resume":   {},
+                    "display_status": {},
+                },
+                "warnings": [],
+                "save_config_pending": False,
+                "save_config_pending_items": {},
+            },
         }
 
     # -------------------------------------------------------------------------
@@ -2655,7 +2697,20 @@ class KobraXBridge:
         return web.json_response({"result": {"count": len(result_jobs), "jobs": result_jobs}})
 
     async def handle_webcams_list(self, request):
-        """Moonraker /server/webcams/list — Obico holt die Webcam-URLs hier."""
+        """Moonraker /server/webcams/list — Obico holt die Webcam-URLs hier.
+
+        Wenn der Client von einem anderen Host kommt (z.B. moonraker-obico auf
+        separatem Server), braucht er absolute URLs damit er den Stream erreicht.
+        Host-Header mit localhost/127.0.0.1 wird durch die echte LAN-IP ersetzt."""
+        host_hdr = request.headers.get("Host", "") if request else ""
+        host_name = (host_hdr or "").split(":")[0]
+        port_part = f":{host_hdr.split(':')[1]}" if ":" in (host_hdr or "") else f":{self._args.port}"
+        local_ip  = getattr(self, "_local_ip", None) or host_name
+        if host_name in ("localhost", "127.0.0.1", ""):
+            host_name = local_ip
+        base         = f"http://{host_name}{port_part}"
+        stream_url   = f"{base}/api/camera/stream"
+        snapshot_url = f"{base}/api/camera/snapshot"
         return web.json_response({
             "result": {
                 "webcams": [
@@ -2667,8 +2722,8 @@ class KobraXBridge:
                         "icon":         "mdiWebcam",
                         "target_fps":   5,
                         "target_fps_idle": 2,
-                        "stream_url":   "/api/camera/stream",
-                        "snapshot_url": "/api/camera/snapshot",
+                        "stream_url":   stream_url,
+                        "snapshot_url": snapshot_url,
                         "flip_horizontal": False,
                         "flip_vertical":   False,
                         "rotation":     0,
@@ -2853,7 +2908,7 @@ class KobraXBridge:
         log.info(f"print/start → {filename}  url={url}  ams={len(ams_box_mapping)} slots  mode={self._filament_mode}")
         result = self.client.publish("print", "start", payload, timeout=15.0)
         if result:
-            log.info(f"Druckstart bestätigt: state={result.get('state')}")
+            log.info(f"Print start confirmed: state={result.get('state')}")
         else:
             log.warning("Druckstart: keine Antwort vom Drucker")
 
@@ -3108,7 +3163,7 @@ class KobraXBridge:
         return web.json_response({"result": "disconnected"})
 
     async def handle_api_restart(self, request):
-        log.info("Neustart über API angefordert")
+        log.info("Restart requested via API")
         response = web.json_response({"status": "restarting"})
         asyncio.get_event_loop().call_later(0.3, self._restart_bridge)
         return response
@@ -3388,6 +3443,9 @@ class KobraXBridge:
         await loop.run_in_executor(None, lambda: self.client.publish(
             "video", "stopCapture", None, timeout=0
         ))
+        # Verhindert dass der Autostart-Guard die Kamera während des
+        # laufenden Drucks wieder einschaltet (State-Flicker-Problem).
+        self._camera_user_stopped = True
         return web.json_response({"result": "ok"})
 
     async def handle_api_camera_snapshot(self, request):
@@ -3447,7 +3505,7 @@ class KobraXBridge:
                 stderr=asyncio.subprocess.DEVNULL,
             )
         except (FileNotFoundError, OSError) as e:
-            log.warning("Kamera: ffmpeg nicht gefunden – Kamerastream nicht verfügbar")
+            log.warning("Camera: ffmpeg not found – camera stream unavailable")
             return web.Response(status=503, text="ffmpeg not found")
         except Exception as e:
             log.warning(f"Kamera: ffmpeg konnte nicht gestartet werden: {e}")
@@ -3542,7 +3600,7 @@ class KobraXBridge:
         if not os.path.isfile(serve_path):
             return web.Response(status=404, text="not found")
         size = os.path.getsize(serve_path)
-        log.info(f"Drucker lädt Datei ab: {filename} ({size} bytes)")
+        log.info(f"Printer downloading file: {filename} ({size} bytes)")
         return web.FileResponse(serve_path, headers={
             "Content-Disposition": f'attachment; filename="{filename}"'
         })
@@ -3580,6 +3638,7 @@ class KobraXBridge:
             "remain_time":      s["remain_time"],
             "curr_layer":       s["curr_layer"],
             "total_layers":     s["total_layers"],
+            "z_mm":             self._estimate_current_z(),
             "filename":         s["filename"],
             "slicer_time":      slicer_time,
             "camera_url":       s["camera_url"],
@@ -3857,7 +3916,7 @@ class KobraXBridge:
         with open(config_path, "w", encoding="utf-8") as f:
             f.write("# KX-Bridge Konfigurationsdatei\n\n")
             cfg.write(f)
-        log.info(f"Drucker '{name or creds['model']}' als {sec} hinzugefügt (Port {new_port})")
+        log.info(f"Printer '{name or creds['model']}' added as {sec} (port {new_port})")
         response = self._json_cors({"status": "restarting", "section": sec, "http_port": new_port})
         asyncio.get_event_loop().call_later(0.5, self._restart_bridge)
         return response
@@ -3932,13 +3991,13 @@ class KobraXBridge:
         # die alten Werte statt der geänderten config.ini.
         for _k in ("PRINTER_IP", "MQTT_PORT", "MQTT_USERNAME", "MQTT_PASSWORD",
                    "MODE_ID", "DEVICE_ID", "DEFAULT_AMS_SLOT", "AUTO_LEVELING",
-                   "BRIDGE_PRINTER_NAME"):
+                   "CAMERA_ON_PRINT", "WEB_UPLOAD_WARNING", "BRIDGE_PRINTER_NAME"):
             os.environ.pop(_k, None)
 
         in_docker = os.path.exists("/.dockerenv") or os.environ.get("KX_IN_DOCKER")
         if in_docker:
             # Docker/systemd: Prozess beenden reicht – der Supervisor startet neu (frische environ)
-            log.info("Container-Umgebung erkannt – beende Prozess für Supervisor-Restart")
+            log.info("Container environment detected – exiting for supervisor restart")
             os._exit(0)
 
         frozen = getattr(sys, "frozen", False)
@@ -4117,7 +4176,7 @@ class KobraXBridge:
                             if fname == "kobrax_moonraker_bridge.py":
                                 return web.json_response(
                                     {"error": f"Download {fname}: HTTP {resp.status}"}, status=502)
-                            log.warning(f"Update: {fname} nicht im Release ({resp.status}) – übersprungen")
+                            log.warning(f"Update: {fname} not found in release ({resp.status}) – skipped")
                             continue
                         downloaded.append((app_dir / fname, await resp.read()))
             # Phase 2: atomar ersetzen (erst nach komplettem, erfolgreichem Download)
@@ -4394,11 +4453,14 @@ class KobraXBridge:
                 # Obico registriert obico_remote_event-Callback. Wir akzeptieren leer.
                 result = "ok"
             elif method == "server.webcams.list":
-                # WS-Variante des HTTP-Endpoints
+                # WS-Variante: absolute URL mit echter LAN-IP statt localhost
+                _lip = getattr(self, "_local_ip", None) or "127.0.0.1"
+                _base = f"http://{_lip}:{self._args.port}"
                 result = {"webcams": [{
                     "name": "KX-Bridge", "location": "printer", "service": "mjpegstreamer",
-                    "enabled": True, "stream_url": "/api/camera/stream",
-                    "snapshot_url": "/api/camera/snapshot",
+                    "enabled": True,
+                    "stream_url":   f"{_base}/api/camera/stream",
+                    "snapshot_url": f"{_base}/api/camera/snapshot",
                     "flip_horizontal": False, "flip_vertical": False, "rotation": 0,
                     "target_fps": 5, "aspect_ratio": "16:9",
                 }]}
@@ -4448,7 +4510,7 @@ class KobraXBridge:
                 log.debug(f"Unbekannte RPC-Methode: {method}")
                 result = {}
         except Exception as e:
-            log.error(f"RPC-Fehler für {method}: {e}")
+            log.error(f"RPC error for {method}: {e}")
             error = {"code": -32603, "message": str(e)}
 
         if rpc_id is not None:
@@ -4762,7 +4824,7 @@ async def run_bridge(args):
         site = web.TCPSite(runner, args.host, per_args.port)
         await site.start()
         runners.append((runner, client, pid))
-        log.info(f"[Drucker {pid}] Bridge läuft auf http://{args.host}:{per_args.port}")
+        log.info(f"[Printer {pid}] Bridge running on http://{args.host}:{per_args.port}")
 
     import socket as _socket
     try:
@@ -4771,6 +4833,9 @@ async def run_bridge(args):
             _local_ip = _s.getsockname()[0]
     except Exception:
         _local_ip = args.host
+    # An alle Bridge-Instanzen weitergeben — wird für absolute Webcam-URLs genutzt
+    for _b in all_bridges.values():
+        _b._local_ip = _local_ip
     log.info(f"OrcaSlicer → Klipper → Host: {_local_ip}  Ports: " +
              ", ".join(str(getattr(b._args, 'port', 0)) for b in all_bridges.values()))
     log.info("Ctrl-C zum Beenden")

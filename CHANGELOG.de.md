@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.9.20] – 2026-06-08
+
+### Neu
+- **Französische Sprachunterstützung (PR #45 von @Nathacks)**
+- **Z-Höhe in der Print-UI (PR #49 von @Nathacks).** Zeigt die aktuelle
+  Z-Position in mm unterhalb des Layer-Zählers.
+
+### Behoben
+- **Kamera-Autostart ignorierte das "Kamera bei Druckstart einschalten"-
+  Setting nach einem Bridge-Restart (Issue #50).** Das Setting wurde in
+  der Prozessumgebung gecacht — nach dem Speichern in der UI überlebte
+  der alte Wert den Restart und der neue Wert aus `config.ini` wurde
+  nicht gelesen.
+- **Kamera startete nach manuellem Stopp während eines Drucks automatisch
+  neu (Issue #50).** Ein neues `_camera_user_stopped`-Flag unterdrückt
+  den Autostart für die aktuelle Drucksitzung. Es wird beim Druckende
+  zurückgesetzt.
+- **Falscher "Stream nicht verfügbar"-Fehler-Toast beim manuellen
+  Kamera-Stopp.** Der Bild-Fehler-Handler war noch registriert als
+  `img.src` geleert wurde.
+- **JS-Fehler (`ReferenceError: br is not defined`) beim Licht-Toggle.**
+  Variable wurde aus dem falschen Scope referenziert.
+- Webcam-URLs sind jetzt absolut, damit Mobileraker/Obico-Clients sie
+  erreichen können.
+
 ## [0.9.19.1] – 2026-06-04
 
 ### Behoben

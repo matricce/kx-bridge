@@ -37,6 +37,7 @@
   "lbl_remaining": "Restante:",
   "lbl_slicer_time": "Estimación del slicer:",
   "lbl_layers": "Capa",
+  "lbl_zpos": "Z (mm)",
   "speed_silent": "🐢 Silencioso",
   "speed_normal": "⚡ Normal",
   "speed_sport": "🚀 Sport",

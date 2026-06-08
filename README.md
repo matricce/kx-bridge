@@ -66,43 +66,17 @@ docker compose up -d
 
 **Linux binary (no Docker):**
 ```bash
-chmod +x kx-bridge-linux-amd64 && ./kx-bridge-linux-amd64
+chmod +x kx-bridge && ./kx-bridge
 ```
 
 **Windows EXE (no Docker):**
 ```
 kx-bridge.exe
 ```
+> `config\` and `data\` are created next to the EXE — portable.
 
-> ⚠️ **TLS certificates required for the standalone binary**
->
-> The bridge talks to the printer's MQTT over mTLS and needs two
-> certificate files **right next to the binary**:
->
-> - `anycubic_slicer.crt`
-> - `anycubic_slicer.key`
->
-> Both ship inside **`anycubic-certs.zip`** on the same release page.
-> Download it and extract the two files into the same directory as
-> `kx-bridge-linux-amd64` / `kx-bridge.exe`. Without them you'll see
-> `Verbindung fehlgeschlagen: TLS-Zertifikate fehlen …` (0.9.19.1+)
-> or `[Errno 2] No such file or directory` (older builds).
->
-> Working layout:
-> ```
-> ~/kx-bridge/
-> ├── kx-bridge-linux-amd64   (or kx-bridge.exe)
-> ├── anycubic_slicer.crt     ← from anycubic-certs.zip
-> ├── anycubic_slicer.key     ← from anycubic-certs.zip
-> └── config/                 (auto-created on first run)
-> ```
->
-> Docker users don't need to do this — the certs are baked into the
-> image.
-
-> With the Linux and Windows binaries, `config/` and `data/` (settings,
-> SQLite, GCode store) live next to the program. Copy the whole folder
-> = move the installation.
+> With the Linux and Windows binaries, `config/` and `data/` (settings, SQLite, GCode store)
+> live next to the program. Copy the whole folder = move the installation.
 
 **Python directly:**
 ```bash

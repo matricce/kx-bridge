@@ -67,44 +67,17 @@ docker compose up -d
 
 **Linux-Binary (kein Docker):**
 ```bash
-chmod +x kx-bridge-linux-amd64 && ./kx-bridge-linux-amd64
+chmod +x kx-bridge && ./kx-bridge
 ```
 
 **Windows-EXE (kein Docker):**
 ```
 kx-bridge.exe
 ```
+> `config\` und `data\` werden neben der EXE angelegt — portabel.
 
-> ⚠️ **TLS-Zertifikate für Standalone-Binary nötig**
->
-> Die Bridge spricht per mTLS mit dem Drucker-MQTT und braucht zwei
-> Zertifikat-Dateien **direkt neben dem Binary**:
->
-> - `anycubic_slicer.crt`
-> - `anycubic_slicer.key`
->
-> Beide liegen im **`anycubic-certs.zip`** auf derselben Release-Seite.
-> Lade die ZIP herunter und entpacke die beiden Dateien in dasselbe
-> Verzeichnis wie `kx-bridge-linux-amd64` bzw. `kx-bridge.exe`. Ohne
-> die Zertifikate siehst du `Verbindung fehlgeschlagen: TLS-Zertifikate
-> fehlen …` (0.9.19.1+) oder `[Errno 2] No such file or directory`
-> (ältere Builds).
->
-> So muss es aussehen:
-> ```
-> ~/kx-bridge/
-> ├── kx-bridge-linux-amd64   (oder kx-bridge.exe)
-> ├── anycubic_slicer.crt     ← aus anycubic-certs.zip
-> ├── anycubic_slicer.key     ← aus anycubic-certs.zip
-> └── config/                 (wird beim ersten Start angelegt)
-> ```
->
-> Docker-User müssen das nicht machen — die Zertifikate sind im Image
-> enthalten.
-
-> Bei Linux- und Windows-Binary liegen `config/` und `data/` (Einstellungen,
-> SQLite, GCode-Store) jeweils neben dem Programm. Einfach den ganzen Ordner
-> kopieren = umziehen.
+> Bei Linux- und Windows-Binary liegen `config/` und `data/` (Einstellungen, SQLite,
+> GCode-Store) jeweils neben dem Programm. Einfach den ganzen Ordner kopieren = umziehen.
 
 **Python direkt:**
 ```bash

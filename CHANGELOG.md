@@ -1,24 +1,51 @@
 # Changelog
 
+## [0.9.20] – 2026-06-08
+
+### New
+- **French language support (PR #45 by @Nathacks)**
+- **Z height display in the print UI (PR #49 by @Nathacks).** Shows
+  current Z position in mm below the layer counter.
+
+### Fixed
+- **Camera auto-start ignored "Enable camera on print start" setting
+  after a bridge restart (issue #50).** The setting was cached in the
+  process environment — after saving it in the UI, the old value
+  survived the restart and the new value from `config.ini` was never
+  read.
+- **Camera restarted automatically after manual stop during a print
+  (issue #50).** A new `_camera_user_stopped` flag suppresses
+  auto-restart for the current print session. It resets when the
+  print ends.
+- **Spurious "stream unavailable" error toast when stopping the camera
+  manually.** The image error handler was still registered when
+  `img.src` was cleared.
+- **JS error (`ReferenceError: br is not defined`) when toggling the
+  light.** Variable was referenced from the wrong scope.
+- Webcam URLs are now absolute so that Mobileraker/Obico clients can
+  reach them.
+
 ## [0.9.19.1] – 2026-06-04
 
 ### Fixed
-- Standalone-Binaries (Linux/Windows) zeigten `vunknown` als Version.
-  Die `VERSION`-Datei ist jetzt ins PyInstaller-Onefile eingebettet.
-- Bei fehlenden TLS-Zertifikaten (`anycubic_slicer.crt`/`.key`) gab
-  es nur den rohen Fehler `[Errno 2] No such file or directory`. Die
-  Bridge meldet jetzt klar, wo die Dateien hingelegt werden müssen
-  und dass `anycubic-certs.zip` aus dem Gitea-Release stammt.
+- Standalone binaries (Linux/Windows) reported `vunknown` as their
+  version. The `VERSION` file is now embedded into the PyInstaller
+  onefile bundle.
+- When the TLS certificates (`anycubic_slicer.crt`/`.key`) were
+  missing, the bridge only logged the raw `[Errno 2] No such file
+  or directory`. It now states clearly where the files need to be
+  placed and that `anycubic-certs.zip` from the Gitea release is the
+  source.
 
 ### Changed
-- Filament-Profil-Liste neu kuratiert: 209 statt 399 Einträge.
-  Profile die nur für drucker-spezifische Vendor-Bundles existieren
-  (z.B. Eryone Thinker X400, Artillery M1 Pro, WonderMaker ZR,
-  Tiertime, Cubicon, CoLiDo, Afinia, Snapmaker) sind rausgeflogen
-  — OrcaSlicer hätte sie im Standard-Kobra-X-Setup beim Sync
-  ohnehin nicht gefunden, weil die jeweiligen Vendor-Bundles nur
-  bei aktivem Drucker-Vendor geladen werden. Für solche Filamente
-  bleibt der Custom-Profile-Import (Issue #41) der Weg.
+- Filament profile list re-curated: 209 entries instead of 399.
+  Profiles that only exist inside printer-specific vendor bundles
+  (e.g. Eryone Thinker X400, Artillery M1 Pro, WonderMaker ZR,
+  Tiertime, Cubicon, CoLiDo, Afinia, Snapmaker) were dropped —
+  OrcaSlicer wouldn't have found them in a default Kobra X setup
+  anyway, because the matching vendor bundle is only loaded when
+  the corresponding printer vendor is active. For those filaments
+  the custom profile import (issue #41) remains the way.
 
 ## [0.9.19] – 2026-06-02
 
