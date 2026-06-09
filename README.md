@@ -129,7 +129,7 @@ For proper AMS filament-sync we ship a **patched OrcaSlicer build**:
 - Vendor match when `tray_info_idx` is set but its preset is incompatible
 - Two-pass lookup: first compatible presets, then all visible ones
 
-**Why this matters:** without #13719 the AMS slots in OrcaSlicer all fall back to `Generic PLA` / `Generic PETG` even though the bridge already sends the concrete brand (`name + vendor_name + gate_filament_name`). With the KX build OrcaSlicer matches your actual user presets — including profiles you imported into the bridge via the [Import your own OrcaSlicer profiles](#-features) flow.
+**Why this matters:** without #13719 the AMS slots in OrcaSlicer all fall back to `Generic PLA` / `Generic PETG` even though the bridge already sends the concrete brand (`name + vendor_name + gate_filament_name`). With the KX build OrcaSlicer matches your actual user presets — including profiles you imported into the bridge via the [Import your own OrcaSlicer profiles](docs/filament-preset-bridge-guide.md) flow.
 
 Stock upstream OrcaSlicer still works for slicing and printing — you just lose the per-slot brand matching on AMS sync. Slot material + colour can still be pushed bridge → printer either way (that goes over MQTT, not via the slicer).
 

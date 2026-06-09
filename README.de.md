@@ -130,7 +130,7 @@ Für sauberen AMS-Filament-Sync gibt es einen **gepatchten OrcaSlicer-Build**:
 - Vendor-Match wenn `tray_info_idx` gesetzt ist, das Preset aber inkompatibel
 - Zwei-Pass-Suche: erst kompatible Presets, dann alle sichtbaren
 
-**Warum das zusammen wichtig ist:** ohne #13719 landen die AMS-Slots in OrcaSlicer alle auf `Generic PLA` / `Generic PETG`, obwohl die Bridge die konkrete Marke schon mitsendet (`name + vendor_name + gate_filament_name`). Mit dem KX-Build matched OrcaSlicer deine echten User-Presets — auch die, die du via [Eigene OrcaSlicer-Profile importieren](#-features) in die Bridge gezogen hast.
+**Warum das zusammen wichtig ist:** ohne #13719 landen die AMS-Slots in OrcaSlicer alle auf `Generic PLA` / `Generic PETG`, obwohl die Bridge die konkrete Marke schon mitsendet (`name + vendor_name + gate_filament_name`). Mit dem KX-Build matched OrcaSlicer deine echten User-Presets — auch die, die du via [Eigene OrcaSlicer-Profile importieren](docs/filament-preset-bridge-guide.md) in die Bridge gezogen hast.
 
 Stock-Upstream-OrcaSlicer funktioniert für Slicing und Drucken weiterhin — nur das Per-Slot-Vendor-Matching beim AMS-Sync fällt dann weg. Material und Farbe pro Slot kannst du auch ohne den KX-Build über die Bridge ans Drucker-Display schreiben (das läuft über MQTT, nicht über den Slicer).
 
