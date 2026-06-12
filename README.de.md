@@ -105,6 +105,20 @@ Drucker → Verbindungstyp **Moonraker** → Host: `http://BRIDGE-IP:7125`
 
 ---
 
+## 🐳 Portainer
+
+[`docker-compose.portainer.yml`](docker-compose.portainer.yml) in
+**Portainer → Stacks → Add stack → Web editor** einfügen und auf *Deploy* klicken.
+
+Keine Konfiguration nötig — die Bridge startet im Offline-Modus.
+**`http://HOST-IP:7125`** öffnen, den **Drucker-Tab** aufrufen und **+ Drucker hinzufügen** klicken.
+Nur die Drucker-IP eingeben — Zugangsdaten werden automatisch geholt und gespeichert.
+
+Alle Daten (Konfiguration, GCode-Store, Datenbank) liegen in Named Docker Volumes
+(`kx-bridge-config`, `kx-bridge-data`), die Portainer verwaltet.
+
+---
+
 ## 📺 Video-Tutorial
 
 [![KX-Bridge Setup & Usage](https://img.youtube.com/vi/1Ql4wfH27fM/hqdefault.jpg)](https://www.youtube.com/watch?v=1Ql4wfH27fM)
