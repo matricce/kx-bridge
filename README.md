@@ -104,20 +104,6 @@ Printer → Connection type **Moonraker** → Host: `http://BRIDGE-IP:7125`
 
 ---
 
-## 🐳 Portainer
-
-Paste [`docker-compose.portainer.yml`](docker-compose.portainer.yml) into
-**Portainer → Stacks → Add stack → Web editor** and click *Deploy*.
-
-No configuration needed upfront — the bridge starts in offline mode.
-Open **`http://HOST-IP:7125`**, go to the **Printers** tab and click **+ Add printer**.
-Enter the printer's IP address — credentials are fetched and saved automatically.
-
-All data (config, GCode store, database) is stored in named Docker volumes
-(`kx-bridge-config`, `kx-bridge-data`) managed by Portainer.
-
----
-
 ## 📺 Video Tutorial
 
 [![KX-Bridge Setup & Usage](https://img.youtube.com/vi/1Ql4wfH27fM/hqdefault.jpg)](https://www.youtube.com/watch?v=1Ql4wfH27fM)
@@ -143,7 +129,7 @@ For proper AMS filament-sync we ship a **patched OrcaSlicer build**:
 - Vendor match when `tray_info_idx` is set but its preset is incompatible
 - Two-pass lookup: first compatible presets, then all visible ones
 
-**Why this matters:** without #13719 the AMS slots in OrcaSlicer all fall back to `Generic PLA` / `Generic PETG` even though the bridge already sends the concrete brand (`name + vendor_name + gate_filament_name`). With the KX build OrcaSlicer matches your actual user presets — including profiles you imported into the bridge via the [Import your own OrcaSlicer profiles](docs/filament-preset-bridge-guide.md) flow.
+**Why this matters:** without #13719 the AMS slots in OrcaSlicer all fall back to `Generic PLA` / `Generic PETG` even though the bridge already sends the concrete brand (`name + vendor_name + gate_filament_name`). With the KX build OrcaSlicer matches your actual user presets — including profiles you imported into the bridge via the [Import your own OrcaSlicer profiles](#-features) flow.
 
 Stock upstream OrcaSlicer still works for slicing and printing — you just lose the per-slot brand matching on AMS sync. Slot material + colour can still be pushed bridge → printer either way (that goes over MQTT, not via the slicer).
 

@@ -1906,10 +1906,12 @@ class KobraXBridge:
                         "square_corner_velocity":  20.0,
                     },
                     "extruder": {
-                        "nozzle_diameter":  0.4,
-                        "min_temp":         0,
-                        "max_temp":         320,
-                        "min_extrude_temp": 10,
+                        "nozzle_diameter":    0.4,
+                        "filament_diameter":  1.75,
+                        "sensor_type":        "ATC Semitec 104GT-2",
+                        "min_temp":           0,
+                        "max_temp":           320,
+                        "min_extrude_temp":   10,
                     },
                     "heater_bed": {
                         "min_temp": 0,

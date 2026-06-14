@@ -167,7 +167,8 @@ class KobraXClient:
         ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
         ctx.load_cert_chain(CERT_FILE, KEY_FILE)
 
-        raw        = socket.create_connection((self.host, self.port), timeout=5)
+        _ai        = socket.getaddrinfo(self.host, self.port, socket.AF_INET, socket.SOCK_STREAM)
+        raw        = socket.create_connection(_ai[0][4], timeout=5)
         self._sock = ctx.wrap_socket(raw)
         log.info("TLS connected  cipher=%s", self._sock.cipher()[0])
 
@@ -596,7 +597,8 @@ class KobraXClient:
         # langsamerem WLAN am Drucker dauert das Schieben sonst >30 s und
         # würde den Connect-Timeout fälschlich auslösen. Read-Timeout danach
         # generös (Drucker verarbeitet die Datei bevor er antwortet).
-        sock = socket.create_connection((self.host, 18910), timeout=10)
+        _ai  = socket.getaddrinfo(self.host, 18910, socket.AF_INET, socket.SOCK_STREAM)
+        sock = socket.create_connection(_ai[0][4], timeout=10)
         sock.settimeout(None)  # blocking während Send
         sock.sendall(headers + body)
         sock.settimeout(180)

@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.9.21] – 2026-06-14
+
+### Fixed
+- **Camera stream not visible on Android (Chrome / Firefox).** Android
+  browsers do not support `multipart/x-mixed-replace` (MJPEG). The UI
+  now detects Android and falls back to snapshot-polling at 5 fps
+  (`/api/camera/snapshot` every 200 ms) — no server-side change needed.
+
+### Changed
+- Docker image now pinned to **Debian 12 (Bookworm)** (`python:3.11-slim-bookworm`)
+  to avoid glibc 2.41 compatibility issues introduced by the Debian 13
+  base image that `python:3.11-slim` recently started pulling.
+- MQTT and HTTP connections now **force IPv4** (`AF_INET`) to prevent
+  connection failures on hosts where the printer is only reachable via
+  IPv4 but the OS prefers IPv6.
+- Extruder stub in the Moonraker `configfile` response now includes
+  `sensor_type` and `filament_diameter` — fixes a Mobileraker crash
+  (`Null is not a subtype of Object`, issue #48).
+
 ## [0.9.20] – 2026-06-08
 
 ### New

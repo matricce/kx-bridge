@@ -7,6 +7,7 @@ var S={nozzle_temp:0,nozzle_target:0,bed_temp:0,bed_target:0,
 var tempHistory={n:[],b:[]};
 var camOn=false;
 var camUserStopped=false; // user stopped camera manually — suppress auto-restart for this print
+var _camPollInterval=null; // snapshot-polling interval for Android (no MJPEG support)
 var currentStep=1;
 var currentPanel='dashboard';
 var aceAutoRefillPrefs=(function(){
@@ -1501,23 +1502,24 @@ function camStart(){
   img.style.display='none';
   sp.style.display='block';
   post('/api/camera/start',{}).then(function(){
-    img.onerror=function(){
-      sp.style.display='none';
-      img.style.display='none';
-      ph.style.display='flex';
-      camOn=false;
-      document.getElementById('cam-toggle-btn').textContent=tr('btn_cam_start');
-      clog(tr('log_error')+' '+tr('cam_stream_unavailable'),'msg-err');
-    };
-    img.src='/api/camera/stream?t='+Date.now();
     camOn=true;
     document.getElementById('cam-toggle-btn').textContent=tr('btn_cam_stop');
     clog(tr('log_cam_start'),'msg-ok');
-    // MJPEG liefert kein onload – Spinner nach kurzem Timeout ausblenden
-    setTimeout(function(){
-      sp.style.display='none';
-      img.style.display='block';
-    },1200);
+    setTimeout(function(){ sp.style.display='none'; img.style.display='block'; },1200);
+    if(/Android/i.test(navigator.userAgent)){
+      // Android browsers don't support multipart/x-mixed-replace (MJPEG) — poll snapshots instead
+      _camPollInterval=setInterval(function(){ img.src='/api/camera/snapshot?t='+Date.now(); },200);
+    } else {
+      img.onerror=function(){
+        sp.style.display='none';
+        img.style.display='none';
+        ph.style.display='flex';
+        camOn=false;
+        document.getElementById('cam-toggle-btn').textContent=tr('btn_cam_start');
+        clog(tr('log_error')+' '+tr('cam_stream_unavailable'),'msg-err');
+      };
+      img.src='/api/camera/stream?t='+Date.now();
+    }
   }).catch(function(e){
     sp.style.display='none';
     ph.style.display='flex';
@@ -1527,6 +1529,7 @@ function camStart(){
 
 function camStop(){
   var img=document.getElementById('cam-img');
+  if(_camPollInterval){clearInterval(_camPollInterval);_camPollInterval=null;}
   img.onerror=null; // deregister error handler before clearing src to avoid spurious error toast
   post('/api/camera/stop',{}).catch(function(){});
   img.src='';
