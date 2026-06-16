@@ -234,6 +234,7 @@
   "skip_sending": "Sending …",
   "skip_success": "Objects will be skipped.",
   "fd_objects_hint": "Skip objects (optional):",
+  "fd_objects_toggle": "Skip objects",
   "fd_slots_hint": "Assign GCode channel to AMS slot:",
   "fd_cancel": "Cancel",
   "fd_print": "▶ Print",

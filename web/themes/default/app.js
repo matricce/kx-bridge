@@ -259,7 +259,7 @@ function applyLang(){
   setText('skip-title',T.skip_title);
   setText('skip-hint',T.skip_hint);
   setText('d-btn-skip-label',T.skip_btn_label);
-  setText('fd-objects-hint',T.fd_objects_hint);
+  setText('fd-objects-toggle-lbl',T.fd_objects_toggle);
   setText('apd-lbl-ip',T.apd_lbl_ip);
   setText('apd-lbl-name',T.apd_lbl_name);
   var apn=document.getElementById('apd-name');if(apn)apn.setAttribute('placeholder',T.apd_placeholder_name);
@@ -2329,6 +2329,18 @@ function _normalizeMaterialKey(material){
 function _materialsCompatible(a,b){
   return _normalizeMaterialKey(a)===_normalizeMaterialKey(b);
 }
+// Issue #57 Punkt 4: konkreter Profilname (User-Override) statt generischem Typ.
+// Fällt auf den Material-Typ zurück wenn kein Profil gemappt ist.
+function _slotProfileLabel(slot){
+  if(!slot)return '';
+  if(slot.filament_name){
+    return slot.filament_name+(slot.filament_vendor?' — '+slot.filament_vendor:'');
+  }
+  return slot.material||'';
+}
+function _escAttr(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 function _updateSlotMarker(sel){
   var opt=sel.options[sel.selectedIndex];
   var color=opt&&opt.dataset.color?opt.dataset.color:'#888';
@@ -2339,6 +2351,7 @@ function _updateSlotMarker(sel){
     marker.style.background=color;
     marker.style.color=_contrastText(color);
     marker.textContent=(slotIdx+1);
+    marker.title=(opt&&opt.dataset.profile)?opt.dataset.profile:'';
   }
 }
 
@@ -2353,12 +2366,19 @@ function openFilamentDialog(slots){
   // Auto-Leveling-Checkbox mit globalem Default vorbelegen
   var fdAl=document.getElementById('fd-auto-leveling');
   if(fdAl) fdAl.checked=(S.auto_leveling===undefined?true:!!S.auto_leveling);
-  // Objekt-Liste laden (nur Store-Modus: per File-ID; Banner-Modus hat keine ID)
+  // Objekt-Liste laden — sobald eine File-ID auflösbar ist (Issue #57 Punkt 3:
+  // Skip-Parität auch im Banner-/Upload-Modus, nicht nur im Store-Modus).
+  // startReadyFileWithSlots() setzt _storeFileId auch im Banner-Modus per
+  // filename→fileObj-Lookup, daher reicht hier die _storeFileId-Prüfung.
   _printObjects=[];
   _printObjectsSvg='';
   var objSection=document.getElementById('fd-objects-section');
+  var objBody=document.getElementById('fd-objects-body');
+  var objArrow=document.getElementById('fd-objects-arrow');
   if(objSection)objSection.style.display='none';
-  if(_filamentDialogMode==='store'&&_storeFileId){
+  if(objBody)objBody.style.display='none';      // immer eingeklappt starten
+  if(objArrow)objArrow.style.transform='';
+  if(_storeFileId){
     fetch(_apiUrl('/kx/files/'+encodeURIComponent(_storeFileId)+'/objects'))
       .then(function(r){return r.json()})
       .then(function(d){
@@ -2367,6 +2387,8 @@ function openFilamentDialog(slots){
         if(names.length>=2){
           _printObjects=names.map(function(n){return {name:n,skip:false};});
           renderObjectChecklist(); renderObjectSvg();
+          var cnt=document.getElementById('fd-objects-count');
+          if(cnt)cnt.textContent='('+names.length+')';
           if(objSection)objSection.style.display='block';
         }
       }).catch(function(){});
@@ -2430,8 +2452,8 @@ function openFilamentDialog(slots){
       var defaultSlot=compatible.find(function(s){return s.slot_index===defaultSlotIndex;})||null;
       var opts=compatible.map(function(s){
         var sel=(defaultSlot&&s.slot_index===defaultSlot.slot_index)?'selected':'';
-        return '<option value="'+s.slot_index+'" data-color="'+s.color_hex+'" data-material="'+s.material+'" '+sel+'>'+
-          '● '+T.fd_slot+' '+(s.slot_index+1)+' · '+s.material+'</option>';
+        return '<option value="'+s.slot_index+'" data-color="'+s.color_hex+'" data-material="'+s.material+'" data-profile="'+_escAttr(_slotProfileLabel(s))+'" '+sel+'>'+
+          '● '+T.fd_slot+' '+(s.slot_index+1)+' · '+_slotProfileLabel(s)+'</option>';
       }).join('');
       if(!compatible.length){
         opts='<option value="-1" data-color="#888888" data-material="" selected>⚠ '+T.fd_no_matching_material+'</option>';
@@ -2448,7 +2470,7 @@ function openFilamentDialog(slots){
         '<span style="font-size:11px;color:var(--txt2);min-width:36px">'+gc.material+'</span>'+
         usedBadge+
         '<span style="font-size:16px;color:var(--txt2)">→</span>'+
-        '<span class="fd-slot-marker" data-for-paint="'+i+'" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:5px;background:'+slotColor+';color:'+slotTxt+';font-weight:700;font-size:12px;border:1px solid var(--border);flex-shrink:0">'+(defaultSlot?defaultSlot.slot_index+1:'?')+'</span>'+
+        '<span class="fd-slot-marker" data-for-paint="'+i+'" title="'+_escAttr(defaultSlot?_slotProfileLabel(defaultSlot):'')+'" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:5px;background:'+slotColor+';color:'+slotTxt+';font-weight:700;font-size:12px;border:1px solid var(--border);flex-shrink:0">'+(defaultSlot?defaultSlot.slot_index+1:'?')+'</span>'+
         '<select data-paint="'+i+'" data-paint-color="'+gc.color_hex+'" data-is-used="'+(isUsed?'1':'0')+'" data-has-compatible="'+(compatible.length?'1':'0')+'" '+(compatible.length?'':'disabled')+' onchange="_updateSlotMarker(this)" style="flex:1;min-width:0;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:var(--raised);color:var(--txt);font-size:12px">'+
         opts+'</select>'+
       '</div>';
@@ -2548,6 +2570,15 @@ function renderObjectChecklist(){
 function _toggleObjectSkip(idx,val){
   if(_printObjects[idx])_printObjects[idx].skip=!!val;
   renderObjectSvg();
+}
+// Issue #57 Punkt 3: Skip-Objekte-Bereich ein-/ausklappen
+function toggleFdObjects(){
+  var body=document.getElementById('fd-objects-body');
+  var arrow=document.getElementById('fd-objects-arrow');
+  if(!body)return;
+  var open=body.style.display!=='none';
+  body.style.display=open?'none':'block';
+  if(arrow)arrow.style.transform=open?'':'rotate(90deg)';
 }
 function renderObjectSvg(){
   var box=document.getElementById('fd-objects-svg');

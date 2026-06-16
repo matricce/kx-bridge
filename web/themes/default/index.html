@@ -626,9 +626,16 @@
     <p id="fd-slots-hint" style="font-size:12px;color:var(--txt2);margin-bottom:10px">GCode-Kanal → AMS-Slot zuweisen:</p>
     <div id="fd-slots" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
     <div id="fd-objects-section" style="display:none;margin-bottom:16px">
-      <p id="fd-objects-hint" style="font-size:12px;color:var(--txt2);margin-bottom:8px">Objekte überspringen (optional):</p>
-      <div id="fd-objects-svg" style="display:none;background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:6px;margin-bottom:8px;text-align:center"></div>
-      <div id="fd-objects" style="display:flex;flex-direction:column;gap:6px;max-height:140px;overflow-y:auto"></div>
+      <button type="button" id="fd-objects-toggle" onclick="toggleFdObjects()"
+        style="display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;background:var(--raised);border:1px solid var(--border);border-radius:8px;color:var(--txt);cursor:pointer;font-size:12px;text-align:left">
+        <span id="fd-objects-arrow" style="font-size:10px;transition:transform .15s">▶</span>
+        <span>✂ <span id="fd-objects-toggle-lbl">Objekte überspringen</span></span>
+        <span id="fd-objects-count" style="margin-left:auto;color:var(--txt2);font-weight:600"></span>
+      </button>
+      <div id="fd-objects-body" style="display:none;margin-top:8px">
+        <div id="fd-objects-svg" style="display:none;background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:6px;margin-bottom:8px;text-align:center"></div>
+        <div id="fd-objects" style="display:flex;flex-direction:column;gap:6px;max-height:140px;overflow-y:auto"></div>
+      </div>
     </div>
     <div style="margin-bottom:14px;padding:10px 12px;background:var(--raised);border-radius:8px;border:1px solid var(--border)">
       <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em" id="fd-options-title">Druckoptionen</div>

@@ -206,6 +206,7 @@
   "skip_sending": "发送中 …",
   "skip_success": "对象将被跳过。",
   "fd_objects_hint": "跳过对象 (可选):",
+  "fd_objects_toggle": "跳过对象",
   "fd_slots_hint": "将 GCode 通道分配到 AMS 槽位:",
   "fd_cancel": "取消",
   "fd_print": "▶ 打印",

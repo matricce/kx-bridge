@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.24] – 2026-06-16
+
+### New
+- **Skip Objects available in every print flow (issue #57).** The "Skip objects"
+  panel in the Slot Mapper used to appear only when printing from the Browser tab.
+  It now shows in all flows (upload / print bar included), collapsed by default
+  behind a `✂ Skip objects (N)` header to keep the dialog compact, expanding on
+  click with the object preview and checklist.
+- **Slot Mapper shows the specific profile name (issue #57).** Each slot now
+  displays its mapped filament profile (e.g. "PolyTerra PLA — Polymaker") in the
+  dropdown options and as a hover tooltip on the slot marker, instead of just the
+  generic type. Falls back to the generic type when no profile is mapped.
+
 ## [0.9.23] – 2026-06-16
 
 ### New

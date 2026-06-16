@@ -206,6 +206,7 @@
   "skip_sending": "Envoi …",
   "skip_success": "Les objets seront ignorés.",
   "fd_objects_hint": "Ignorer des objets (optionnel) :",
+  "fd_objects_toggle": "Ignorer des objets",
   "fd_slots_hint": "Associer le canal GCode au slot AMS :",
   "fd_cancel": "Annuler",
   "fd_print": "▶ Imprimer",

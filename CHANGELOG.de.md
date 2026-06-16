@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.24] – 2026-06-16
+
+### Neu
+- **Objekte überspringen in jedem Druck-Flow (Issue #57).** Der „Objekte
+  überspringen"-Bereich im Slot-Mapper erschien bisher nur beim Druck aus dem
+  Browser-Tab. Er ist jetzt in allen Flows verfügbar (inkl. Upload / Print-Leiste),
+  standardmäßig eingeklappt hinter einem `✂ Objekte überspringen (N)`-Header, damit
+  der Dialog kompakt bleibt — Klick klappt Vorschau + Checkliste auf.
+- **Slot-Mapper zeigt konkreten Profilnamen (Issue #57).** Jeder Slot zeigt nun das
+  zugeordnete Filament-Profil (z.B. „PolyTerra PLA — Polymaker") in den Dropdown-
+  Optionen und als Hover-Tooltip am Slot-Marker, statt nur des generischen Typs.
+  Fällt auf den generischen Typ zurück, wenn kein Profil gemappt ist.
+
 ## [0.9.23] – 2026-06-16
 
 ### Neu

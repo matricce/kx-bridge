@@ -206,6 +206,7 @@
   "skip_sending": "Sende …",
   "skip_success": "Objekte werden übersprungen.",
   "fd_objects_hint": "Objekte überspringen (optional):",
+  "fd_objects_toggle": "Objekte überspringen",
   "fd_slots_hint": "GCode-Kanal → AMS-Slot zuweisen:",
   "fd_cancel": "Abbrechen",
   "fd_print": "▶ Drucken",

@@ -206,6 +206,7 @@
   "skip_sending": "Enviando …",
   "skip_success": "Se omitirán los objetos.",
   "fd_objects_hint": "Omitir objetos (opcional):",
+  "fd_objects_toggle": "Omitir objetos",
   "fd_slots_hint": "Asignar canal GCode a la ranura AMS:",
   "fd_cancel": "Cancelar",
   "fd_print": "▶ Imprimir",
