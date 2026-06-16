@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.9.23] – 2026-06-16
+
+### Neu
+- **Druckdialog nach Upload automatisch öffnen.** Eine neue Einstellung
+  `print_start_dialog` (Einstellungen → Drucker → „Druckstart-Verhalten") steuert,
+  was nach einem Upload bei leerlaufendem Drucker passiert: „Print-Dialog" öffnet
+  den Slot-Zuordnungs-Dialog automatisch, „Print-Leiste" behält das bisherige
+  Banner. Basiert auf PR #56 von @gangoke.
+- **Auto-Leveling-Schalter pro Druck.** Der Druckdialog hat jetzt eine eigene
+  Auto-Leveling-Checkbox, die den globalen Standard für einen einzelnen Druck
+  überschreibt.
+
+### Behoben
+- **Objekt-Skip wurde beim Druckstart still ignoriert (PR #56, @gangoke).** Der
+  Skip-Befehl wurde gesendet, *bevor* der Drucker im `printing`-Status war, und
+  daher verworfen. Der Skip wird nun in einer Retry-Schleife erneut angewendet,
+  sobald der Druck bestätigt läuft — mit einer Pending-Sperre, damit die UI den
+  Skip-Status nicht vorzeitig zurücksetzt.
+- **Upload während eines laufenden Drucks überschrieb die Vorschau des laufenden
+  Auftrags.** Ein neuer Upload während des Drucks ersetzt nicht mehr Thumbnail /
+  file_ready des Auftrags auf dem Druckbett.
+
+## [0.9.22] – 2026-06-16
+
+### Neu
+- **Neu strukturiertes Einstellungs-Panel.** Das Einstellungs-Modal wurde durch
+  ein dauerhaftes Master-Detail-Panel mit fünf Kategorien ersetzt: Verbindung,
+  Drucker, Darstellung, Filament und System. Das Poll-Intervall ist nun live
+  einstellbar.
+- **Vendor-Sichtbarkeitsfilter (Issue #41).** Eine neue Checkliste in den
+  Filament-Einstellungen beschränkt das Slot-Profil-Dropdown auf bestimmte
+  Hersteller. „Generic" und eigene importierte Profile sind immer sichtbar.
+- **Idle-Datei-Aktionen in der Fortschritts-Karte (Issue #55).** Nach einem
+  Upload bei leerlaufendem Drucker erscheinen drei Schnellaktionen direkt in der
+  Fortschritts-Karte: ▶ Drucken, ⚙ Slots zuordnen und ✕ Leeren.
+
+### Behoben
+- **Mobileraker-Kompatibilität (Issue #48).** Absturz in `ConfigExtruder.fromJson`
+  (leeres `configfile.config`), Hänger beim Refresh (Metadata-Endlosschleife) und
+  fehlende ETA/Restzeit behoben.
+
 ## [0.9.21] – 2026-06-14
 
 ### Behoben

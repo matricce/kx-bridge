@@ -9,6 +9,9 @@ var camOn=false;
 var camUserStopped=false; // user stopped camera manually — suppress auto-restart for this print
 var _camPollInterval=null; // snapshot-polling interval for Android (no MJPEG support)
 var _lastLoadedFile=null;  // zuletzt geladene/gedruckte Datei für Progress-Karten-Aktionen (Issue #55)
+var _fdDialogOpen=false;          // Dialog ist gerade offen
+var _fdAutoOpenedFile=null;       // Dateiname für den der Dialog auto-geöffnet wurde
+var _fdUserCancelled=false;       // User hat den Auto-Open-Dialog abgebrochen
 var currentStep=1;
 var currentPanel='dashboard';
 var aceAutoRefillPrefs=(function(){
@@ -355,8 +358,13 @@ function applyLang(){
   setText('lbl-default-slot',T.settings_default_slot);
   setText('opt-slot-auto',T.settings_slot_auto);
   setText('lbl-auto-leveling',T.settings_auto_leveling);
+  setText('lbl-file-ready-mode',T.settings_file_ready_mode);
+  setText('opt-file-ready-dialog',T.settings_file_ready_dialog);
+  setText('opt-file-ready-banner',T.settings_file_ready_banner);
   setText('lbl-camera-on-print',T.settings_camera_on_print);
   setText('lbl-web-upload-warning',T.settings_web_upload_warning);
+  setText('fd-options-title',T.fd_options_title);
+  setText('fd-lbl-auto-leveling',T.print_auto_leveling);
 
   setText('lbl-update-check',T.update_check);
   setText('lbl-update-apply',T.update_apply);
@@ -652,10 +660,18 @@ function applyState(){
   var bannerVisible=false;
   var frb=document.getElementById('file-ready-banner');
   if(frb){
+    var shouldAutoOpen=(s.print_start_dialog===undefined?true:!!s.print_start_dialog);
     if(s.file_ready&&s.print_state==='standby'){
       document.getElementById('file-ready-name').textContent=s.file_ready;
-      frb.style.display='flex';
-      bannerVisible=true;
+      // Neue Datei → Abbruch-Sperre aufheben
+      if(_fdAutoOpenedFile&&_fdAutoOpenedFile!==s.file_ready) _fdUserCancelled=false;
+      if(shouldAutoOpen&&!_fdDialogOpen&&!_fdUserCancelled&&_fdAutoOpenedFile!==s.file_ready){
+        _fdAutoOpenedFile=s.file_ready;
+        startReadyFileWithSlots(s.file_ready,true);
+      } else {
+        frb.style.display='flex';
+        bannerVisible=true;
+      }
     }else{frb.style.display='none';}
   }
   // skip-button (mid-print) – nur sichtbar wenn aktuell gedruckt wird
@@ -958,6 +974,7 @@ function openSettings(){
     document.getElementById('s-default-slot').value=d.default_ams_slot||'auto';
     document.getElementById('s-auto-leveling').checked=(d.auto_leveling===undefined?true:!!d.auto_leveling);
     var cop=document.getElementById('s-camera-on-print');if(cop)cop.checked=!!d.camera_on_print;
+    var frm=document.getElementById('s-file-ready-mode');if(frm)frm.value=(d.print_start_dialog===undefined?'1':String(d.print_start_dialog?1:0));
     var wuw=document.getElementById('s-web-upload-warning');if(wuw)wuw.checked=(d.web_upload_warning===undefined?true:!!d.web_upload_warning);
     // Poll-Intervall (Sekunden) — Backend hat Vorrang vor localStorage
     var pi=document.getElementById('s-poll-interval');
@@ -1455,6 +1472,7 @@ function saveSettings(){
     default_ams_slot: document.getElementById('s-default-slot').value,
     auto_leveling:    document.getElementById('s-auto-leveling').checked?1:0,
     camera_on_print:  (document.getElementById('s-camera-on-print')||{}).checked?1:0,
+    print_start_dialog: parseInt((document.getElementById('s-file-ready-mode')||{}).value||'1',10),
     web_upload_warning:webUploadWarning,
     poll_interval:    Math.min(60,Math.max(1,parseInt((document.getElementById('s-poll-interval')||{}).value,10)||3)),
   }).then(function(){
@@ -2239,7 +2257,8 @@ function confirmStoreWebVerify(){
     });
 }
 
-function startReadyFileWithSlots(filename){
+function startReadyFileWithSlots(filename,_autoOpen){
+  if(!_autoOpen) _fdAutoOpenedFile=null; // manueller Aufruf → Auto-Open-Sperre aufheben
   var fn=filename||S.file_ready;
   var currentFile=(storeFiles||[]).find(function(f){return f.filename===fn;});
   if(currentFile && currentFile.web_unverified && webUploadWarningEnabled()){
@@ -2252,10 +2271,16 @@ function startReadyFileWithSlots(filename){
   _storeFileId=null;
   _gcodeFilaments=[];
 
+  var _autoOpenFile=_autoOpen?fn:null;
+  if(_autoOpen) _fdDialogOpen=true; // bereits während Fetch sperren
   function openWithSlots(){
     fetch(_apiUrl('/kx/filament/slots')).then(function(r){return r.json()}).then(function(d){
+      if(_autoOpenFile && _fdUserCancelled){_fdDialogOpen=false;return;}
       openFilamentDialog(d.result||[]);
-    }).catch(function(){openFilamentDialog([]);});
+    }).catch(function(){
+      if(_autoOpenFile && _fdUserCancelled){_fdDialogOpen=false;return;}
+      openFilamentDialog([]);
+    });
   }
 
   var fileObj=(storeFiles||[]).find(function(f){return f.filename===_storeFilename;});
@@ -2325,6 +2350,9 @@ function openFilamentDialog(slots){
   var title=document.getElementById('fd-title');
   var body=document.getElementById('fd-slots');
   if(title)title.textContent='▶ '+_storeFilename;
+  // Auto-Leveling-Checkbox mit globalem Default vorbelegen
+  var fdAl=document.getElementById('fd-auto-leveling');
+  if(fdAl) fdAl.checked=(S.auto_leveling===undefined?true:!!S.auto_leveling);
   // Objekt-Liste laden (nur Store-Modus: per File-ID; Banner-Modus hat keine ID)
   _printObjects=[];
   _printObjectsSvg='';
@@ -2432,6 +2460,8 @@ function openFilamentDialog(slots){
 function closeFilamentDialog(){
   var dlg=document.getElementById('filament-dialog');
   if(dlg)dlg.classList.remove('open');
+  _fdDialogOpen=false;
+  if(_fdAutoOpenedFile) _fdUserCancelled=true;
 }
 
 function confirmFilamentPrint(){
@@ -2471,12 +2501,14 @@ function confirmFilamentPrint(){
   }
   // Pre-Print Skip: Namen der abgehakten Objekte sammeln
   var excludedObjects=_printObjects.filter(function(o){return o.skip;}).map(function(o){return o.name;});
+  var fdAlEl=document.getElementById('fd-auto-leveling');
+  var fdAutoLeveling=fdAlEl?( fdAlEl.checked?1:0):(S.auto_leveling===undefined?1:S.auto_leveling?1:0);
   closeFilamentDialog();
   if(_filamentDialogMode==='banner'){
     // Banner-Modus: normaler print/start mit Slot-Override
     var btn=document.getElementById('file-ready-btn');
     if(btn){btn.disabled=true;btn.textContent='…';}
-    post('/printer/print/start',{filename:S.file_ready,filament_assignments:assignments,excluded_objects:excludedObjects})
+    post('/printer/print/start',{filename:S.file_ready,filament_assignments:assignments,excluded_objects:excludedObjects,auto_leveling:fdAutoLeveling})
       .then(function(r){return r.json();})
       .then(function(){
         document.getElementById('file-ready-banner').style.display='none';
@@ -2491,7 +2523,7 @@ function confirmFilamentPrint(){
     fetch(_apiUrl('/kx/print'),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({file_id:_storeFileId,filament_assignments:assignments,excluded_objects:excludedObjects})
+      body:JSON.stringify({file_id:_storeFileId,filament_assignments:assignments,excluded_objects:excludedObjects,auto_leveling:fdAutoLeveling})
     }).then(function(r){return r.json()}).then(function(d){
       if(d.result==='ok'){clog('Druckstart: '+_storeFilename,'msg-ok');showPanel('dashboard');}
       else{clog('Druckfehler: '+(d.error||'?'),'msg-err');}

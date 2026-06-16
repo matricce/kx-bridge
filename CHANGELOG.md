@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.9.23] – 2026-06-16
+
+### New
+- **Auto-open print dialog after upload.** A new `print_start_dialog` setting
+  (Settings → Printer → "Start Print Behavior") controls what happens after a
+  file is uploaded while the printer is idle: `Print Dialog` opens the
+  slot-assignment dialog automatically, `Print Bar` keeps the previous banner
+  behaviour. Based on PR #56 by @gangoke.
+- **Per-print auto-leveling toggle.** The print dialog now has its own
+  auto-leveling checkbox that overrides the global default for a single print.
+
+### Fixed
+- **Object skip was silently ignored at print start (PR #56, @gangoke).** The
+  skip command was sent *before* the printer entered the `printing` state, so it
+  was dropped. The skip is now re-applied in a retry loop once the print is
+  confirmed running, with a pending-lock so the UI doesn't reset the skip state
+  prematurely.
+- **Upload during an active print overwrote the running job's preview.**
+  Uploading a new file while printing no longer replaces the thumbnail /
+  file_ready of the job currently on the bed.
+
 ## [0.9.22] – 2026-06-16
 
 ### New

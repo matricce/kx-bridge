@@ -61,6 +61,7 @@ def _load_config_file(path: pathlib.Path):
         "AUTO_LEVELING":        (CONFIG_SECTION_PRINT,   "auto_leveling"),
         "CAMERA_ON_PRINT":      (CONFIG_SECTION_PRINT,   "camera_on_print"),
         "WEB_UPLOAD_WARNING":   (CONFIG_SECTION_PRINT,   "web_upload_warning"),
+        "PRINT_START_DIALOG":   (CONFIG_SECTION_PRINT,   "print_start_dialog"),
         "BRIDGE_PRINTER_NAME":  (CONFIG_SECTION_BRIDGE,  "printer_name"),
     }
     for env_key, (section, option) in mapping.items():
@@ -71,6 +72,18 @@ def _load_config_file(path: pathlib.Path):
                     os.environ[env_key] = val
             except (configparser.NoSectionError, configparser.NoOptionError):
                 pass
+
+
+    # Backward compatibility: old key FILE_READY_DIALOG → PRINT_START_DIALOG
+    if "PRINT_START_DIALOG" not in os.environ:
+        try:
+            legacy = cfg.get(CONFIG_SECTION_PRINT, "file_ready_dialog")
+            if legacy:
+                os.environ["PRINT_START_DIALOG"] = legacy
+        except (configparser.NoSectionError, configparser.NoOptionError):
+            pass
+    if "PRINT_START_DIALOG" not in os.environ and "FILE_READY_DIALOG" in os.environ:
+        os.environ["PRINT_START_DIALOG"] = os.environ["FILE_READY_DIALOG"]
 
 
 def migrate_env_to_config(env_path: pathlib.Path, config_path: pathlib.Path):
@@ -303,3 +316,4 @@ DEFAULT_AMS_SLOT = get("DEFAULT_AMS_SLOT", "auto")
 AUTO_LEVELING    = int(get("AUTO_LEVELING","1"))
 CAMERA_ON_PRINT  = int(get("CAMERA_ON_PRINT","0"))
 WEB_UPLOAD_WARNING = int(get("WEB_UPLOAD_WARNING", "1"))
+PRINT_START_DIALOG = int(get("PRINT_START_DIALOG", get("FILE_READY_DIALOG", "1")))

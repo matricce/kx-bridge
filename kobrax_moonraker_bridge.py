@@ -791,6 +791,7 @@ class KobraXBridge:
           "print_speed_mode":   2,
           "connection_error":   "",
           "file_ready":         "",
+          "print_start_dialog": getattr(args, "print_start_dialog", 1),
           "filament_mode":      "toolhead",
           "ace_drying": {"status": 0, "target_temp": 0, "duration": 0, "remain_time": 0, "humidity": None, "current_temp": None},
         }
@@ -814,6 +815,9 @@ class KobraXBridge:
 
         # Part-Skip: zuletzt vom Drucker gemeldete Skip-Liste (v0.9.10)
         self._skip_state: dict = {"objects": [], "skipped": [], "ts": 0}
+        # Pre-Print-Skip: pending until printer enters printing state
+        self._pending_preprint_skip: list[str] = []
+        self._pending_preprint_skip_deadline: float = 0.0
 
         # Theme-Name prüfen (keine Sonderzeichen oder Umlaute)
         raw_theme = (getattr(args, "ui_theme", None) or "default").strip()
@@ -1067,7 +1071,16 @@ class KobraXBridge:
         """
         d = payload.get("data") or {}
         skipped = d.get("objects_skip_parts") or d.get("skipped") or d.get("skipped_parts") or []
-        # Liste immer (auch leer) übernehmen – sonst bleibt sie auf alten Stand
+        # Während ein Pre-Print-Skip noch pending ist, leere Früh-Reports ignorieren
+        # damit die UI nicht sofort zurückspringt bevor der Drucker den Skip bestätigt.
+        now = time.time()
+        if (not skipped and self._pending_preprint_skip
+                and now <= self._pending_preprint_skip_deadline):
+            return
+        # Pending-Lock aufheben sobald Drucker die gewünschten Objekte bestätigt
+        if self._pending_preprint_skip and set(skipped) >= set(self._pending_preprint_skip):
+            self._pending_preprint_skip = []
+            self._pending_preprint_skip_deadline = 0.0
         self._skip_state = {
             "skipped":  list(skipped),
             "ts":       int(time.time()),
@@ -1079,14 +1092,19 @@ class KobraXBridge:
         d = payload.get("data") or {}
         details = d.get("file_details") or {}
         thumb = details.get("thumbnail") or details.get("png_image") or ""
-        if thumb:
+        file_name = d.get("filename") or details.get("filename") or self._last_uploaded_file
+        active_print = self._state.get("print_state") in ("printing", "paused")
+        current_print_file = self._state.get("filename") or ""
+        # Uploads während eines laufenden Drucks dürfen die aktive
+        # Fortschritts-Vorschau nicht überschreiben.
+        if thumb and (not active_print or (file_name and file_name == current_print_file)):
             self._thumbnail_b64 = thumb
             log.info(f"Vorschaubild empfangen: {len(thumb)} Zeichen base64")
         # Part-Skip: Objekt-Liste + optionales SVG (v0.9.10)
         objs = details.get("objects_skip_parts") or []
         svg  = details.get("svg_image") or ""
         if objs:
-            filename = d.get("filename") or details.get("filename") or self._last_uploaded_file
+            filename = file_name
             if filename:
                 try:
                     self._store.update_file_objects(filename, objs, svg)
@@ -1094,6 +1112,33 @@ class KobraXBridge:
                 except Exception as e:
                     log.warning(f"update_file_objects fehlgeschlagen: {e}")
         self._push_status_update()
+
+    def _apply_preprint_skip_after_start(self, names: list[str], retries: int = 20, delay_s: float = 0.75):
+        """Sendet Skip-Befehl erst nachdem Drucker in printing-State gewechselt hat.
+
+        Vorher sendet der Drucker den Befehl ins Leere (kein aktiver Druck).
+        """
+        wanted = [str(n) for n in (names or []) if isinstance(n, str) and n]
+        if not wanted:
+            return False
+        for i in range(max(1, int(retries))):
+            try:
+                if self._state.get("kobra_state") != "printing":
+                    time.sleep(max(0.1, float(delay_s)))
+                    continue
+                resp = self.client.skip_objects(wanted)
+                if resp is not None:
+                    log.info(f"Pre-Print skip applied ({len(wanted)} objects) on attempt {i+1}/{retries}")
+                    self._pending_preprint_skip = []
+                    self._pending_preprint_skip_deadline = 0.0
+                    return True
+            except Exception as e:
+                log.debug(f"Pre-Print skip attempt {i+1}/{retries} failed: {e}")
+            time.sleep(max(0.1, float(delay_s)))
+        log.warning(f"Pre-Print skip could not be confirmed after {retries} attempts")
+        self._pending_preprint_skip = []
+        self._pending_preprint_skip_deadline = 0.0
+        return False
 
     @staticmethod
     def _detect_filament_mode(boxes: list, head_tools_model: int = -1) -> str:
@@ -2538,7 +2583,7 @@ class KobraXBridge:
             ams_box_mapping = self._build_auto_ams_box_mapping()
 
         use_ams = len(ams_box_mapping) > 0
-        auto_leveling = getattr(self._args, "auto_leveling", 1)
+        auto_leveling = int(body.get("auto_leveling", getattr(self._args, "auto_leveling", 1)))
         filename = gcode_file["filename"]
         file_path = gcode_file["path"]
 
@@ -2570,6 +2615,15 @@ class KobraXBridge:
             },
         }
 
+        # Pre-Print-Skip sofort im UI-Status spiegeln
+        self._skip_state = {"skipped": list(excluded_objects), "ts": int(time.time())}
+        if excluded_objects:
+            self._pending_preprint_skip = [str(n) for n in excluded_objects if isinstance(n, str) and n]
+            self._pending_preprint_skip_deadline = time.time() + 12.0
+        else:
+            self._pending_preprint_skip = []
+            self._pending_preprint_skip_deadline = 0.0
+
         log.info(f"KX-Store Druckstart: {filename}  ams={len(ams_box_mapping)} slots  assignments={bool(assignments)}  excluded={len(excluded_objects)}")
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
@@ -2577,6 +2631,9 @@ class KobraXBridge:
         )
         if result is None:
             return self._json_cors({"error": "Keine Antwort vom Drucker"}, status=504)
+
+        if excluded_objects:
+            loop.run_in_executor(None, lambda: self._apply_preprint_skip_after_start(excluded_objects))
 
         # Job in History starten
         self._current_job_id = self._store.start_job(
@@ -3759,6 +3816,7 @@ class KobraXBridge:
             "thumbnail":        thumbnail,
             "connection_error": s["connection_error"],
             "file_ready":       s["file_ready"],
+            "print_start_dialog": s.get("print_start_dialog", getattr(self._args, "print_start_dialog", 1)),
             "version":          self._read_version(),
         })
 
@@ -3897,6 +3955,7 @@ class KobraXBridge:
             "auto_leveling":    getattr(self._args, "auto_leveling", 1),
             "camera_on_print":  getattr(self._args, "camera_on_print", 0),
             "web_upload_warning": getattr(self._args, "web_upload_warning", 1),
+            "print_start_dialog": getattr(self._args, "print_start_dialog", 1),
             "poll_interval":    getattr(self._args, "poll_interval", 3),
             "filament_profiles": {str(k): v for k, v in self._filament_profiles.items()},
             "visible_vendors":  self._visible_vendors,
@@ -3930,6 +3989,7 @@ class KobraXBridge:
         cfg.set("print",      "auto_leveling",    str(data.get("auto_leveling",    getattr(self._args, "auto_leveling",    1))))
         cfg.set("print",      "camera_on_print",  str(int(bool(data.get("camera_on_print", getattr(self._args, "camera_on_print", 0))))))
         cfg.set("print",      "web_upload_warning", str(int(bool(data.get("web_upload_warning", getattr(self._args, "web_upload_warning", 1))))))
+        cfg.set("print",      "print_start_dialog", str(int(bool(data.get("print_start_dialog", getattr(self._args, "print_start_dialog", 1))))))
         if "poll_interval" in data:
             try:
                 pi = max(1, min(60, int(data["poll_interval"])))
@@ -4102,7 +4162,8 @@ class KobraXBridge:
         # die alten Werte statt der geänderten config.ini.
         for _k in ("PRINTER_IP", "MQTT_PORT", "MQTT_USERNAME", "MQTT_PASSWORD",
                    "MODE_ID", "DEVICE_ID", "DEFAULT_AMS_SLOT", "AUTO_LEVELING",
-                   "CAMERA_ON_PRINT", "WEB_UPLOAD_WARNING", "BRIDGE_PRINTER_NAME"):
+                   "CAMERA_ON_PRINT", "WEB_UPLOAD_WARNING", "PRINT_START_DIALOG",
+                   "FILE_READY_DIALOG", "BRIDGE_PRINTER_NAME"):
             os.environ.pop(_k, None)
 
         in_docker = os.path.exists("/.dockerenv") or os.environ.get("KX_IN_DOCKER")
@@ -4987,6 +5048,8 @@ def main():
     parser.add_argument("--auto-leveling",   type=int, default=env_loader.AUTO_LEVELING)
     parser.add_argument("--camera-on-print", type=int, default=env_loader.CAMERA_ON_PRINT)
     parser.add_argument("--web-upload-warning", type=int, default=env_loader.WEB_UPLOAD_WARNING)
+    parser.add_argument("--print-start-dialog", dest="print_start_dialog", type=int, default=env_loader.PRINT_START_DIALOG)
+    parser.add_argument("--file-ready-dialog",  dest="print_start_dialog", type=int)
 
     parser.add_argument("--host",            default="0.0.0.0",
                         help="Bind-Adresse für den Bridge-Server")

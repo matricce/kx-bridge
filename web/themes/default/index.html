@@ -492,6 +492,13 @@
                 <input type="checkbox" id="s-auto-leveling" style="width:auto;margin:0">
                 <label id="lbl-auto-leveling" style="margin:0;cursor:pointer" for="s-auto-leveling">Auto-Leveling vor Druck</label>
               </div>
+              <div class="modal-field">
+                <label id="lbl-file-ready-mode">Nach Upload: Druckstart-Verhalten</label>
+                <select id="s-file-ready-mode">
+                  <option value="1" id="opt-file-ready-dialog">Print-Dialog</option>
+                  <option value="0" id="opt-file-ready-banner">Print-Leiste</option>
+                </select>
+              </div>
               <div class="modal-field" style="flex-direction:row;align-items:center;gap:10px">
                 <input type="checkbox" id="s-camera-on-print" style="width:auto;margin:0">
                 <label id="lbl-camera-on-print" style="margin:0;cursor:pointer" for="s-camera-on-print">Kamera bei Druckstart einschalten</label>
@@ -622,6 +629,13 @@
       <p id="fd-objects-hint" style="font-size:12px;color:var(--txt2);margin-bottom:8px">Objekte überspringen (optional):</p>
       <div id="fd-objects-svg" style="display:none;background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:6px;margin-bottom:8px;text-align:center"></div>
       <div id="fd-objects" style="display:flex;flex-direction:column;gap:6px;max-height:140px;overflow-y:auto"></div>
+    </div>
+    <div style="margin-bottom:14px;padding:10px 12px;background:var(--raised);border-radius:8px;border:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em" id="fd-options-title">Druckoptionen</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="fd-auto-leveling" style="width:auto;margin:0">
+        <label for="fd-auto-leveling" style="margin:0;cursor:pointer;font-size:13px" id="fd-lbl-auto-leveling">Auto-Leveling</label>
+      </div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button id="fd-cancel" onclick="closeFilamentDialog()" style="padding:8px 16px;background:var(--raised);border:1px solid var(--border);border-radius:8px;color:var(--txt);cursor:pointer">Abbrechen</button>
