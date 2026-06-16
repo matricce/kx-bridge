@@ -42,115 +42,12 @@
       <option value="zh-cn">中文(简体)</option>
     </select>
   </div>
-  <button class="theme-btn" onclick="openSettings()" id="settings-btn" title="Einstellungen">⚙</button>
+  <button class="theme-btn" onclick="showPanel('settings')" id="settings-btn" title="Einstellungen">⚙</button>
   <button class="conn-btn disconnected" id="conn-btn" onclick="toggleConnection()">⚡ Verbinden</button>
 </header>
 
 <!-- ═══ SETTINGS MODAL ═══ -->
-<div class="modal-overlay" id="settings-modal" onclick="if(event.target===this)closeSettings()">
-  <div class="modal-box">
-    <div class="modal-header">
-      <span class="modal-title" id="modal-title-settings">Einstellungen</span>
-      <button class="modal-close" onclick="closeSettings()">✕</button>
-    </div>
-
-    <div>
-      <div class="modal-field" style="margin-bottom:12px">
-        <label id="lbl-printer-name" style="font-weight:600">Drucker-Name</label>
-        <input type="text" id="s-printer-name" placeholder="z.B. Kobra X Links">
-      </div>
-      <div class="modal-section" id="modal-sec-connection">Verbindung</div>
-      <div class="modal-field">
-        <label id="lbl-printer-ip">Drucker-IP</label>
-        <input type="text" id="s-printer-ip" placeholder="192.168.x.x">
-        <small id="lbl-ip-hint" style="color:#f80;display:none"></small>
-      </div>
-      <div class="modal-field">
-        <label id="lbl-mqtt-port">MQTT-Port</label>
-        <input type="number" id="s-mqtt-port" placeholder="9883">
-      </div>
-      <div class="modal-field">
-        <label id="lbl-username">MQTT-Benutzername</label>
-        <input type="text" id="s-username" placeholder="userXXXXXXXX" autocomplete="new-password">
-      </div>
-      <div class="modal-field">
-        <label id="lbl-password">MQTT-Passwort</label>
-        <input type="password" id="s-password" autocomplete="new-password">
-      </div>
-      <div class="modal-field">
-        <label id="lbl-device-id">Device-ID</label>
-        <input type="text" id="s-device-id" placeholder="32 Hex-Zeichen">
-      </div>
-      <div class="modal-field">
-        <label id="lbl-mode-id">Mode-ID</label>
-        <input type="text" id="s-mode-id" placeholder="20030">
-      </div>
-    </div>
-
-    <div>
-      <div class="modal-section" id="modal-sec-print">Druckeinstellungen</div>
-      <div class="modal-field">
-        <label id="lbl-default-slot">Standard-Slot (Einfarbdruck)</label>
-        <select id="s-default-slot">
-          <option value="auto" id="opt-slot-auto">Auto (alle belegten Slots)</option>
-          <option value="0" id="opt-slot-0">Slot 1</option>
-          <option value="1" id="opt-slot-1">Slot 2</option>
-          <option value="2" id="opt-slot-2">Slot 3</option>
-          <option value="3" id="opt-slot-3">Slot 4</option>
-        </select>
-      </div>
-      <div class="modal-field" style="flex-direction:row;align-items:center;gap:10px">
-        <input type="checkbox" id="s-auto-leveling" style="width:auto;margin:0">
-        <label id="lbl-auto-leveling" style="margin:0;cursor:pointer" for="s-auto-leveling">Auto-Leveling vor Druck</label>
-      </div>
-      <div class="modal-field" style="flex-direction:row;align-items:center;gap:10px">
-        <input type="checkbox" id="s-camera-on-print" style="width:auto;margin:0">
-        <label id="lbl-camera-on-print" style="margin:0;cursor:pointer" for="s-camera-on-print">Kamera bei Druckstart einschalten</label>
-      </div>
-      <div class="modal-field" style="flex-direction:row;align-items:center;gap:10px">
-        <input type="checkbox" id="s-web-upload-warning" style="width:auto;margin:0">
-        <label id="lbl-web-upload-warning" style="margin:0;cursor:pointer" for="s-web-upload-warning">Warnung bei Web-Upload-Druck anzeigen</label>
-      </div>
-    </div>
-
-    <div>
-      <div class="modal-section" id="modal-sec-poll">Poll-Intervall</div>
-      <div class="poll-btns">
-        <button class="poll-btn" onclick="setPoll(1000)" id="poll-1">1s</button>
-        <button class="poll-btn active" onclick="setPoll(2000)" id="poll-2">2s</button>
-        <button class="poll-btn" onclick="setPoll(5000)" id="poll-5">5s</button>
-      </div>
-    </div>
-
-    <!-- OrcaSlicer-Profile (Custom-Profile-Import, Issue #41) -->
-    <div>
-      <div class="modal-section" id="modal-sec-orca-profiles">OrcaSlicer-Profile</div>
-      <div style="font-size:11px;color:var(--txt2);margin-bottom:8px" id="orca-profiles-hint">
-        Eigene Profile aus OrcaSlicer importieren (User-Dir öffnen via Help → Show Configuration Folder)
-      </div>
-      <div id="orca-profiles-list" style="margin-bottom:8px;font-size:12px;color:var(--txt2)"></div>
-      <button class="btn btn-sm" id="btn-orca-profiles-import" onclick="openProfileImport()"
-        style="background:var(--raised);color:var(--txt)">
-        ⬆ <span id="lbl-orca-profiles-import">Profile importieren</span>
-      </button>
-    </div>
-
-    <div>
-      <div class="modal-section" id="modal-sec-version">Version</div>
-      <div class="update-row">
-        <span id="s-version-label" style="font-size:13px;color:var(--txt)">–</span>
-        <button class="btn btn-sm" style="background:var(--raised);color:var(--txt)" onclick="checkUpdate()" id="btn-update-check">🔄 <span id="lbl-update-check">Auf Updates prüfen</span></button>
-      </div>
-      <div class="update-status" id="update-status" style="margin-top:6px"></div>
-      <button class="btn btn-sm btn-accent" id="btn-update-apply" style="display:none;margin-top:8px" onclick="applyUpdate()">
-        <span id="lbl-update-apply">Jetzt installieren</span>
-      </button>
-      <div id="update-changelog" style="display:none;margin-top:10px;background:var(--raised);border-radius:6px;padding:10px;font-size:11px;font-family:var(--mono);color:var(--txt2);white-space:pre-wrap;max-height:180px;overflow-y:auto;line-height:1.6"></div>
-    </div>
-
-    <button class="modal-save" onclick="saveSettings()" id="btn-save-settings">Speichern &amp; Neustart</button>
-  </div>
-</div>
+<!-- Settings-Modal entfernt — jetzt #panel-settings (Master-Detail im Main-Bereich) -->
 
 <!-- ═══ AMS SLOT EDIT DIALOG ═══ -->
 <div class="modal-overlay" id="slot-edit-modal" onclick="if(event.target===this)closeSlotEdit()">
@@ -230,6 +127,8 @@
       <span class="nav-icon">🗂</span><span class="nav-text">Browser</span></button>
     <button class="nav-btn" onclick="showPanel('console');clearLogBadge()" id="nb-console">
       <span class="nav-icon">≡</span><span class="nav-text">Konsole</span><span id="log-badge" style="display:none;margin-left:4px;background:var(--err);color:#fff;border-radius:10px;font-size:10px;padding:1px 5px;font-weight:700"></span></button>
+    <button class="nav-btn" onclick="showPanel('settings')" id="nb-settings">
+      <span class="nav-icon">⚙</span><span class="nav-text" id="nav-settings">Einstellungen</span></button>
   </nav>
 
   <main>
@@ -297,6 +196,12 @@
             <button class="btn btn-pause btn-sm" id="d-btn-pause" onclick="togglePauseResume()">⏸ Pause</button>
             <button class="btn btn-skip btn-sm" id="d-btn-skip" onclick="openSkipDialog()" style="display:none">✂ <span id="d-btn-skip-label">Objekte</span></button>
             <button class="btn btn-cancel btn-sm" id="d-btn-cancel" onclick="confirmCancel()">✕ Stopp</button>
+          </div>
+          <!-- Aktionen für eine geladene, aber nicht laufende Datei (Issue #55) -->
+          <div class="ctrl-btns" id="d-idle-btns" style="margin-top:12px;display:none">
+            <button class="btn btn-accent btn-sm" id="d-idle-print" onclick="startIdleFile()">▶ <span id="d-idle-print-lbl">Drucken</span></button>
+            <button class="btn btn-sm" id="d-idle-slots" onclick="startIdleFileWithSlots()" style="background:var(--raised);color:var(--txt)">⚙ <span id="d-idle-slots-lbl">Slots zuordnen</span></button>
+            <button class="btn btn-cancel btn-sm" id="d-idle-clear" onclick="clearIdleFile()">✕ <span id="d-idle-clear-lbl">Leeren</span></button>
           </div>
         </div>
 
@@ -520,6 +425,162 @@
         <div class="console" id="console-log" style="height:calc(100vh - 260px);min-height:160px" onscroll="onLogScroll()"></div>
       </div>
     </div>
+
+    <!-- ═══ EINSTELLUNGEN ═══ -->
+    <div class="panel" id="panel-settings">
+      <div class="settings-wrap">
+        <div class="settings-cats">
+          <button class="set-cat active" id="setcat-connection" onclick="showSettingsCat('connection')"><span>🔌</span> <span id="setcat-lbl-connection">Verbindung</span></button>
+          <button class="set-cat" id="setcat-printer" onclick="showSettingsCat('printer')"><span>🖨</span> <span id="setcat-lbl-printer">Drucker</span></button>
+          <button class="set-cat" id="setcat-display" onclick="showSettingsCat('display')"><span>🎨</span> <span id="setcat-lbl-display">Darstellung</span></button>
+          <button class="set-cat" id="setcat-filament" onclick="showSettingsCat('filament')"><span>🧵</span> <span id="setcat-lbl-filament">Filament</span></button>
+          <button class="set-cat" id="setcat-system" onclick="showSettingsCat('system')"><span>⚙</span> <span id="setcat-lbl-system">System</span></button>
+        </div>
+
+        <div class="settings-content">
+          <!-- Verbindung -->
+          <div class="set-group active" id="setgrp-connection">
+            <div class="card">
+              <div class="card-title"><span>🔌</span> <span id="modal-sec-connection">Verbindung</span></div>
+              <div class="modal-field" style="margin-bottom:12px">
+                <label id="lbl-printer-name" style="font-weight:600">Drucker-Name</label>
+                <input type="text" id="s-printer-name" placeholder="z.B. Kobra X Links">
+              </div>
+              <div class="modal-field">
+                <label id="lbl-printer-ip">Drucker-IP</label>
+                <input type="text" id="s-printer-ip" placeholder="192.168.x.x">
+                <small id="lbl-ip-hint" style="color:#f80;display:none"></small>
+              </div>
+              <div class="modal-field">
+                <label id="lbl-mqtt-port">MQTT-Port</label>
+                <input type="number" id="s-mqtt-port" placeholder="9883">
+              </div>
+              <div class="modal-field">
+                <label id="lbl-username">MQTT-Benutzername</label>
+                <input type="text" id="s-username" placeholder="userXXXXXXXX" autocomplete="new-password">
+              </div>
+              <div class="modal-field">
+                <label id="lbl-password">MQTT-Passwort</label>
+                <input type="password" id="s-password" autocomplete="new-password">
+              </div>
+              <div class="modal-field">
+                <label id="lbl-device-id">Device-ID</label>
+                <input type="text" id="s-device-id" placeholder="32 Hex-Zeichen">
+              </div>
+              <div class="modal-field">
+                <label id="lbl-mode-id">Mode-ID</label>
+                <input type="text" id="s-mode-id" placeholder="20030">
+              </div>
+            </div>
+          </div>
+
+          <!-- Drucker -->
+          <div class="set-group" id="setgrp-printer">
+            <div class="card">
+              <div class="card-title"><span>🖨</span> <span id="modal-sec-print">Druckeinstellungen</span></div>
+              <div class="modal-field">
+                <label id="lbl-default-slot">Standard-Slot (Einfarbdruck)</label>
+                <select id="s-default-slot">
+                  <option value="auto" id="opt-slot-auto">Auto (alle belegten Slots)</option>
+                  <option value="0" id="opt-slot-0">Slot 1</option>
+                  <option value="1" id="opt-slot-1">Slot 2</option>
+                  <option value="2" id="opt-slot-2">Slot 3</option>
+                  <option value="3" id="opt-slot-3">Slot 4</option>
+                </select>
+              </div>
+              <div class="modal-field" style="flex-direction:row;align-items:center;gap:10px">
+                <input type="checkbox" id="s-auto-leveling" style="width:auto;margin:0">
+                <label id="lbl-auto-leveling" style="margin:0;cursor:pointer" for="s-auto-leveling">Auto-Leveling vor Druck</label>
+              </div>
+              <div class="modal-field" style="flex-direction:row;align-items:center;gap:10px">
+                <input type="checkbox" id="s-camera-on-print" style="width:auto;margin:0">
+                <label id="lbl-camera-on-print" style="margin:0;cursor:pointer" for="s-camera-on-print">Kamera bei Druckstart einschalten</label>
+              </div>
+              <div class="modal-field" style="flex-direction:row;align-items:center;gap:10px">
+                <input type="checkbox" id="s-web-upload-warning" style="width:auto;margin:0">
+                <label id="lbl-web-upload-warning" style="margin:0;cursor:pointer" for="s-web-upload-warning">Warnung bei Web-Upload-Druck anzeigen</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Darstellung -->
+          <div class="set-group" id="setgrp-display">
+            <div class="card">
+              <div class="card-title"><span>🎨</span> <span id="setcat-lbl-display2">Darstellung</span></div>
+              <div class="modal-field">
+                <label id="lbl-set-lang">Sprache</label>
+                <select id="s-lang-select" onchange="setLanguage(this.value)">
+                  <option value="de">Deutsch</option>
+                  <option value="en">English</option>
+                  <option value="es">Espanol</option>
+                  <option value="fr">Français</option>
+                  <option value="zh-cn">中文(简体)</option>
+                </select>
+              </div>
+              <div class="modal-field" style="flex-direction:row;align-items:center;gap:10px">
+                <button class="btn btn-sm" style="background:var(--raised);color:var(--txt)" onclick="toggleTheme()"><span id="lbl-set-theme">Hell / Dunkel umschalten</span></button>
+              </div>
+              <div class="modal-field">
+                <label id="lbl-poll-interval">Poll-Intervall (Sekunden)</label>
+                <input type="number" id="s-poll-interval" min="1" max="60" step="1" placeholder="3" oninput="onPollIntervalInput()">
+                <small style="color:var(--txt2)" id="lbl-poll-hint">Wie oft die Bridge den Drucker-Status abfragt</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Filament -->
+          <div class="set-group" id="setgrp-filament">
+            <div class="card">
+              <div class="card-title"><span>🧵</span> <span id="modal-sec-orca-profiles">OrcaSlicer-Profile</span></div>
+              <div style="font-size:11px;color:var(--txt2);margin-bottom:8px" id="orca-profiles-hint">
+                Eigene Profile aus OrcaSlicer importieren (User-Dir öffnen via Help → Show Configuration Folder)
+              </div>
+              <div id="orca-profiles-list" style="margin-bottom:8px;font-size:12px;color:var(--txt2)"></div>
+              <button class="btn btn-sm" id="btn-orca-profiles-import" onclick="openProfileImport()"
+                style="background:var(--raised);color:var(--txt)">
+                ⬆ <span id="lbl-orca-profiles-import">Profile importieren</span>
+              </button>
+            </div>
+            <div class="card">
+              <div class="card-title"><span>🎯</span> <span id="lbl-filament-mapping">Filament-Profil-Mapping (pro Slot)</span></div>
+              <div style="font-size:11px;color:var(--txt2);margin-bottom:8px" id="filament-mapping-hint">
+                Festes Orca-Profil pro AMS-Slot. Beim Slicer-Sync sendet die Bridge dieses Profil statt „Generic".
+              </div>
+              <div id="filament-mapping-list"></div>
+              <button class="btn btn-sm" style="background:var(--accent);color:#fff;margin-top:8px" onclick="saveFilamentMapping()"><span id="lbl-filament-mapping-save">Mapping speichern</span></button>
+            </div>
+            <div class="card">
+              <div class="card-title"><span>👁</span> <span id="lbl-visible-vendors">Sichtbare Hersteller (Profil-Dropdown)</span></div>
+              <div style="font-size:11px;color:var(--txt2);margin-bottom:8px" id="visible-vendors-hint">
+                Nur diese Hersteller erscheinen im Slot-Profil-Dropdown. Nichts ausgewählt = alle anzeigen. „Generic" und eigene Profile sind immer sichtbar.
+              </div>
+              <input type="text" id="vendor-filter-search" placeholder="Hersteller suchen…" oninput="renderVendorChecklist()"
+                style="width:100%;padding:6px 10px;margin-bottom:8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);font-size:12px">
+              <div id="visible-vendors-list" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:8px"></div>
+              <button class="btn btn-sm" style="background:var(--accent);color:#fff;margin-top:8px" onclick="saveVisibleVendors()"><span id="lbl-visible-vendors-save">Auswahl speichern</span></button>
+            </div>
+          </div>
+
+          <!-- System -->
+          <div class="set-group" id="setgrp-system">
+            <div class="card">
+              <div class="card-title"><span>⚙</span> <span id="modal-sec-version">Version</span></div>
+              <div class="update-row">
+                <span id="s-version-label" style="font-size:13px;color:var(--txt)">–</span>
+                <button class="btn btn-sm" style="background:var(--raised);color:var(--txt)" onclick="checkUpdate()" id="btn-update-check">🔄 <span id="lbl-update-check">Auf Updates prüfen</span></button>
+              </div>
+              <div class="update-status" id="update-status" style="margin-top:6px"></div>
+              <button class="btn btn-sm btn-accent" id="btn-update-apply" style="display:none;margin-top:8px" onclick="applyUpdate()">
+                <span id="lbl-update-apply">Jetzt installieren</span>
+              </button>
+              <div id="update-changelog" style="display:none;margin-top:10px;background:var(--raised);border-radius:6px;padding:10px;font-size:11px;font-family:var(--mono);color:var(--txt2);white-space:pre-wrap;max-height:180px;overflow-y:auto;line-height:1.6"></div>
+            </div>
+          </div>
+
+          <button class="modal-save" onclick="saveSettings()" id="btn-save-settings" style="margin-top:14px">Speichern &amp; Neustart</button>
+        </div>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -528,6 +589,7 @@
   <button class="bnav-btn" onclick="showPanel('printers');loadPrinterTab()" id="bnb-printers"><span class="bnav-icon">🖨</span>Drucker</button>
   <button class="bnav-btn" onclick="showPanel('store');loadStore()" id="bnb-store"><span class="bnav-icon">🗂</span>Browser</button>
   <button class="bnav-btn" onclick="showPanel('console');clearLogBadge()" id="bnb-console"><span class="bnav-icon">≡</span>Log<span id="log-badge-bot" style="display:none;margin-left:3px;background:var(--err);color:#fff;border-radius:10px;font-size:10px;padding:1px 4px;font-weight:700"></span></button>
+  <button class="bnav-btn" onclick="showPanel('settings')" id="bnb-settings"><span class="bnav-icon">⚙</span>Setup</button>
 </nav>
 
 

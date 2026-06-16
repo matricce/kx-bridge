@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.9.22] – 2026-06-16
+
+### New
+- **Restructured Settings panel.** The settings modal has been replaced by a
+  persistent Master-Detail panel with five categories: Connection, Printer,
+  Appearance, Filament, and System. Poll interval is now adjustable live.
+- **Vendor visibility filter (issue #41).** A new checklist in the Filament
+  settings lets you restrict the slot profile dropdown to specific manufacturers.
+  "Generic" and your own imported profiles are always visible. The list updates
+  automatically after a profile import.
+- **Idle file actions in the progress card (issue #55).** After uploading a file
+  while the printer is idle, three quick-action buttons appear directly in the
+  progress card: ▶ Print, ⚙ Map Slots, and ✕ Clear — matching the file browser
+  workflow without navigating away.
+
+### Fixed
+- **Mobileraker: app crashed with `Null is not a subtype of Object` in
+  `ConfigExtruder.fromJson` (issue #48).** `configfile.config` was returned as
+  an empty object `{}`. Mobileraker parses both `configfile.settings` and
+  `configfile.config` through the same strict Dart parser — both are now
+  populated with the same extruder/bed/stepper stub.
+- **Mobileraker: app hung indefinitely on refresh (issue #48).** The WebSocket
+  `server.files.metadata` handler called a non-existent store method
+  (`get_file_by_filename`), always returning empty metadata. Mobileraker retried
+  this thousands of times per second. Both the HTTP and WS paths now share a
+  single `_build_file_metadata()` method.
+- **Mobileraker: ETA / remaining time not shown (issue #48).** A side effect of
+  the metadata loop fix — once `currentFile` resolves, Mobileraker can calculate
+  ETA from `estimated_time`.
+- **Mobileraker: `notify_status_update` triggered repeated `ConfigFile.parse`
+  (issue #48).** Static objects (`configfile`, `webhooks`, `heaters`, `history`)
+  were included in every live status push. They are now filtered out; only live
+  telemetry is broadcast.
+- `motion_report` (`live_position`, `live_velocity`) added to printer objects
+  for Mobileraker motion display.
+- Saving filament slot profiles no longer silently drops the `visible_vendors`
+  setting from `config.ini`.
+
 ## [0.9.21] – 2026-06-14
 
 ### Fixed

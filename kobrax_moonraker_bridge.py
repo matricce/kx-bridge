@@ -34,6 +34,7 @@ except ImportError:
     import env_loader
 import asyncio
 import hashlib
+import copy
 import json
 import logging
 import os
@@ -751,6 +752,13 @@ class KobraXBridge:
             self._filament_profiles: dict[int, dict] = _cl.list_filament_profiles()
         except Exception:
             self._filament_profiles = {}
+        # Vendor-Sichtbarkeitsfilter fürs Slot-Profil-Dropdown (Issue #41 Option A).
+        # Leere Liste = alle Vendoren sichtbar (rückwärtskompatibel).
+        try:
+            import config_loader as _cl
+            self._visible_vendors: list[str] = _cl.list_visible_vendors()
+        except Exception:
+            self._visible_vendors = []
         self._last_state: dict = {}
         self._state = {
           "nozzle_temp":        0.0,
@@ -1694,13 +1702,22 @@ class KobraXBridge:
     # WebSocket push
     # -------------------------------------------------------------------------
 
+    # Statische Objekte, die sich zur Laufzeit nie ändern. Sie werden einmalig
+    # per objects.query/subscribe ausgeliefert, aber NICHT in jedem
+    # notify_status_update mitgeschickt — sonst läuft Mobilerakers
+    # ConfigFile.parse (teuer + strikt) bei jedem Status-Tick erneut und die App
+    # hängt/crasht beim Refresh (Issue #48).
+    _STATIC_STATUS_OBJECTS = ("configfile", "webhooks", "heaters", "history")
+
     def _push_status_update(self):
         if not self.ws_clients:
             return
+        objs = self._build_printer_objects()
+        live = {k: v for k, v in objs.items() if k not in self._STATIC_STATUS_OBJECTS}
         msg = {
             "jsonrpc": "2.0",
             "method":  "notify_status_update",
-            "params": [self._build_printer_objects(), time.time()],
+            "params": [live, time.time()],
         }
         text = json.dumps(msg)
         dead = set()
@@ -1858,6 +1875,17 @@ class KobraXBridge:
                 "homing_origin":  [0, 0, 0, 0],
                 "position":       [0, 0, self._estimate_current_z(), 0],
             },
+            # motion_report: Mobileraker liest die Live-Geschwindigkeit hier
+            # (live_velocity). Der Kobra-X-MQTT liefert KEINE echte mm/s, nur
+            # einen print_speed_mode (1-4). live_velocity bleibt daher 0 — das
+            # Objekt muss aber existieren, sonst zeigt Mobileraker nichts an
+            # (motion_report war zuvor null). live_position spiegelt die
+            # geschätzte Z-Höhe (wie gcode_move).
+            "motion_report": {
+                "live_position":          [0, 0, self._estimate_current_z(), 0],
+                "live_velocity":          0.0,
+                "live_extruder_velocity": 0.0,
+            },
             "fan": {
                 "speed": (int(s.get("fan_speed") or 0)) / 100.0,
                 "rpm":   None,
@@ -1894,40 +1922,78 @@ class KobraXBridge:
             # configfile stub — Mobileraker und andere Clients crashen ohne
             # dieses Objekt (Missing field: configFile). Werte aus der
             # entschlüsselten avata_main.conf (ACCFG1.0 — Kobra X Firmware).
-            "configfile": {
-                "config": {},
-                "settings": {
-                    "printer": {
-                        "kinematics":              "cartesian",
-                        "max_velocity":            450,
-                        "max_accel":               10000,
-                        "max_z_velocity":          12,
-                        "max_z_accel":             100,
-                        "square_corner_velocity":  20.0,
-                    },
-                    "extruder": {
-                        "nozzle_diameter":    0.4,
-                        "filament_diameter":  1.75,
-                        "sensor_type":        "ATC Semitec 104GT-2",
-                        "min_temp":           0,
-                        "max_temp":           320,
-                        "min_extrude_temp":   10,
-                    },
-                    "heater_bed": {
-                        "min_temp": 0,
-                        "max_temp": 120,
-                    },
-                    "stepper_x": {"position_min": -18.5, "position_max": 280},
-                    "stepper_y": {"position_min": -6.5,  "position_max": 272.5},
-                    "stepper_z": {"position_min": -4,    "position_max": 262},
-                    "virtual_sdcard": {"path": "/data/gcodes"},
-                    "pause_resume":   {},
-                    "display_status": {},
-                },
-                "warnings": [],
-                "save_config_pending": False,
-                "save_config_pending_items": {},
+            # Mobileraker (Issue #48) parst BEIDE Zweige config + settings durch
+            # denselben ConfigFile.parse → ConfigExtruder.fromJson; ein leeres
+            # config:{} ließ den nicht-nullbaren Dart-Parser crashen. Daher wird
+            # config identisch zu settings gespiegelt.
+            "configfile": self._klipper_configfile_stub(),
+        }
+
+    def _klipper_configfile_stub(self) -> dict:
+        """Minimaler Klipper-configfile-Stub für Mobileraker/OctoApp (Issue #48).
+
+        Mobileraker parst BEIDE Zweige `config` und `settings` durch denselben
+        ConfigFile.parse → ConfigExtruder.fromJson. Ein leeres `config: {}`
+        ließ den nicht-nullbaren Dart-Parser crashen, daher wird `config`
+        identisch zu `settings` gespiegelt. Werte aus der entschlüsselten
+        avata_main.conf (ACCFG1.0 — Kobra X Firmware).
+        """
+        settings = {
+            "printer": {
+                "kinematics":              "cartesian",
+                "max_velocity":            450,
+                "max_accel":               10000,
+                "max_z_velocity":          12,
+                "max_z_accel":             100,
+                "square_corner_velocity":  20.0,
             },
+            "extruder": {
+                "nozzle_diameter":    0.4,
+                "filament_diameter":  1.75,
+                "sensor_type":        "ATC Semitec 104GT-2",
+                "min_temp":           0,
+                "max_temp":           320,
+                "min_extrude_temp":   10,
+                # Mobileraker ConfigExtruder erwartet diese Felder non-nullable
+                # (max_extrude_only_distance, max_power) bzw. als Key präsent
+                # (max_extrude_only_velocity/accel dürfen null sein). Fehlen =
+                # Crash in ConfigExtruder.fromJson (Issue #48).
+                "max_extrude_only_distance": 100.0,
+                "max_power":                 1.0,
+                "max_extrude_only_velocity": None,
+                "max_extrude_only_accel":    None,
+            },
+            "heater_bed": {
+                # Mobileraker ConfigHeaterBed: heater_pin, sensor_type, control
+                # sind non-nullable. Werte sind Platzhalter (Bridge kennt die
+                # echten Pins nicht — Anycubic-Firmware, kein Klipper-printer.cfg).
+                "heater_pin":  "PA0",
+                "sensor_type": "ATC Semitec 104GT-2",
+                "control":     "pid",
+                "min_temp":    0,
+                "max_temp":    120,
+            },
+            # stepper_* mit non-nullable Pflichtfeldern (step_pin, dir_pin,
+            # rotation_distance) füllen, sonst crasht ConfigStepper.fromJson.
+            "stepper_x": {"step_pin": "PA1", "dir_pin": "PA2", "rotation_distance": 40,
+                          "position_min": -18.5, "position_max": 280},
+            "stepper_y": {"step_pin": "PA3", "dir_pin": "PA4", "rotation_distance": 40,
+                          "position_min": -6.5,  "position_max": 272.5},
+            "stepper_z": {"step_pin": "PA5", "dir_pin": "PA6", "rotation_distance": 8,
+                          "position_min": -4,    "position_max": 262},
+            "virtual_sdcard": {"path": "/data/gcodes"},
+            "pause_resume":   {},
+            "display_status": {},
+        }
+        # config + settings müssen dieselben Felder enthalten — Mobileraker
+        # parst beide. deepcopy, damit kein Client durch geteilte Referenz
+        # versehentlich beide Zweige mutiert.
+        return {
+            "config":   copy.deepcopy(settings),
+            "settings": settings,
+            "warnings": [],
+            "save_config_pending": False,
+            "save_config_pending_items": {},
         }
 
     # -------------------------------------------------------------------------
@@ -2246,6 +2312,31 @@ class KobraXBridge:
                                 "vendor": entry.get("vendor", ""),
                                 "name":   entry.get("name", ""),
                                 "id":     entry.get("id", "")})
+
+    async def handle_kx_visible_vendors(self, request):
+        """GET/POST /kx/filament/visible_vendors — Vendor-Sichtbarkeitsfilter
+        fürs Slot-Profil-Dropdown (Issue #41 Option A).
+
+        GET  → {"result": ["Polymaker", "eSUN", ...]}
+        POST {"vendors": [...]} → speichert in config.ini [filament_profiles]
+             visible_vendors. Leere Liste = alle sichtbar. KEIN Bridge-Neustart
+             nötig (nur Anzeigefilter)."""
+        if request.method == "POST":
+            try:
+                data = await request.json()
+            except Exception:
+                data = {}
+            vendors = data.get("vendors") or []
+            if not isinstance(vendors, list):
+                return self._json_cors({"error": "vendors must be a list"}, status=400)
+            self._visible_vendors = [str(v).strip() for v in vendors if str(v).strip()]
+            try:
+                import config_loader as _cl
+                _cl.save_visible_vendors(self._visible_vendors)
+            except Exception as e:
+                log.warning(f"save_visible_vendors failed: {e}")
+                return self._json_cors({"error": str(e)}, status=500)
+        return self._json_cors({"result": self._visible_vendors})
 
     def _load_orca_filaments(self) -> list[dict]:
         """Lädt System- + User-Profile aus dem Cache. System-Profile kommen
@@ -2591,18 +2682,16 @@ class KobraXBridge:
             })
         return web.json_response({"result": files})
 
-    async def handle_files_metadata(self, request):
-        """Moonraker /server/files/metadata — moonraker-obico-Plugin holt das
-        einmal pro Druck und liest daraus `object_height` (für `currentZ`-
-        Anzeige im Obico-UI: `mmProgress` braucht maxZ), `layer_count`,
-        `layer_height` und `first_layer_height` (für die Layer-Berechnung).
+    def _build_file_metadata(self, filename: str) -> dict:
+        """Baut die Moonraker-file-metadata für eine Datei. Gemeinsame Quelle
+        für HTTP /server/files/metadata UND den WS-RPC server.files.metadata
+        (vorher hatte der WS-Pfad eigene, kaputte Logik mit einer nicht
+        existierenden Store-Methode → leere Antwort → Mobileraker fragte in
+        Endlosschleife, App hing beim Refresh, Issue #48).
 
-        Quelle: aktueller `_state` + GCode-Store-Eintrag wenn vorhanden.
-        Wenn Layer-Heights weder im State noch im Store sind, Fallback auf die
-        OrcaSlicer-Default-Filename-Heuristik (`_layer_height_from_filename`)."""
-        filename = request.rel_url.query.get("filename", "") or self._state.get("filename", "")
-        if not filename:
-            return web.json_response({"result": {}})
+        Liefert Mobileraker-kompatible Pflichtfelder: `filename`, `size`,
+        `modified` sind in GCodeFile non-nullable; `print_start_time` und die
+        Slicer-Felder optional."""
         s = self._state
         layer_h = float(s.get("layer_height") or 0.0)
         first_h = float(s.get("first_layer_height") or 0.0)
@@ -2626,16 +2715,27 @@ class KobraXBridge:
             if layer_h and not first_h:
                 first_h = layer_h
         object_height = round(first_h + max(0, total_layers - 1) * layer_h, 3) if (layer_h and total_layers) else 0.0
-        return web.json_response({"result": {
+        return {
             "filename":           filename,
-            "size":               size_bytes,
+            # GCodeFile (Mobileraker) verlangt size als non-nullable int.
+            "size":               size_bytes or 1,
             "modified":           time.time(),
             "estimated_time":     est_time or None,
             "layer_height":       layer_h or None,
             "first_layer_height": first_h or None,
             "layer_count":        total_layers or None,
             "object_height":      object_height or None,
-        }})
+            "thumbnails":         [],
+        }
+
+    async def handle_files_metadata(self, request):
+        """Moonraker /server/files/metadata — moonraker-obico + Mobileraker
+        holen Datei-Metadaten (Slicer-Zeit, Layer, object_height).
+        Logik in _build_file_metadata (gemeinsam mit WS-RPC)."""
+        filename = request.rel_url.query.get("filename", "") or self._state.get("filename", "")
+        if not filename:
+            return web.json_response({"result": {}})
+        return web.json_response({"result": self._build_file_metadata(filename)})
 
     # ── Moonraker-Stubs für moonraker-obico ──────────────────────────────────
     async def handle_access_api_key(self, request):
@@ -3797,6 +3897,9 @@ class KobraXBridge:
             "auto_leveling":    getattr(self._args, "auto_leveling", 1),
             "camera_on_print":  getattr(self._args, "camera_on_print", 0),
             "web_upload_warning": getattr(self._args, "web_upload_warning", 1),
+            "poll_interval":    getattr(self._args, "poll_interval", 3),
+            "filament_profiles": {str(k): v for k, v in self._filament_profiles.items()},
+            "visible_vendors":  self._visible_vendors,
             "ace_dry_presets":  self._ace_dry_presets,
         })
 
@@ -3827,7 +3930,13 @@ class KobraXBridge:
         cfg.set("print",      "auto_leveling",    str(data.get("auto_leveling",    getattr(self._args, "auto_leveling",    1))))
         cfg.set("print",      "camera_on_print",  str(int(bool(data.get("camera_on_print", getattr(self._args, "camera_on_print", 0))))))
         cfg.set("print",      "web_upload_warning", str(int(bool(data.get("web_upload_warning", getattr(self._args, "web_upload_warning", 1))))))
-        if not cfg.has_option("bridge", "poll_interval"):
+        if "poll_interval" in data:
+            try:
+                pi = max(1, min(60, int(data["poll_interval"])))
+            except (TypeError, ValueError):
+                pi = 3
+            cfg.set("bridge", "poll_interval", str(pi))
+        elif not cfg.has_option("bridge", "poll_interval"):
             cfg.set("bridge", "poll_interval", "3")
         printer_name = str(data.get("printer_name", "")).strip()
         if printer_name:
@@ -4491,23 +4600,13 @@ class KobraXBridge:
             elif method == "machine.update.status":
                 result = {"busy": False, "version_info": {}}
             elif method == "server.files.metadata":
-                # Obico fragt nach Metadaten zu einer Datei (filename in params)
+                # Obico + Mobileraker fragen Metadaten zu einer Datei. Dieselbe
+                # Logik wie der HTTP-Endpoint (vorher eigener kaputter Pfad mit
+                # nicht existierender Store-Methode → leere Antwort →
+                # Mobileraker-Endlosschleife, Issue #48).
                 fname = (params or {}).get("filename") if isinstance(params, dict) else None
-                meta = {}
-                if fname:
-                    try:
-                        rec = self._store.get_file_by_filename(fname) if hasattr(self._store, "get_file_by_filename") else None
-                    except Exception:
-                        rec = None
-                    if rec:
-                        meta = {
-                            "filename": rec.get("filename"),
-                            "size":     rec.get("size_bytes") or 0,
-                            "modified": time.time(),
-                            "estimated_time": rec.get("est_print_time_sec") or 0,
-                            "thumbnails": [],
-                        }
-                result = meta
+                fname = fname or self._state.get("filename", "")
+                result = self._build_file_metadata(fname) if fname else {}
             else:
                 log.debug(f"Unbekannte RPC-Methode: {method}")
                 result = {}
@@ -4711,6 +4810,8 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_get("/kx/filament/slots",        bridge.handle_kx_filament_slots)
     r.add_get("/kx/filament/profiles",     bridge.handle_kx_filament_profiles)
     r.add_post("/kx/filament/slots/{idx}/profile", bridge.handle_kx_filament_slot_profile)
+    r.add_get("/kx/filament/visible_vendors",  bridge.handle_kx_visible_vendors)
+    r.add_post("/kx/filament/visible_vendors", bridge.handle_kx_visible_vendors)
     # Custom-Profile-Import (Issue #41) — User lädt eigene Orca-Filament-
     # Profile als ZIP/JSON hoch (z.B. aus ~/.config/OrcaSlicer/user/<id>/filament/),
     # weil die Bridge typischerweise nicht auf demselben Host wie OrcaSlicer läuft.

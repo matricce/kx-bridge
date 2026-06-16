@@ -227,10 +227,17 @@ def save_filament_profiles(profiles: dict[int, dict]) -> bool:
         return False
     cfg = configparser.ConfigParser()
     cfg.read(path, encoding="utf-8")
+    # visible_vendors (Issue #41) ist kein Slot-Mapping — beim Ersetzen der
+    # Sektion erhalten, sonst geht der Vendor-Filter beim Slot-Save verloren.
+    preserved_vendors = None
+    if cfg.has_option("filament_profiles", "visible_vendors"):
+        preserved_vendors = cfg.get("filament_profiles", "visible_vendors")
     if cfg.has_section("filament_profiles"):
         cfg.remove_section("filament_profiles")
-    if profiles:
+    if profiles or preserved_vendors:
         cfg["filament_profiles"] = {}
+        if preserved_vendors:
+            cfg["filament_profiles"]["visible_vendors"] = preserved_vendors
         for slot_idx in sorted(profiles.keys()):
             entry = profiles[slot_idx] or {}
             if entry.get("vendor"):
@@ -239,6 +246,43 @@ def save_filament_profiles(profiles: dict[int, dict]) -> bool:
                 cfg["filament_profiles"][f"slot_{slot_idx}_name"] = entry["name"]
             if entry.get("id"):
                 cfg["filament_profiles"][f"slot_{slot_idx}_id"] = entry["id"]
+    with open(path, "w", encoding="utf-8") as f:
+        cfg.write(f)
+    return True
+
+
+def list_visible_vendors() -> list[str]:
+    """Liest [filament_profiles] visible_vendors (komma-separiert) aus config.ini.
+
+    Vendor-Sichtbarkeitsfilter für das Slot-Profil-Dropdown (Issue #41 Option A).
+    Leere Liste = keine Einschränkung (rückwärtskompatibel: alle Vendoren).
+    """
+    path = _find_config_file()
+    if not path:
+        return []
+    cfg = configparser.ConfigParser()
+    cfg.read(path, encoding="utf-8")
+    if not cfg.has_option("filament_profiles", "visible_vendors"):
+        return []
+    raw = cfg.get("filament_profiles", "visible_vendors")
+    return [v.strip() for v in raw.split(",") if v.strip()]
+
+
+def save_visible_vendors(vendors: list[str]) -> bool:
+    """Schreibt visible_vendors in [filament_profiles], ohne die Slot-Mappings
+    (slot_N_*) zu verlieren. Leere Liste entfernt den Key wieder."""
+    path = _find_config_file()
+    if not path:
+        return False
+    cfg = configparser.ConfigParser()
+    cfg.read(path, encoding="utf-8")
+    if not cfg.has_section("filament_profiles"):
+        cfg.add_section("filament_profiles")
+    clean = [v.strip() for v in (vendors or []) if v and v.strip()]
+    if clean:
+        cfg["filament_profiles"]["visible_vendors"] = ", ".join(clean)
+    elif cfg.has_option("filament_profiles", "visible_vendors"):
+        cfg.remove_option("filament_profiles", "visible_vendors")
     with open(path, "w", encoding="utf-8") as f:
         cfg.write(f)
     return True

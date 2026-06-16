@@ -8,6 +8,7 @@ var tempHistory={n:[],b:[]};
 var camOn=false;
 var camUserStopped=false; // user stopped camera manually — suppress auto-restart for this print
 var _camPollInterval=null; // snapshot-polling interval for Android (no MJPEG support)
+var _lastLoadedFile=null;  // zuletzt geladene/gedruckte Datei für Progress-Karten-Aktionen (Issue #55)
 var currentStep=1;
 var currentPanel='dashboard';
 var aceAutoRefillPrefs=(function(){
@@ -167,6 +168,8 @@ async function setLanguage(lang){
   localStorage.setItem('lang',l);
   var langSel=document.getElementById('lang-select');
   if(langSel)langSel.value=l;
+  var sLangSel=document.getElementById('s-lang-select');
+  if(sLangSel)sLangSel.value=l;
   document.documentElement.setAttribute('lang',l);
   applyLang();
 }
@@ -310,12 +313,26 @@ function applyLang(){
   document.querySelectorAll('.temp-input').forEach(e=>e.setAttribute('placeholder',T.label_target_c.replace(':','')));
   // Console
   setText('ptitle-console',T.panel_console_title);
-  // Settings modal
-  setText('modal-title-settings',T.settings_title);
+  // Settings-Panel
   setText('modal-sec-connection',T.settings_connection);
   setText('modal-sec-print',T.settings_print);
-  setText('modal-sec-poll',T.settings_poll);
   setText('modal-sec-version',T.settings_version);
+  // Nav + Kategorie-Labels (mit Fallback falls i18n-Key noch fehlt)
+  setText('nav-settings',T.nav_settings||'Einstellungen');
+  setText('setcat-lbl-connection',T.settings_connection||'Verbindung');
+  setText('setcat-lbl-printer',T.settings_print||'Drucker');
+  setText('setcat-lbl-display',T.settings_cat_display||'Darstellung');
+  setText('setcat-lbl-display2',T.settings_cat_display||'Darstellung');
+  setText('setcat-lbl-filament',T.settings_cat_filament||'Filament');
+  setText('setcat-lbl-system',T.settings_version||'System');
+  setText('lbl-set-lang',T.settings_cat_language||'Sprache');
+  setText('lbl-set-theme',T.settings_cat_theme||'Hell / Dunkel umschalten');
+  setText('lbl-poll-interval',T.settings_poll||'Poll-Intervall (Sekunden)');
+  setText('lbl-filament-mapping',T.settings_filament_mapping||'Filament-Profil-Mapping (pro Slot)');
+  setText('lbl-filament-mapping-save',T.settings_filament_mapping_save||'Mapping speichern');
+  setText('lbl-visible-vendors',T.settings_visible_vendors||'Sichtbare Hersteller (Profil-Dropdown)');
+  setText('visible-vendors-hint',T.settings_visible_vendors_hint||'Nur diese Hersteller erscheinen im Slot-Profil-Dropdown. Nichts ausgewählt = alle anzeigen. „Generic" und eigene Profile sind immer sichtbar.');
+  setText('lbl-visible-vendors-save',T.settings_visible_vendors_save||'Auswahl speichern');
   // Custom-Profile-Import (Issue #41)
   setText('modal-sec-orca-profiles',T.orca_profile_section);
   setText('orca-profiles-hint',T.orca_profile_hint);
@@ -343,6 +360,10 @@ function applyLang(){
 
   setText('lbl-update-check',T.update_check);
   setText('lbl-update-apply',T.update_apply);
+  // Progress-Karten-Aktionen für geladene/idle Datei (Issue #55)
+  setText('d-idle-print-lbl',T.progress_action_print||'Drucken');
+  setText('d-idle-slots-lbl',T.progress_action_slots||'Slots zuordnen');
+  setText('d-idle-clear-lbl',T.progress_action_clear||'Leeren');
   // Speed buttons
   setText('d-spd-lbl-1',T.speed_silent.replace(/^\S+\s/,''));
   setText('d-spd-lbl-2',T.speed_normal.replace(/^\S+\s/,''));
@@ -462,6 +483,15 @@ function showPanel(id){
   var nb=document.getElementById('nb-'+id);if(nb)nb.classList.add('active');
   var bnb=document.getElementById('bnb-'+id);if(bnb)bnb.classList.add('active');
   currentPanel=id;
+  if(id==='settings')openSettings();
+}
+
+// Settings-Kategorie umschalten (Master-Detail)
+function showSettingsCat(name){
+  document.querySelectorAll('.set-group').forEach(g=>g.classList.remove('active'));
+  document.querySelectorAll('.set-cat').forEach(b=>b.classList.remove('active'));
+  var g=document.getElementById('setgrp-'+name);if(g)g.classList.add('active');
+  var c=document.getElementById('setcat-'+name);if(c)c.classList.add('active');
 }
 
 // ── Console log ──
@@ -619,11 +649,13 @@ function applyState(){
   // connection error banner – nur wenn überhaupt ein Drucker konfiguriert ist
   var banner=document.getElementById('conn-error-banner');
   if(banner){if(s.connection_error&&_printers.length>0){banner.textContent='⚠ '+tr('lbl_conn_error')+' '+s.connection_error;banner.style.display='block';}else{banner.style.display='none';}}
+  var bannerVisible=false;
   var frb=document.getElementById('file-ready-banner');
   if(frb){
     if(s.file_ready&&s.print_state==='standby'){
       document.getElementById('file-ready-name').textContent=s.file_ready;
       frb.style.display='flex';
+      bannerVisible=true;
     }else{frb.style.display='none';}
   }
   // skip-button (mid-print) – nur sichtbar wenn aktuell gedruckt wird
@@ -635,6 +667,25 @@ function applyState(){
   var ctrlBtns=document.getElementById('d-ctrl-btns');
   if(ctrlBtns) ctrlBtns.style.display=printing?'':'none';
   updatePauseResumeBtn();
+  // Zuletzt geladene Datei merken (Issue #55): solange sie über den State
+  // sichtbar ist. Beim Druckende/Abbruch leert die Bridge file_ready+filename
+  // (Issue #29) — die gemerkte Referenz bleibt für die Karten-Aktionen.
+  if(s.file_ready) _lastLoadedFile=s.file_ready;
+  else if(s.filename) _lastLoadedFile=s.filename;
+  // Idle-Aktionen (Drucken/Slots/Leeren) nur wenn nicht gedruckt wird, eine
+  // Datei bekannt ist und der grüne Banner nicht ohnehin schon dieselbe Aktion
+  // anbietet.
+  var idleBtns=document.getElementById('d-idle-btns');
+  if(idleBtns){
+    var showIdle=(!printing && _lastLoadedFile && !bannerVisible);
+    idleBtns.style.display=showIdle?'':'none';
+    if(showIdle){
+      var dfn=document.getElementById('d-fname');
+      if(dfn && (!dfn.textContent || dfn.textContent==='–')){
+        dfn.textContent=_lastLoadedFile;dfn.title=_lastLoadedFile;
+      }
+    }
+  }
 
   // header
   var b=document.getElementById('h-badge');
@@ -896,10 +947,6 @@ function drawChart(id,_,series){
 var _updateTag='';
 var _updateUrl='';
 function openSettings(){
-  // Titel mit aktivem Drucker-Namen aktualisieren
-  var pname=_activePrinter&&_activePrinter.name?_activePrinter.name:null;
-  var title=document.getElementById('modal-title-settings');
-  if(title)title.textContent=T.settings_title+(pname?' – '+pname:'');
   fetch(_apiUrl('/api/settings')).then(function(r){return r.json()}).then(function(d){
     document.getElementById('s-printer-name').value=d.printer_name||'';
     document.getElementById('s-printer-ip').value=d.printer_ip||'';
@@ -912,23 +959,118 @@ function openSettings(){
     document.getElementById('s-auto-leveling').checked=(d.auto_leveling===undefined?true:!!d.auto_leveling);
     var cop=document.getElementById('s-camera-on-print');if(cop)cop.checked=!!d.camera_on_print;
     var wuw=document.getElementById('s-web-upload-warning');if(wuw)wuw.checked=(d.web_upload_warning===undefined?true:!!d.web_upload_warning);
+    // Poll-Intervall (Sekunden) — Backend hat Vorrang vor localStorage
+    var pi=document.getElementById('s-poll-interval');
+    if(pi){
+      var sec=d.poll_interval||Math.round((parseInt(localStorage.getItem('pollInterval')||'2000'))/1000)||3;
+      pi.value=sec;
+    }
+    renderFilamentMapping(d.filament_profiles||{});
   });
-  var v=localStorage.getItem('pollInterval')||'2000';
-  document.querySelectorAll('.poll-btn').forEach(function(b){b.classList.remove('active')});
-  var pb=document.getElementById('poll-'+Math.round(parseInt(v)/1000));
-  if(pb)pb.classList.add('active');
+  // Sprach-Select im Settings-Panel mit aktueller Sprache spiegeln
+  var ls=document.getElementById('s-lang-select');
+  if(ls)ls.value=(localStorage.getItem('lang')||document.documentElement.lang||'de');
   document.getElementById('s-version-label').textContent='v'+('__VERSION__'||'?');
   document.getElementById('update-status').textContent='';
   document.getElementById('btn-update-apply').style.display='none';
   var cl=document.getElementById('update-changelog');if(cl)cl.style.display='none';
   _updateTag='';_updateUrl='';
-  document.getElementById('settings-modal').classList.add('open');
-  // Custom-Profile-Liste laden (Issue #41 — Verwaltung von User-importierten
-  // OrcaSlicer-Filament-Profilen)
+  // Custom-Profile-Liste laden (Issue #41)
   refreshUserProfileList();
+  // Vendor-Sichtbarkeitsfilter (Issue #41 Option A)
+  loadVendorChecklist();
 }
 function closeSettings(){
-  document.getElementById('settings-modal').classList.remove('open');
+  // Panel-Variante: zurück zum Dashboard
+  showPanel('dashboard');
+}
+
+// Poll-Intervall-Feld → Live-Poll sofort übernehmen (Persistenz erst beim Speichern)
+function onPollIntervalInput(){
+  var pi=document.getElementById('s-poll-interval');
+  if(!pi)return;
+  var sec=parseInt(pi.value,10);
+  if(sec>=1&&sec<=60)setPoll(sec*1000);
+}
+
+// ── Filament-Profil-Mapping pro Slot ([filament_profiles]) ──
+function renderFilamentMapping(map){
+  var el=document.getElementById('filament-mapping-list');
+  if(!el)return;
+  var rows='';
+  for(var i=0;i<4;i++){
+    var m=map[i]||map[String(i)]||{};
+    var idHint=m.id?' <span style="color:var(--txt2);font-size:11px">('+m.id+')</span>':'';
+    rows+='<div class="modal-field" style="margin-bottom:8px">'
+      +'<label>Slot '+(i+1)+idHint+'</label>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+      +'<input type="text" id="fmap-'+i+'-vendor" placeholder="Vendor (z.B. Polymaker)" value="'+(m.vendor||'')+'" style="flex:1;min-width:120px">'
+      +'<input type="text" id="fmap-'+i+'-name" placeholder="Name (z.B. PolyTerra PLA)" value="'+(m.name||'')+'" style="flex:1;min-width:140px">'
+      +'</div></div>';
+  }
+  el.innerHTML=rows;
+}
+function saveFilamentMapping(){
+  // Nutzt den per-Slot-Endpoint (vendor,name → ID-Lookup im Backend).
+  // Leere Felder = Mapping entfernen.
+  var chain=Promise.resolve();
+  for(var i=0;i<4;i++){
+    (function(slot){
+      var vendor=((document.getElementById('fmap-'+slot+'-vendor')||{}).value||'').trim();
+      var name=((document.getElementById('fmap-'+slot+'-name')||{}).value||'').trim();
+      chain=chain.then(function(){
+        return fetch(_apiUrl('/kx/filament/slots/'+slot+'/profile'),
+          {method:'POST',headers:{'Content-Type':'application/json'},
+           body:JSON.stringify({vendor:vendor,name:name})});
+      });
+    })(i);
+  }
+  chain.then(function(){
+    clog(tr('log_filament_mapping_saved')||'Filament-Mapping gespeichert','msg-ok');
+    openSettings(); // neu laden → ID-Hints aktualisieren
+  }).catch(function(e){clog('Mapping-Fehler: '+e,'msg-err');});
+}
+
+// ── Vendor-Sichtbarkeitsfilter (Issue #41 Option A) ──
+var _vendorChecklistSel={};  // {vendor:true} — laufende Auswahl im UI
+function loadVendorChecklist(){
+  // aktuelle Auswahl aus Backend, dann alle verfügbaren Vendoren rendern
+  _visibleVendors=null; // Cache invalidieren
+  _loadVisibleVendors(function(vis){
+    _vendorChecklistSel={};
+    (vis||[]).forEach(function(v){_vendorChecklistSel[v]=true;});
+    renderVendorChecklist();
+  });
+}
+function renderVendorChecklist(){
+  var el=document.getElementById('visible-vendors-list');
+  if(!el)return;
+  _loadOrcaFilaments(function(profiles){
+    // alle System-Vendoren (ohne Generic — der ist immer sichtbar) sammeln
+    var set={};
+    profiles.forEach(function(p){ if(!p.is_user && p.vendor && p.vendor!=='Generic') set[p.vendor]=1; });
+    var vendors=Object.keys(set).sort();
+    var q=((document.getElementById('vendor-filter-search')||{}).value||'').toLowerCase();
+    if(q)vendors=vendors.filter(function(v){return v.toLowerCase().indexOf(q)>=0;});
+    el.innerHTML=vendors.map(function(v){
+      var ck=_vendorChecklistSel[v]?'checked':'';
+      var safe=v.replace(/"/g,'&quot;');
+      return '<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;font-size:13px">'
+        +'<input type="checkbox" data-vendor="'+safe+'" '+ck+' onchange="_vendorCheck(this)" style="width:auto;margin:0"> '+v+'</label>';
+    }).join('')||'<i style="color:var(--txt2)">–</i>';
+  });
+}
+function _vendorCheck(cb){
+  var v=cb.getAttribute('data-vendor');
+  if(cb.checked)_vendorChecklistSel[v]=true; else delete _vendorChecklistSel[v];
+}
+function saveVisibleVendors(){
+  var vendors=Object.keys(_vendorChecklistSel);
+  fetch(_apiUrl('/kx/filament/visible_vendors'),{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({vendors:vendors})}).then(function(r){return r.json();}).then(function(){
+    _visibleVendors=vendors.slice(); // Dropdown-Cache aktualisieren
+    clog(tr('log_visible_vendors_saved')||'Hersteller-Auswahl gespeichert','msg-ok');
+  }).catch(function(e){clog('Vendor-Filter-Fehler: '+e,'msg-err');});
 }
 
 // ── Custom Filament Profile Import (Issue #41) ──
@@ -1002,6 +1144,9 @@ function doProfileImportUpload(files){
       _orcaFilamentCache=null;
       refreshImportDialogList();
       refreshUserProfileList();
+      // Vendor-Checkliste neu aufbauen — ein Import kann einen bisher
+      // unbekannten System-Vendor mitbringen (Issue #41).
+      if(document.getElementById('visible-vendors-list')) renderVendorChecklist();
       // Wenn Slot-Edit offen ist, Dropdown gleich neu befüllen
       var mat=document.getElementById('slot-edit-mat');
       if(mat && document.getElementById('slot-edit-modal').classList.contains('open')){
@@ -1042,6 +1187,14 @@ function updateSlotEditFeedButton(){
   btn.textContent=_slotEditLoaded?tr('slot_edit_unload'):tr('slot_edit_load');
 }
 var _orcaFilamentCache=null;  // [{id,name,vendor,type,color}, …]
+var _visibleVendors=null;     // Vendor-Sichtbarkeitsfilter (Issue #41); [] = alle
+function _loadVisibleVendors(cb){
+  if(_visibleVendors!==null){ cb(_visibleVendors); return; }
+  fetch(_apiUrl('/kx/filament/visible_vendors')).then(function(r){return r.json();}).then(function(d){
+    _visibleVendors=d.result||[];
+    cb(_visibleVendors);
+  }).catch(function(){ _visibleVendors=[]; cb([]); });
+}
 function _loadOrcaFilaments(cb){
   if(_orcaFilamentCache){ cb(_orcaFilamentCache); return; }
   fetch(_apiUrl('/kx/filament/profiles')).then(function(r){return r.json();}).then(function(d){
@@ -1087,13 +1240,23 @@ function _fillSlotProfileDropdown(material, currentVendor, currentName){
       userProfs.forEach(function(p){ _appendOption(gUser, p); });
       sel.appendChild(gUser);
     }
-    // System-Profile nach Vendor gruppieren
-    var byVendor={};
-    systemProfs.forEach(function(p){ (byVendor[p.vendor]=byVendor[p.vendor]||[]).push(p); });
-    Object.keys(byVendor).sort().forEach(function(v){
-      var g=document.createElement('optgroup'); g.label=v;
-      byVendor[v].forEach(function(p){ _appendOption(g, p); });
-      sel.appendChild(g);
+    // Vendor-Sichtbarkeitsfilter (Issue #41 Option A): nur gewählte Vendoren +
+    // Generic. Leere Liste = alle (rückwärtskompatibel). Eigene Profile (is_user)
+    // sind oben bereits unkonditional drin.
+    _loadVisibleVendors(function(vis){
+      var filtered=systemProfs;
+      if(vis&&vis.length){
+        var allow={};vis.forEach(function(v){allow[v]=1;});
+        allow['Generic']=1;
+        filtered=systemProfs.filter(function(p){return allow[p.vendor];});
+      }
+      var byVendor={};
+      filtered.forEach(function(p){ (byVendor[p.vendor]=byVendor[p.vendor]||[]).push(p); });
+      Object.keys(byVendor).sort().forEach(function(v){
+        var g=document.createElement('optgroup'); g.label=v;
+        byVendor[v].forEach(function(p){ _appendOption(g, p); });
+        sel.appendChild(g);
+      });
     });
   });
 }
@@ -1147,15 +1310,16 @@ function slotEditFeed(){
     })
     .catch(function(){});
 }
-function startReadyFile(){
-  var currentFile=(storeFiles||[]).find(function(f){return f.filename===S.file_ready;});
+function startReadyFile(filename){
+  var fn=filename||S.file_ready;
+  var currentFile=(storeFiles||[]).find(function(f){return f.filename===fn;});
   if(currentFile && currentFile.web_unverified && webUploadWarningEnabled()){
-    maybeGateWebUpload(currentFile, function(){ startReadyFile(); });
+    maybeGateWebUpload(currentFile, function(){ startReadyFile(fn); });
     return;
   }
   var btn=document.getElementById('file-ready-btn');
   if(btn){btn.disabled=true;btn.textContent='…';}
-  post('/printer/print/start',{filename:S.file_ready})
+  post('/printer/print/start',{filename:fn})
     .then(function(r){return r.json();})
     .then(function(r){
       document.getElementById('file-ready-banner').style.display='none';
@@ -1169,6 +1333,20 @@ function startReadyFile(){
 function cancelReadyFile(){
   post('/api/file_ready/clear',{})
     .then(function(){document.getElementById('file-ready-banner').style.display='none';});
+}
+
+// ── Aktionen für geladene/idle Datei in der Progress-Karte (Issue #55) ──
+function startIdleFile(){
+  if(_lastLoadedFile) startReadyFile(_lastLoadedFile);
+}
+function startIdleFileWithSlots(){
+  if(_lastLoadedFile) startReadyFileWithSlots(_lastLoadedFile);
+}
+function clearIdleFile(){
+  _lastLoadedFile=null;
+  var ib=document.getElementById('d-idle-btns');if(ib)ib.style.display='none';
+  var fn=document.getElementById('d-fname');if(fn){fn.textContent='–';fn.title='';}
+  post('/api/file_ready/clear',{}).catch(function(){});
 }
 function selectMatPreset(m){
   document.getElementById('slot-edit-mat').value=m;
@@ -1257,9 +1435,6 @@ document.addEventListener('DOMContentLoaded',function(){
   });
 });
 function setPoll(ms){
-  document.querySelectorAll('.poll-btn').forEach(function(b){b.classList.remove('active')});
-  var id='poll-'+Math.round(ms/1000);
-  var pb=document.getElementById(id);if(pb)pb.classList.add('active');
   localStorage.setItem('pollInterval',ms);
   clearInterval(pollTimer);
   pollTimer=setInterval(poll,ms);
@@ -1281,6 +1456,7 @@ function saveSettings(){
     auto_leveling:    document.getElementById('s-auto-leveling').checked?1:0,
     camera_on_print:  (document.getElementById('s-camera-on-print')||{}).checked?1:0,
     web_upload_warning:webUploadWarning,
+    poll_interval:    Math.min(60,Math.max(1,parseInt((document.getElementById('s-poll-interval')||{}).value,10)||3)),
   }).then(function(){
     btn.textContent=T.update_restarting;
     setTimeout(function(){
@@ -2063,14 +2239,15 @@ function confirmStoreWebVerify(){
     });
 }
 
-function startReadyFileWithSlots(){
-  var currentFile=(storeFiles||[]).find(function(f){return f.filename===S.file_ready;});
+function startReadyFileWithSlots(filename){
+  var fn=filename||S.file_ready;
+  var currentFile=(storeFiles||[]).find(function(f){return f.filename===fn;});
   if(currentFile && currentFile.web_unverified && webUploadWarningEnabled()){
-    maybeGateWebUpload(currentFile, function(){ startReadyFileWithSlots(); });
+    maybeGateWebUpload(currentFile, function(){ startReadyFileWithSlots(fn); });
     return;
   }
   _filamentDialogMode='banner';
-  _storeFilename=S.file_ready||'';
+  _storeFilename=fn||'';
   // Banner must never reuse stale store-file context.
   _storeFileId=null;
   _gcodeFilaments=[];
