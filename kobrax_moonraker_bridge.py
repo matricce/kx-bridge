@@ -2925,6 +2925,18 @@ class KobraXBridge:
         if not file_data:
             return web.json_response({"error": "no file received"}, status=400)
 
+        # Nur druckbare Dateien zulassen (Issue #59) — verhindert dass z.B. ein
+        # JPG im File-Browser landet. OrcaSlicer-Uploads sind .gcode/.gcode.3mf,
+        # der Kobra X akzeptiert .gcode/.3mf/.bgcode.
+        _allowed_ext = (".gcode", ".gcode.3mf", ".3mf", ".bgcode")
+        _fn_lower = (remote_filename or "").lower()
+        if not _fn_lower.endswith(_allowed_ext):
+            log.warning(f"Upload abgelehnt (kein GCode): {remote_filename}")
+            return web.json_response(
+                {"error": f"only GCode files allowed ({', '.join(_allowed_ext)})"},
+                status=400,
+            )
+
         file_md5   = hashlib.md5(file_data).hexdigest()
         file_size  = len(file_data)
 

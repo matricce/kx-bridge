@@ -27,6 +27,7 @@ import hashlib
 import json
 import logging
 import os
+import select
 import socket
 import ssl
 import sys
@@ -120,6 +121,10 @@ class KobraXClient:
         self._buf     = b""
         self._pid     = 1
         self._lock    = threading.Lock()
+        # Generations-Marker: wird bei jedem Socket-Swap/Close erhöht, damit der
+        # Reader-Thread erkennt wenn _reconnect/_do_connect den Socket unter ihm
+        # ersetzt hat (Issue #53). Schützt gegen recv auf einem stale fd.
+        self._sock_gen = 0
         self._running = False
 
         # Pending requests by msgid (for response ACK)
@@ -167,21 +172,31 @@ class KobraXClient:
         ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
         ctx.load_cert_chain(CERT_FILE, KEY_FILE)
 
-        _ai        = socket.getaddrinfo(self.host, self.port, socket.AF_INET, socket.SOCK_STREAM)
-        raw        = socket.create_connection(_ai[0][4], timeout=5)
-        self._sock = ctx.wrap_socket(raw)
-        log.info("TLS connected  cipher=%s", self._sock.cipher()[0])
+        # Socket als lokale Variable aufbauen — der Handshake (Connect + CONNACK)
+        # läuft OHNE gehaltenes Lock, damit ein langsamer Connect die Sender nicht
+        # einfriert. Erst der fertige Socket wird unter Lock eingeschwenkt (#53).
+        _ai      = socket.getaddrinfo(self.host, self.port, socket.AF_INET, socket.SOCK_STREAM)
+        raw      = socket.create_connection(_ai[0][4], timeout=5)
+        new_sock = ctx.wrap_socket(raw)
+        log.info("TLS connected  cipher=%s", new_sock.cipher()[0])
 
-        self._sock.sendall(_build_connect(self.client_id, self.username, self.password))
-        self._sock.settimeout(3)
-        r = self._sock.recv(64)
+        new_sock.sendall(_build_connect(self.client_id, self.username, self.password))
+        new_sock.settimeout(3)
+        r = new_sock.recv(64)
         if len(r) < 4 or r[0] != 0x20 or r[3] != 0:
+            try:
+                new_sock.close()
+            except Exception:
+                pass
             raise RuntimeError(f"CONNACK failed: {r.hex()}")
         log.info("CONNACK rc=0")
 
-        self._sock.settimeout(0.2)
-        self._buf = b""
-        self._subscribe(self._sub_topic())
+        new_sock.settimeout(0.2)
+        with self._lock:
+            self._sock = new_sock
+            self._sock_gen += 1
+            self._buf = b""
+        self._subscribe(self._sub_topic())  # nimmt das Lock selbst — nicht verschachteln
         log.debug("MQTT connected to %s:%s", self.host, self.port)
 
     def connect(self):
@@ -207,10 +222,14 @@ class KobraXClient:
 
     def disconnect(self):
         self._running = False
-        try:
-            self._sock.close()
-        except Exception:
-            pass
+        with self._lock:
+            try:
+                if self._sock is not None:
+                    self._sock.close()
+            except Exception:
+                pass
+            self._sock = None
+            self._sock_gen += 1
 
     def _reconnect(self):
         """Persistenter Reconnect: versucht endlos weiter bis der Drucker wieder
@@ -219,10 +238,16 @@ class KobraXClient:
         nur DEBUG um Log-Spam bei langem Drucker-Ausfall (z.B. über Nacht
         ausgeschaltet) zu vermeiden."""
         log.warning("Verbindung verloren – reconnect…")
-        try:
-            self._sock.close()
-        except Exception:
-            pass
+        # Close + Invalidierung unter Lock, damit kein Sender mitten im sendall
+        # auf den gerade geschlossenen Socket trifft (Issue #53).
+        with self._lock:
+            try:
+                if self._sock is not None:
+                    self._sock.close()
+            except Exception:
+                pass
+            self._sock = None
+            self._sock_gen += 1
         delays = [2, 4, 8, 15, 30, 60]
         attempt = 0
         while self._running:
@@ -246,7 +271,8 @@ class KobraXClient:
         with self._lock:
             pid = self._pid
             self._pid += 1
-            self._sock.sendall(_build_subscribe(topic, pid))
+            if self._sock is not None:
+                self._sock.sendall(_build_subscribe(topic, pid))
         log.info("SUB %s", topic)
 
     # -- Read loop -----------------------------------------------------------
@@ -256,17 +282,52 @@ class KobraXClient:
         _empty_count = 0
         while self._running:
             if time.time() - last_ping > 30:
+                ping_ok = False
                 with self._lock:
                     try:
-                        self._sock.sendall(_build_pingreq())
+                        if self._sock is not None:
+                            self._sock.sendall(_build_pingreq())
+                            ping_ok = True
                     except Exception:
-                        if self._running and not self._reconnect():
-                            break
-                        last_ping = time.time()
-                        continue
+                        ping_ok = False
+                # _reconnect() AUSSERHALB des Locks aufrufen — es nimmt das Lock
+                # selbst, und threading.Lock ist nicht reentrant (sonst Deadlock).
+                if not ping_ok:
+                    if self._running and not self._reconnect():
+                        break
                 last_ping = time.time()
+            # Aktuellen Socket + Generation unter Lock greifen, damit ein
+            # paralleler _reconnect/_do_connect-Swap uns nicht auf einem stale
+            # fd pollen lässt (Issue #53).
+            with self._lock:
+                sock = self._sock
+                gen  = self._sock_gen
+            if sock is None:
+                time.sleep(0.05)
+                continue
+
+            # Idle-Wartezeit OHNE Lock — select probt nur die Bereitschaft, so
+            # blockiert der Reader während Leerlauf nie das gemeinsame Lock.
             try:
-                data = self._sock.recv(65536)
+                ready, _, _ = select.select([sock], [], [], 0.2)
+            except (OSError, ValueError):
+                # fd geschlossen/ungültig (Reconnect oder Disconnect mitten im select)
+                if not self._running:
+                    break
+                time.sleep(0.05)
+                continue
+            if not ready:
+                continue  # Leerlauf, kein Lock gehalten
+
+            # Daten liegen an: Lock kurz greifen für das eine recv, serialisiert
+            # gegen alle sendall-Caller. recv blockiert nicht lange (select sagte
+            # ready, Socket-Timeout ist 0.2s).
+            try:
+                with self._lock:
+                    # Socket könnte zwischen select und hier ersetzt worden sein.
+                    if self._sock_gen != gen or self._sock is not sock:
+                        continue
+                    data = sock.recv(65536)
                 if not data:
                     # Windows SSL kann kurzzeitig b"" liefern ohne echten EOF
                     _empty_count += 1
@@ -275,7 +336,7 @@ class KobraXClient:
                     continue
                 _empty_count = 0
                 self._buf += data
-                self._drain()
+                self._drain()  # außerhalb des Locks — Dispatch/event.set() bleibt prompt
             except ssl.SSLWantReadError:
                 continue
             except socket.timeout:

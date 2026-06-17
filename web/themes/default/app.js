@@ -2006,6 +2006,14 @@ function uploadGcode(file){
   var zone=document.getElementById('store-upload-zone');
   var status=document.getElementById('store-upload-status');
   var label=document.getElementById('store-upload-label');
+  // Nur druckbare Dateien zulassen (Issue #59) — Drag&Drop umgeht das
+  // accept-Attribut, daher hier explizit prüfen.
+  var _fn=(file.name||'').toLowerCase();
+  if(!/\.(gcode|gcode\.3mf|3mf|bgcode)$/.test(_fn)){
+    if(status){ status.textContent=T.store_upload_only_gcode||'Only GCode files allowed'; status.style.display=''; status.className='upload-status-err'; }
+    clog('Upload abgelehnt (kein GCode): '+file.name,'msg-err');
+    return;
+  }
   if(status) { status.textContent=T.store_upload_busy; status.style.display=''; status.className='upload-status-busy'; }
   if(label) label.style.display='none';
   if(zone) zone.style.pointerEvents='none';

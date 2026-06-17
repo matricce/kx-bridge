@@ -252,6 +252,7 @@
   "store_upload_busy": "⏳ 上传中…",
   "store_upload_success": "✓ {file}",
   "store_upload_error": "✗ {error}",
+  "store_upload_only_gcode": "✗ 仅允许 GCode 文件 (.gcode, .3mf, .bgcode)",
   "sf_all": "全部",
   "sf_ok": "✓ 已完成",
   "sf_err": "✗ 失败",

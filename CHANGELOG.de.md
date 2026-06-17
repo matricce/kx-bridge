@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.9.25] – 2026-06-17
+
+### Behoben
+- **Zufällige Abstürze / Container-Restarts — Segfault in `libcrypto.so.3`
+  (Issue #53).** Der MQTT-über-TLS-Client teilte einen einzelnen SSL-Socket
+  zwischen dem Reader-Thread (`recv`) und den Sender-Threads (`sendall`), ohne sie
+  zu serialisieren. CPythons `ssl`-Modul erlaubt kein gleichzeitiges Lesen und
+  Schreiben auf demselben Socket — die Überlappung korrumpierte den internen
+  OpenSSL-Zustand und löste eine Heap-Corruption + Segfault aus, die auf manchen
+  Hosts timing-bedingt zuverlässig auftrat. Sämtliche Socket-Zugriffe (recv /
+  sendall / close / reconnect) werden nun unter einem einzigen Lock serialisiert;
+  der Reader prüft die Bereitschaft mit `select()` außerhalb des Locks, damit die
+  Sender nie ausgehungert werden. Reconnect und Disconnect tauschen den Socket
+  jetzt atomar. Dank an @BasK für den detaillierten Fault-Handler-Trace.
+- **File-Browser akzeptierte Nicht-GCode-Uploads (Issue #59).** Drag & Drop umging
+  den `accept`-Filter des Dateidialogs, sodass z.B. ein JPG hochgeladen werden
+  konnte. Uploads werden jetzt client- und serverseitig validiert; nur `.gcode`,
+  `.gcode.3mf`, `.3mf` und `.bgcode` werden akzeptiert. Dank an @gangoke.
+
 ## [0.9.24] – 2026-06-16
 
 ### Neu

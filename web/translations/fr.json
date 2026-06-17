@@ -252,6 +252,7 @@
   "store_upload_busy": "⏳ Envoi en cours…",
   "store_upload_success": "✓ {file}",
   "store_upload_error": "✗ {error}",
+  "store_upload_only_gcode": "✗ Seuls les fichiers GCode sont autorisés (.gcode, .3mf, .bgcode)",
   "sf_all": "Tout",
   "sf_ok": "✓ Terminés",
   "sf_err": "✗ Échoués",
