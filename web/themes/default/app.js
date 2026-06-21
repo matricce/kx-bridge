@@ -9,9 +9,10 @@ var camOn=false;
 var camUserStopped=false; // user stopped camera manually — suppress auto-restart for this print
 var _camPollInterval=null; // snapshot-polling interval for Android (no MJPEG support)
 var _lastLoadedFile=null;  // zuletzt geladene/gedruckte Datei für Progress-Karten-Aktionen (Issue #55)
+var _idleCleared=false;    // User hat idle-Datei explizit „geleert" → kein Nachladen von s.filename (Issue #57)
 var _fdDialogOpen=false;          // Dialog ist gerade offen
-var _fdAutoOpenedFile=null;       // Dateiname für den der Dialog auto-geöffnet wurde
-var _fdUserCancelled=false;       // User hat den Auto-Open-Dialog abgebrochen
+var _fdAutoOpenedFile=sessionStorage.getItem('fdAutoOpenedFile')||null;
+var _fdUserCancelled=sessionStorage.getItem('fdUserCancelled')==='1';
 var currentStep=1;
 var currentPanel='dashboard';
 var aceAutoRefillPrefs=(function(){
@@ -108,6 +109,7 @@ function _langToggleLabel(lang){
   if(lang==='de')return 'Deutsch';
   if(lang==='en')return 'English';
   if(lang==='fr')return 'Français';
+  if(lang==='it')return 'Italiano';
   if(lang==='zh-cn')return '简体中文';
   return 'Espanol';
 }
@@ -115,10 +117,10 @@ function _langToggleLabel(lang){
 function _mapSupportedLang(lang){
   if(!lang)return '';
   var l=String(lang).toLowerCase().replace(/_/g,'-').trim();
-  if(l==='de'||l==='en'||l==='es'||l==='fr'||l==='zh-cn')return l;
+  if(l==='de'||l==='en'||l==='es'||l==='fr'||l==='it'||l==='zh-cn')return l;
 
   var base=l.split('-')[0];
-  if(base==='de'||base==='en'||base==='es'||base==='fr')return base;
+  if(base==='de'||base==='en'||base==='es'||base==='fr'||base==='it')return base;
 
   if(base==='zh'){
     if(l.indexOf('cn')>=0||l.indexOf('hans')>=0||l==='zh')return 'zh-cn';
@@ -664,10 +666,18 @@ function applyState(){
     if(s.file_ready&&s.print_state==='standby'){
       document.getElementById('file-ready-name').textContent=s.file_ready;
       // Neue Datei → Abbruch-Sperre aufheben
-      if(_fdAutoOpenedFile&&_fdAutoOpenedFile!==s.file_ready) _fdUserCancelled=false;
-      if(shouldAutoOpen&&!_fdDialogOpen&&!_fdUserCancelled&&_fdAutoOpenedFile!==s.file_ready){
-        _fdAutoOpenedFile=s.file_ready;
-        startReadyFileWithSlots(s.file_ready,true);
+      if(_fdAutoOpenedFile&&_fdAutoOpenedFile!==s.file_ready){
+        _fdUserCancelled=false;
+        sessionStorage.removeItem('fdUserCancelled');
+        sessionStorage.removeItem('fdAutoOpenedFile');
+      }
+      if(shouldAutoOpen){
+        // Dialog-Modus: Banner niemals anzeigen.
+        frb.style.display='none';
+        if(!_fdDialogOpen&&!_fdUserCancelled&&_fdAutoOpenedFile!==s.file_ready){
+          _fdAutoOpenedFile=s.file_ready;
+          startReadyFileWithSlots(s.file_ready,true);
+        }
       } else {
         frb.style.display='flex';
         bannerVisible=true;
@@ -686,8 +696,11 @@ function applyState(){
   // Zuletzt geladene Datei merken (Issue #55): solange sie über den State
   // sichtbar ist. Beim Druckende/Abbruch leert die Bridge file_ready+filename
   // (Issue #29) — die gemerkte Referenz bleibt für die Karten-Aktionen.
+  // Echte ready-Datei oder laufender Druck hebt einen vorherigen „Clear" auf.
+  if(s.file_ready||printing) _idleCleared=false;
   if(s.file_ready) _lastLoadedFile=s.file_ready;
-  else if(s.filename) _lastLoadedFile=s.filename;
+  else if(s.filename && !_idleCleared) _lastLoadedFile=s.filename;
+  else if(_idleCleared) _lastLoadedFile=null;
   // Idle-Aktionen (Drucken/Slots/Leeren) nur wenn nicht gedruckt wird, eine
   // Datei bekannt ist und der grüne Banner nicht ohnehin schon dieselbe Aktion
   // anbietet.
@@ -864,7 +877,13 @@ function applyState(){
         var activity=(slot.activity||'');
         var pct=empty?T.ams_empty:(slot.consumables_percent!=null?slot.consumables_percent+'%':'–');
         var slotLabel=T.label_slot+' '+(globalIdx+1);
-        var profile=(window._slotProfileMap||{})[globalIdx];
+        // Gemapptes Profil nur für belegte Slots verwenden — sonst zeigt ein
+        // verwaistes Mapping (Slot wurde geleert) ein „Geister"-Profil (Issue #57).
+        var profile=empty?null:(window._slotProfileMap||{})[globalIdx];
+        var genericType=(slot.type||slot.material_type||'–');
+        // Material-Label: bei belegtem Slot mit Mapping den konkreten Profilnamen
+        // (z.B. „eSUN PLA+") statt nur des generischen Typs zeigen (Issue #57 Punkt 4).
+        var materialLabel=empty?'–':((profile&&profile.name)?profile.name:genericType);
         var vendorBadge='';
         if(!empty && profile && profile.vendor){
           var tt=(profile.name||'')+(profile.id?' ('+profile.id+')':'');
@@ -873,7 +892,7 @@ function applyState(){
         html+='<div class="ams-slot'+(active?' active':'')+(loaded?' loaded':'')+(activity?' '+activity:'')+(empty?' empty':'')
           +'" style="--slot-color:'+col+';opacity:'+(empty?0.4:1)+';cursor:pointer" onclick="openSlotEdit('+i+')">'
           +'<div class="slot-circle" style="background:'+col+'"></div>'
-          +'<div class="slot-material">'+(empty?'–':(slot.type||slot.material_type||'–'))+'</div>'
+          +'<div class="slot-material" title="'+(empty?'':genericType)+'">'+materialLabel+'</div>'
           +vendorBadge
           +'<div class="slot-label">'+slotLabel+'</div>'
           +'<div class="slot-label" style="font-size:10px;color:var(--txt2)">'+pct+'</div>'
@@ -895,7 +914,7 @@ function applyState(){
   if(co)co.style.display=(s.print_state==='printing'&&camOn)?'block':'none';
 
   // auto-start camera during print (unless user explicitly stopped it)
-  if(s.print_state==='printing'&&!camOn&&s.camera_url&&!camUserStopped){
+  if(s.print_state==='printing'&&!camOn&&s.camera_url&&!camUserStopped&&s.camera_on_print){
     camStart();
   }
   // reset user-stopped flag when print ends so next print auto-starts again
@@ -1011,6 +1030,11 @@ function onPollIntervalInput(){
 }
 
 // ── Filament-Profil-Mapping pro Slot ([filament_profiles]) ──
+// Pro Slot ein einzelnes Profil-Dropdown (vendor+name gemeinsam, gekeyt per
+// _profileKey). Kein Freitext mehr → das (vendor,name)→id-Matching kann nicht
+// mehr durch manuelle Eingabe brechen (Issue #57 Punkt 1). Optionen werden aus
+// /kx/filament/profiles geladen, nach Vendor gruppiert, User-Profile zuerst,
+// mit demselben Vendor-Sichtbarkeitsfilter wie das Slot-Edit-Dropdown.
 function renderFilamentMapping(map){
   var el=document.getElementById('filament-mapping-list');
   if(!el)return;
@@ -1020,21 +1044,61 @@ function renderFilamentMapping(map){
     var idHint=m.id?' <span style="color:var(--txt2);font-size:11px">('+m.id+')</span>':'';
     rows+='<div class="modal-field" style="margin-bottom:8px">'
       +'<label>Slot '+(i+1)+idHint+'</label>'
-      +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
-      +'<input type="text" id="fmap-'+i+'-vendor" placeholder="Vendor (z.B. Polymaker)" value="'+(m.vendor||'')+'" style="flex:1;min-width:120px">'
-      +'<input type="text" id="fmap-'+i+'-name" placeholder="Name (z.B. PolyTerra PLA)" value="'+(m.name||'')+'" style="flex:1;min-width:140px">'
-      +'</div></div>';
+      +'<select id="fmap-'+i+'" data-vendor="'+(m.vendor||'')+'" data-name="'+(m.name||'')+'" style="width:100%"></select>'
+      +'</div>';
   }
   el.innerHTML=rows;
+  // Dropdowns befüllen (async, geteilter Profil-Cache + Vendor-Filter)
+  for(var j=0;j<4;j++){ _fillMappingDropdown(j); }
+}
+function _fillMappingDropdown(slot){
+  var sel=document.getElementById('fmap-'+slot);
+  if(!sel) return;
+  var wantKey=_profileKey(sel.dataset.vendor, sel.dataset.name);
+  _loadOrcaFilaments(function(profiles){
+    sel.innerHTML='<option value="">'+(tr('slot_edit_profile_default')||'Generic (Standard)')+'</option>';
+    var userProfs=profiles.filter(function(p){return p.is_user;});
+    var systemProfs=profiles.filter(function(p){return !p.is_user;});
+    function _opt(g,p){
+      var o=document.createElement('option');
+      o.value=_profileKey(p.vendor,p.name);
+      o.dataset.vendor=p.vendor; o.dataset.name=p.name; o.dataset.id=p.id||'';
+      o.textContent=(p.is_user?'★ ':'')+p.name+(p.vendor?' — '+p.vendor:'');
+      if(o.value===wantKey)o.selected=true;
+      g.appendChild(o);
+    }
+    if(userProfs.length){
+      var gUser=document.createElement('optgroup');
+      gUser.label='★ '+(tr('orca_profile_user_label')||'Eigene Profile');
+      userProfs.forEach(function(p){_opt(gUser,p);});
+      sel.appendChild(gUser);
+    }
+    _loadVisibleVendors(function(vis){
+      var filtered=systemProfs;
+      if(vis&&vis.length){
+        var allow={};vis.forEach(function(v){allow[v]=1;});allow['Generic']=1;
+        filtered=systemProfs.filter(function(p){return allow[p.vendor];});
+      }
+      var byVendor={};
+      filtered.forEach(function(p){(byVendor[p.vendor]=byVendor[p.vendor]||[]).push(p);});
+      Object.keys(byVendor).sort().forEach(function(v){
+        var g=document.createElement('optgroup');g.label=v;
+        byVendor[v].forEach(function(p){_opt(g,p);});
+        sel.appendChild(g);
+      });
+    });
+  });
 }
 function saveFilamentMapping(){
   // Nutzt den per-Slot-Endpoint (vendor,name → ID-Lookup im Backend).
-  // Leere Felder = Mapping entfernen.
+  // Leere Auswahl ("") = Mapping entfernen.
   var chain=Promise.resolve();
   for(var i=0;i<4;i++){
     (function(slot){
-      var vendor=((document.getElementById('fmap-'+slot+'-vendor')||{}).value||'').trim();
-      var name=((document.getElementById('fmap-'+slot+'-name')||{}).value||'').trim();
+      var sel=document.getElementById('fmap-'+slot);
+      var opt=sel?sel.options[sel.selectedIndex]:null;
+      var vendor=(opt&&opt.dataset.vendor)||'';
+      var name=(opt&&opt.dataset.name)||'';
       chain=chain.then(function(){
         return fetch(_apiUrl('/kx/filament/slots/'+slot+'/profile'),
           {method:'POST',headers:{'Content-Type':'application/json'},
@@ -1193,6 +1257,7 @@ function doProfileImportUpload(files){
 var _slotEditIndex=-1;
 var _slotEditLoaded=false;
 var _MAT_PRESETS=['PLA','PETG','ABS','ASA','TPU','PA','PC','HIPS'];
+var _BASE_MATERIAL_TYPES=['PLA','PETG','ABS','ASA','TPU','TPE','PA','PC','HIPS','PEI','PEEK'];
 function updateSlotEditFeedButton(){
   var btn=document.getElementById('btn-slot-edit-feed');
   if(!btn)return;
@@ -1329,23 +1394,39 @@ function slotEditFeed(){
 }
 function startReadyFile(filename){
   var fn=filename||S.file_ready;
+  function _doStartReadyFile(){
+    var btn=document.getElementById('file-ready-btn');
+    if(btn){btn.disabled=true;btn.textContent='…';}
+    post('/printer/print/start',{filename:fn})
+      .then(function(r){return r.json();})
+      .then(function(){
+        document.getElementById('file-ready-banner').style.display='none';
+        if(btn){btn.disabled=false;setText('file-ready-btn',T.file_ready_btn);}
+      })
+      .catch(function(e){
+        clog(tr('log_error')+' '+e,'msg-err');
+        if(btn){btn.disabled=false;setText('file-ready-btn',T.file_ready_btn);}
+      });
+  }
+  function _gateAndStart(fileObj){
+    if(fileObj && fileObj.web_unverified && webUploadWarningEnabled()){
+      maybeGateWebUpload(fileObj, function(){ startReadyFile(fn); });
+      return;
+    }
+    _doStartReadyFile();
+  }
   var currentFile=(storeFiles||[]).find(function(f){return f.filename===fn;});
-  if(currentFile && currentFile.web_unverified && webUploadWarningEnabled()){
-    maybeGateWebUpload(currentFile, function(){ startReadyFile(fn); });
+  if(currentFile){
+    _gateAndStart(currentFile);
     return;
   }
-  var btn=document.getElementById('file-ready-btn');
-  if(btn){btn.disabled=true;btn.textContent='…';}
-  post('/printer/print/start',{filename:fn})
-    .then(function(r){return r.json();})
-    .then(function(r){
-      document.getElementById('file-ready-banner').style.display='none';
-      if(btn){btn.disabled=false;setText('file-ready-btn',T.file_ready_btn);}
-    })
-    .catch(function(e){
-      clog(tr('log_error')+' '+e,'msg-err');
-      if(btn){btn.disabled=false;setText('file-ready-btn',T.file_ready_btn);}
-    });
+  fetch(_apiUrl('/kx/files')).then(function(r){return r.json();}).then(function(d){
+    storeFiles=d.result||[];
+    var refreshed=(storeFiles||[]).find(function(f){return f.filename===fn;})||null;
+    _gateAndStart(refreshed);
+  }).catch(function(){
+    _doStartReadyFile();
+  });
 }
 function cancelReadyFile(){
   post('/api/file_ready/clear',{})
@@ -1361,8 +1442,17 @@ function startIdleFileWithSlots(){
 }
 function clearIdleFile(){
   _lastLoadedFile=null;
+  _idleCleared=true;  // verhindert Nachladen von s.filename im nächsten poll() (Issue #57)
+  _fdAutoOpenedFile=null;  // nächster Upload derselben Datei soll Dialog wieder öffnen
+  _fdUserCancelled=false;
+  _fdDialogOpen=false;
+  sessionStorage.removeItem('fdAutoOpenedFile');
+  sessionStorage.removeItem('fdUserCancelled');
+  sessionStorage.removeItem('webVerifyCancelledFileId');
+  S.file_ready=''; S.filename=''; S.thumbnail='';  // sofort lokal leeren, kein Warten auf nächsten Poll
   var ib=document.getElementById('d-idle-btns');if(ib)ib.style.display='none';
   var fn=document.getElementById('d-fname');if(fn){fn.textContent='–';fn.title='';}
+  var thumb=document.getElementById('d-thumbnail');if(thumb){thumb.style.display='none';thumb.src='';}
   post('/api/file_ready/clear',{}).catch(function(){});
 }
 function selectMatPreset(m){
@@ -1461,6 +1551,11 @@ function saveSettings(){
   btn.disabled=true;btn.textContent='…';
   var webUploadWarning=(document.getElementById('s-web-upload-warning')||{}).checked?1:0;
   S.web_upload_warning=webUploadWarning;
+  // Start-Print-Behavior-Wechsel könnte den Auto-Open sonst dauerhaft blockieren
+  // (alter _fdUserCancelled bei gleicher file_ready) → Dialog-State zurücksetzen (Issue #57).
+  _fdUserCancelled=false;_fdAutoOpenedFile=null;
+  sessionStorage.removeItem('fdUserCancelled');sessionStorage.removeItem('fdAutoOpenedFile');
+  sessionStorage.removeItem('webVerifyCancelledFileId');
   post('/api/settings',{
     printer_name:     document.getElementById('s-printer-name').value,
     printer_ip:       document.getElementById('s-printer-ip').value,
@@ -2132,6 +2227,7 @@ var _filamentDialogMode='store'; // 'store' oder 'banner'
 var _pendingWebVerifyFileId=null;
 var _pendingWebVerifyFilename='';
 var _pendingWebVerifyAction=null;
+var _pendingWebVerifyAutoOpen=false;
 // GCode-Store-Dateiliste. MUSS deklariert sein – sonst ReferenceError, wenn
 // "Slots wählen" im Banner geklickt wird, bevor der Browser-Tab je geladen
 // wurde (Issue #29 / Theme-Auslagerung PR #27).
@@ -2199,7 +2295,8 @@ function clearWebUploadWarningFlag(fileId, onDone){
     });
 }
 
-function maybeGateWebUpload(fileObj, onContinue){
+function maybeGateWebUpload(fileObj, onContinue, opts){
+  opts=opts||{};
   if(!fileObj || !fileObj.web_unverified){
     if(onContinue) onContinue();
     return;
@@ -2208,15 +2305,20 @@ function maybeGateWebUpload(fileObj, onContinue){
     if(onContinue) onContinue();
     return;
   }
+  var cancelledId=sessionStorage.getItem('webVerifyCancelledFileId')||'';
+  if(opts.autoOpen && cancelledId && cancelledId===String(fileObj.id||'')){
+    return;
+  }
   openWebVerifyDialog(fileObj.id, fileObj.filename, function(){
     clearWebUploadWarningFlag(fileObj.id, onContinue);
-  });
+  }, !!opts.autoOpen);
 }
 
-function openWebVerifyDialog(fileId, filename, onConfirm){
+function openWebVerifyDialog(fileId, filename, onConfirm, autoOpen){
   _pendingWebVerifyFileId=fileId;
   _pendingWebVerifyFilename=filename;
   _pendingWebVerifyAction=onConfirm||null;
+  _pendingWebVerifyAutoOpen=!!autoOpen;
   var status=document.getElementById('store-web-verify-status');
   if(status){status.textContent='';}
   openStoreWebVerifyDialog();
@@ -2230,9 +2332,13 @@ function openStoreWebVerifyDialog(){
 function closeStoreWebVerifyDialog(){
   var modal=document.getElementById('store-web-verify-dialog');
   if(modal){modal.classList.remove('open');}
+  if(_pendingWebVerifyAutoOpen && _pendingWebVerifyFileId){
+    sessionStorage.setItem('webVerifyCancelledFileId', String(_pendingWebVerifyFileId));
+  }
   _pendingWebVerifyFileId=null;
   _pendingWebVerifyFilename='';
   _pendingWebVerifyAction=null;
+  _pendingWebVerifyAutoOpen=false;
 }
 
 function confirmStoreWebVerify(){
@@ -2252,9 +2358,11 @@ function confirmStoreWebVerify(){
     .then(function(){
       var fileObj=(storeFiles||[]).find(function(f){return f.id===fileId;});
       if(fileObj){fileObj.web_unverified=false;}
+      sessionStorage.removeItem('webVerifyCancelledFileId');
       _pendingWebVerifyFileId=null;
       _pendingWebVerifyFilename='';
       _pendingWebVerifyAction=null;
+      _pendingWebVerifyAutoOpen=false;
       closeStoreWebVerifyDialog();
       loadStore();
       if(typeof action==='function') action();
@@ -2270,7 +2378,7 @@ function startReadyFileWithSlots(filename,_autoOpen){
   var fn=filename||S.file_ready;
   var currentFile=(storeFiles||[]).find(function(f){return f.filename===fn;});
   if(currentFile && currentFile.web_unverified && webUploadWarningEnabled()){
-    maybeGateWebUpload(currentFile, function(){ startReadyFileWithSlots(fn); });
+    maybeGateWebUpload(currentFile, function(){ startReadyFileWithSlots(fn,_autoOpen); }, {autoOpen:!!_autoOpen});
     return;
   }
   _filamentDialogMode='banner';
@@ -2291,23 +2399,31 @@ function startReadyFileWithSlots(filename,_autoOpen){
     });
   }
 
+  function _proceedWithFileObj(fileObj){
+    if(fileObj && fileObj.web_unverified && webUploadWarningEnabled()){
+      // Verify-Gate war beim ersten Lookup noch nicht aktiv (storeFiles leer) — jetzt prüfen.
+      if(_autoOpen){_fdDialogOpen=false;}
+      maybeGateWebUpload(fileObj, function(){ startReadyFileWithSlots(fn,_autoOpen); }, {autoOpen:!!_autoOpen});
+      return;
+    }
+    if(fileObj){
+      _storeFileId=fileObj.id;
+      _setGcodeFilamentsFromFileObj(fileObj);
+    }
+    openWithSlots();
+  }
+
   var fileObj=(storeFiles||[]).find(function(f){return f.filename===_storeFilename;});
   if(fileObj){
-    _storeFileId=fileObj.id;
-    _setGcodeFilamentsFromFileObj(fileObj);
-    openWithSlots();
+    _proceedWithFileObj(fileObj);
     return;
   }
 
   // Fallback: refresh file list, then resolve current file by filename.
   fetch(_apiUrl('/kx/files')).then(function(r){return r.json()}).then(function(d){
     storeFiles=d.result||[];
-    var refreshed=(storeFiles||[]).find(function(f){return f.filename===_storeFilename;});
-    if(refreshed){
-      _storeFileId=refreshed.id;
-      _setGcodeFilamentsFromFileObj(refreshed);
-    }
-    openWithSlots();
+    var refreshed=(storeFiles||[]).find(function(f){return f.filename===_storeFilename;})||null;
+    _proceedWithFileObj(refreshed);
   }).catch(function(){
     openWithSlots();
   });
@@ -2332,6 +2448,17 @@ function _normalizeMaterialKey(material){
   var key=(material||'').toUpperCase().replace(/[^A-Z0-9+]/g,'');
   // Orca often uses PLA for PLA+, while AMS may report PLA+.
   if(key==='PLA+'||key==='PLAPLUS') return 'PLA';
+  // Handle modifier+base patterns in either order: "Matte PLA", "Silk PETG",
+  // "PLA Silk", "PLA Matte". OrcaSlicer always writes the base type in GCode
+  // (filament_type = PLA), but users label slots with the full product-style name.
+  var trimmed=(material||'').trim();
+  if(trimmed.indexOf(' ')>=0){
+    var words=trimmed.toUpperCase().split(/\s+/);
+    for(var i=0;i<words.length;i++){
+      var w=words[i].replace(/[^A-Z0-9+]/g,'');
+      if(_BASE_MATERIAL_TYPES.indexOf(w)>=0) return w;
+    }
+  }
   return key;
 }
 function _materialsCompatible(a,b){
@@ -2387,19 +2514,30 @@ function openFilamentDialog(slots){
   if(objBody)objBody.style.display='none';      // immer eingeklappt starten
   if(objArrow)objArrow.style.transform='';
   if(_storeFileId){
-    fetch(_apiUrl('/kx/files/'+encodeURIComponent(_storeFileId)+'/objects'))
-      .then(function(r){return r.json()})
-      .then(function(d){
-        var names=(d.result&&d.result.names)||[];
-        _printObjectsSvg=(d.result&&d.result.svg_b64)||'';
-        if(names.length>=2){
-          _printObjects=names.map(function(n){return {name:n,skip:false};});
-          renderObjectChecklist(); renderObjectSvg();
-          var cnt=document.getElementById('fd-objects-count');
-          if(cnt)cnt.textContent='('+names.length+')';
-          if(objSection)objSection.style.display='block';
-        }
-      }).catch(function(){});
+    // Bei frischem Orca-/Web-Upload liefert der Drucker die Objektliste
+    // (objects_skip_parts) erst per fileDetails nach → ist im Store kurz leer.
+    // Daher mehrfach nachfragen, bis Objekte da sind (Issue #57 Skip-Parität).
+    var _objFid=_storeFileId;
+    var _objTries=0;
+    (function _loadObjects(){
+      if(_objFid!==_storeFileId) return; // Dialog wechselte Datei → abbrechen
+      fetch(_apiUrl('/kx/files/'+encodeURIComponent(_objFid)+'/objects'))
+        .then(function(r){return r.json()})
+        .then(function(d){
+          var names=(d.result&&d.result.names)||[];
+          var svg=(d.result&&d.result.svg_b64)||'';
+          if(names.length>=2){
+            _printObjectsSvg=svg;
+            _printObjects=names.map(function(n){return {name:n,skip:false};});
+            renderObjectChecklist(); renderObjectSvg();
+            var cnt=document.getElementById('fd-objects-count');
+            if(cnt)cnt.textContent='('+names.length+')';
+            if(objSection)objSection.style.display='block';
+          } else if(_objTries++ < 6){
+            setTimeout(_loadObjects, 1000); // bis ~6s auf fileDetails warten
+          }
+        }).catch(function(){});
+    })();
   }
 
   // GCode-Kanäle: bevorzugt aus _gcodeFilaments, sonst aus belegten AMS-Slots ableiten
@@ -2491,7 +2629,11 @@ function closeFilamentDialog(){
   var dlg=document.getElementById('filament-dialog');
   if(dlg)dlg.classList.remove('open');
   _fdDialogOpen=false;
-  if(_fdAutoOpenedFile) _fdUserCancelled=true;
+  if(_fdAutoOpenedFile){
+    _fdUserCancelled=true;
+    sessionStorage.setItem('fdUserCancelled','1');
+    sessionStorage.setItem('fdAutoOpenedFile',_fdAutoOpenedFile);
+  }
 }
 
 function confirmFilamentPrint(){
@@ -2535,19 +2677,41 @@ function confirmFilamentPrint(){
   var fdAutoLeveling=fdAlEl?( fdAlEl.checked?1:0):(S.auto_leveling===undefined?1:S.auto_leveling?1:0);
   closeFilamentDialog();
   if(_filamentDialogMode==='banner'){
-    // Banner-Modus: normaler print/start mit Slot-Override
+    // Banner-Modus: /kx/print bevorzugen wenn _storeFileId bekannt (gleicher Pfad wie File-Browser).
     var btn=document.getElementById('file-ready-btn');
     if(btn){btn.disabled=true;btn.textContent='…';}
-    post('/printer/print/start',{filename:S.file_ready,filament_assignments:assignments,excluded_objects:excludedObjects,auto_leveling:fdAutoLeveling})
-      .then(function(r){return r.json();})
-      .then(function(){
-        document.getElementById('file-ready-banner').style.display='none';
-        if(btn){btn.disabled=false;setText('file-ready-btn',T.file_ready_btn);}
-      })
-      .catch(function(e){
-        clog(tr('log_error')+' '+e,'msg-err');
-        if(btn){btn.disabled=false;setText('file-ready-btn',T.file_ready_btn);}
+    var startPromise;
+    if(_storeFileId){
+      startPromise=fetch(_apiUrl('/kx/print'),{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          file_id:_storeFileId,
+          filament_assignments:assignments,
+          excluded_objects:excludedObjects,
+          auto_leveling:fdAutoLeveling
+        })
       });
+    }else{
+      startPromise=post('/printer/print/start',{
+        filename:S.file_ready||_storeFilename,
+        filament_assignments:assignments,
+        excluded_objects:excludedObjects,
+        auto_leveling:fdAutoLeveling
+      });
+    }
+    startPromise.then(function(r){
+      if(!r.ok){return r.text().then(function(t){throw new Error(t||('HTTP '+r.status));});}
+      return r.json();
+    }).then(function(d){
+      if(d&&d.error) throw new Error(d.error);
+      if(d&&d.result&&d.result!=='ok') throw new Error(String(d.result));
+      document.getElementById('file-ready-banner').style.display='none';
+      if(btn){btn.disabled=false;setText('file-ready-btn',T.file_ready_btn);}
+    }).catch(function(e){
+      clog(tr('log_error')+' '+e,'msg-err');
+      if(btn){btn.disabled=false;setText('file-ready-btn',T.file_ready_btn);}
+    });
   } else {
     // Store-Modus: POST /kx/print
     fetch(_apiUrl('/kx/print'),{
@@ -2618,35 +2782,45 @@ function renderObjectSvg(){
 // ── Mid-Print Skip ──
 var _skipObjects=[]; // [{name, skipped, willSkip}]
 var _skipSvg='';
+var _skipPollTimer=null;
+function _applySkipDialogState(s){
+  s=s||{};
+  _skipSvg=s.svg_b64||'';
+  var skipped=s.skipped||[];
+  // Pending-Auswahl (willSkip) beim Refresh erhalten.
+  var prevWillSkip={};
+  (_skipObjects||[]).forEach(function(o){if(o&&o.name)prevWillSkip[o.name]=!!o.willSkip;});
+  _skipObjects=(s.objects||[]).map(function(n){
+    var isSkipped=(skipped.indexOf(n)>=0);
+    return {name:n, skipped:isSkipped, willSkip:isSkipped?false:!!prevWillSkip[n]};
+  });
+  renderSkipList(); renderSkipSvg();
+}
 function openSkipDialog(){
   document.getElementById('skip-status').textContent='';
   document.getElementById('skip-confirm').disabled=false;
   _refreshSkipDialog();
+  if(_skipPollTimer)clearInterval(_skipPollTimer);
+  _skipPollTimer=setInterval(function(){
+    var dlg=document.getElementById('skip-dialog');
+    if(!(dlg&&dlg.classList.contains('open')))return;
+    _refreshSkipDialog();
+  },2000);
   document.getElementById('skip-dialog').classList.add('open');
 }
 function _refreshSkipDialog(){
-  // Erst aktueller State (mit DB-Objects + svg), dann query_obj für frischen skipped
-  fetch(_apiUrl('/kx/skip/state')).then(function(r){return r.json()}).then(function(d){
-    var s=d.result||{};
-    _skipSvg=s.svg_b64||'';
-    _skipObjects=(s.objects||[]).map(function(n){
-      return {name:n, skipped:(s.skipped||[]).indexOf(n)>=0, willSkip:false};
+  // query-Endpoint wartet intern auf frischen skip/report (bis 1.5s).
+  fetch(_apiUrl('/kx/skip/query'),{method:'POST'})
+    .then(function(r){return r.json();})
+    .then(function(d){_applySkipDialogState(d.result||{});})
+    .catch(function(){
+      fetch(_apiUrl('/kx/skip/state')).then(function(r){return r.json();}).then(function(d){
+        _applySkipDialogState(d.result||{});
+      }).catch(function(){});
     });
-    renderSkipList(); renderSkipSvg();
-  });
-  // Frisch nachfragen (skipped-Liste aktualisieren)
-  fetch(_apiUrl('/kx/skip/query'),{method:'POST'}).then(function(r){return r.json()}).then(function(){
-    setTimeout(function(){
-      fetch(_apiUrl('/kx/skip/state')).then(function(r){return r.json()}).then(function(d){
-        var s=d.result||{};
-        var skipped=s.skipped||[];
-        _skipObjects.forEach(function(o){ o.skipped=skipped.indexOf(o.name)>=0; if(o.skipped)o.willSkip=false; });
-        renderSkipList(); renderSkipSvg();
-      });
-    }, 500);
-  }).catch(function(){});
 }
 function closeSkipDialog(){
+  if(_skipPollTimer){clearInterval(_skipPollTimer);_skipPollTimer=null;}
   document.getElementById('skip-dialog').classList.remove('open');
 }
 function _shortLabel(name){

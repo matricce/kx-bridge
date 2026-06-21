@@ -1077,6 +1077,25 @@ class KobraXBridge:
         if (not skipped and self._pending_preprint_skip
                 and now <= self._pending_preprint_skip_deadline):
             return
+
+        # Während eines aktiven Drucks sind Skip-Zustände effektiv monoton.
+        # Manche Firmware-Reports kommen zwischenzeitlich leer/teilweise zurück;
+        # diese dürfen bereits bestätigte Skip-Objekte nicht aus der UI löschen.
+        existing_skipped = [str(n) for n in (self._skip_state.get("skipped") or []) if n]
+        existing_set = set(existing_skipped)
+        incoming_skipped = [str(n) for n in (skipped or []) if n]
+        incoming_set = set(incoming_skipped)
+        active_print = self._state.get("print_state") in ("printing", "paused")
+        if active_print and existing_set:
+            if not incoming_set:
+                skipped = list(existing_skipped)
+            elif not incoming_set.issuperset(existing_set):
+                merged = list(existing_skipped)
+                for n in incoming_skipped:
+                    if n not in existing_set:
+                        merged.append(n)
+                skipped = merged
+
         # Pending-Lock aufheben sobald Drucker die gewünschten Objekte bestätigt
         if self._pending_preprint_skip and set(skipped) >= set(self._pending_preprint_skip):
             self._pending_preprint_skip = []
@@ -1123,7 +1142,7 @@ class KobraXBridge:
             return False
         for i in range(max(1, int(retries))):
             try:
-                if self._state.get("kobra_state") != "printing":
+                if self._state.get("print_state") not in ("printing", "paused"):
                     time.sleep(max(0.1, float(delay_s)))
                     continue
                 resp = self.client.skip_objects(wanted)
@@ -2453,6 +2472,18 @@ class KobraXBridge:
             names = json.loads(f.get("objects_skip_parts") or "[]")
         except Exception:
             names = []
+        # Noch keine Objekte im Store (frischer Orca-/Web-Upload): einmal aktiv
+        # file/fileDetails beim Drucker anfragen. _on_file() füllt den Store nach,
+        # das Frontend pollt diesen Endpoint und bekommt die Liste beim nächsten
+        # Versuch (Issue #57 — Skip-Parität auch außerhalb des File-Browsers).
+        if not names:
+            fn = f.get("filename") or ""
+            if fn:
+                try:
+                    self.client.publish("file", "fileDetails",
+                                        {"root": "local", "filename": fn}, timeout=0)
+                except Exception as e:
+                    log.debug(f"fileDetails-Nachfrage fehlgeschlagen: {e}")
         return self._json_cors({
             "result": {
                 "names":   names,
@@ -2479,29 +2510,8 @@ class KobraXBridge:
             return self._json_cors({"error": str(e)}, status=502)
         return self._json_cors({"result": "ok", "names": names})
 
-    async def handle_kx_skip_query(self, request):
-        """Druck-Objektliste vom Drucker neu abfragen.
-
-        POST /kx/skip/query  → triggert skip/query_obj, gibt zuletzt bekannten
-        Stand zurück (skip/report kommt async, Frontend pollt /kx/skip/state).
-        """
-        try:
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, lambda: self.client.query_skip_objects())
-        except Exception as e:
-            return self._json_cors({"error": str(e)}, status=502)
-        return self._json_cors({"result": self._skip_state})
-
-    async def handle_kx_skip_state(self, request):
-        """Aktueller Skip-State.
-
-        Kombiniert:
-        - Gesamt-Objektliste: aus dem GCode-Store, gematcht über den aktuell
-          laufenden filename (file/report beim Druckstart hat die Liste gefüllt).
-          skip/query_obj liefert nämlich NUR die bereits geskippten zurück,
-          nicht die Gesamtliste.
-        - Geskippt: aus self._skip_state (von skip/report aktualisiert).
-        """
+    def _build_skip_state_result(self) -> dict:
+        """Baut den kombinierten Skip-State für UI-Endpunkte."""
         filename = self._state.get("filename", "")
         all_objects: list[str] = []
         svg = ""
@@ -2513,14 +2523,46 @@ class KobraXBridge:
                     svg = f.get("svg_image") or ""
             except Exception as e:
                 log.warning(f"skip_state lookup failed: {e}")
-        result = {
+        return {
             "objects":  all_objects,
             "skipped":  list(self._skip_state.get("skipped", [])),
             "svg_b64":  svg,
             "ts":       self._skip_state.get("ts", 0),
             "filename": filename,
         }
-        return self._json_cors({"result": result})
+
+    async def handle_kx_skip_query(self, request):
+        """Druck-Objektliste vom Drucker neu abfragen.
+
+        POST /kx/skip/query  → triggert skip/query_obj, wartet kurz auf den
+        async skip/report und gibt den zusammengeführten Skip-State zurück.
+        """
+        prev_ts = int(self._skip_state.get("ts", 0) or 0)
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, lambda: self.client.query_skip_objects())
+        except Exception as e:
+            return self._json_cors({"error": str(e)}, status=502)
+
+        deadline = time.time() + 1.5
+        while time.time() < deadline:
+            if int(self._skip_state.get("ts", 0) or 0) > prev_ts:
+                break
+            await asyncio.sleep(0.1)
+
+        return self._json_cors({"result": self._build_skip_state_result()})
+
+    async def handle_kx_skip_state(self, request):
+        """Aktueller Skip-State.
+
+        Kombiniert:
+        - Gesamt-Objektliste: aus dem GCode-Store, gematcht über den aktuell
+          laufenden filename (file/report beim Druckstart hat die Liste gefüllt).
+          skip/query_obj liefert nämlich NUR die bereits geskippten zurück,
+          nicht die Gesamtliste.
+        - Geskippt: aus self._skip_state (von skip/report aktualisiert).
+        """
+        return self._json_cors({"result": self._build_skip_state_result()})
 
     async def handle_kx_printers(self, request):
         # Aktive Drucker (mit IP) sammeln
@@ -2615,8 +2657,8 @@ class KobraXBridge:
             },
         }
 
-        # Pre-Print-Skip sofort im UI-Status spiegeln
-        self._skip_state = {"skipped": list(excluded_objects), "ts": int(time.time())}
+        # UI erst nach echter Drucker-Bestätigung als "geskippt" markieren.
+        self._skip_state = {"skipped": [], "ts": int(time.time())}
         if excluded_objects:
             self._pending_preprint_skip = [str(n) for n in excluded_objects if isinstance(n, str) and n]
             self._pending_preprint_skip_deadline = time.time() + 12.0
@@ -3139,7 +3181,8 @@ class KobraXBridge:
             ams_box_mapping = self._build_auto_ams_box_mapping()
 
         use_ams = len(ams_box_mapping) > 0
-        auto_leveling = getattr(self._args, "auto_leveling", 1)
+        # Dialog-Checkbox (body) hat Vorrang, sonst Setting-Default (wie handle_kx_print).
+        auto_leveling = int(body.get("auto_leveling", getattr(self._args, "auto_leveling", 1)))
         url = self._state.get("last_upload_url", "")
         filesize = self._state.get("last_upload_size", 0)
         md5 = self._state.get("last_upload_md5", "")
@@ -3169,6 +3212,15 @@ class KobraXBridge:
             },
         }
 
+        # UI erst nach echter Drucker-Bestätigung als "geskippt" markieren.
+        self._skip_state = {"skipped": [], "ts": int(time.time())}
+        if excluded_objects:
+            self._pending_preprint_skip = [str(n) for n in excluded_objects if isinstance(n, str) and n]
+            self._pending_preprint_skip_deadline = time.time() + 12.0
+        else:
+            self._pending_preprint_skip = []
+            self._pending_preprint_skip_deadline = 0.0
+
         log.info(
           f"print/start api=1 mode={self._filament_mode} "
           f"ams={len(ams_box_mapping)} slots assignments={filament_assignments is not None}"
@@ -3180,6 +3232,9 @@ class KobraXBridge:
         )
         if result is None:
             return web.json_response({"error": "Keine Antwort vom Drucker"}, status=504)
+
+        if excluded_objects:
+            loop.run_in_executor(None, lambda: self._apply_preprint_skip_after_start(excluded_objects))
 
         return web.json_response({"result": "ok"})
 
@@ -3815,6 +3870,8 @@ class KobraXBridge:
             "camera_url":       s["camera_url"],
             "fan_speed":        s["fan_speed"],
             "print_speed_mode": s["print_speed_mode"],
+            "auto_leveling":    getattr(self._args, "auto_leveling", 1),
+            "camera_on_print":  getattr(self._args, "camera_on_print", 0),
             "web_upload_warning": getattr(self._args, "web_upload_warning", 1),
             "light_on":         s["light_on"],
             "light_brightness": s["light_brightness"],

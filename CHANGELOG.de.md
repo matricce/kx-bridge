@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.9.26] – 2026-06-21
+
+### Neu
+- **Italienische Sprachunterstützung** (PR #66, @Alex_M). Die Bridge-UI ist jetzt vollständig auf Italienisch verfügbar.
+
+### Behoben
+- **Kamera startete immer beim Druckbeginn** (Issue #50). `camera_on_print` fehlte in der `/api/state`-Antwort — JavaScript las `undefined` und startete die Kamera unabhängig vom Setting. Jetzt korrekt im State enthalten.
+- **Auto-Leveling-Setting wurde im Moonraker-Druckpfad ignoriert** (Issue #57). `handle_print_start` las den Wert nur aus den Bridge-Args, nicht aus dem Request-Body — Dialog-Checkbox und Per-Print-Override hatten keine Wirkung. Verhält sich jetzt identisch zum direkten Druckpfad.
+- **Filament-Mapping: Freitext-Felder durch Dropdowns ersetzt** (Issue #57). Falsch getippte Vendor/Name-Kombination brach das Profil-Matching ohne Fehlermeldung; Felder sind jetzt Dropdowns (Vendor → Profil, vendor-gefiltert), sodass nur gültige Kombinationen gespeichert werden können.
+- **Dashboard zeigte generischen Materialtyp statt Profilname** (Issue #57). AMS-Slot-Karten zeigen jetzt den gemappten Profilnamen (z.B. „eSUN PLA-Basic") statt nur „PLA". Fallback auf generischen Typ wenn kein Profil gemappt ist.
+- **Ghost-Profil auf leerem Slot** (Issue #57). Verwaiste Mappings für leere Slots wurden weiterhin angezeigt; leere Slots zeigen jetzt korrekt „–".
+- **Skip-Objects-Panel fehlte im Orca-Upload-Flow** (Issue #57). Panel erscheint jetzt in allen Druckflows; bei frischem Upload fragt die Bridge `fileDetails` beim Drucker nach und pollt die Objektliste bis zu 6 Sekunden nach.
+- **Banner und Dialog erschienen gleichzeitig** (Issue #57). Settings-Save setzt jetzt den Dialog-Cancel-State zurück, sodass der Slot-Mapper nach Wechsel des Start-Print-Verhaltens zuverlässig öffnet.
+- **„Leeren" lud idle-Datei beim nächsten Poll nach** (Issue #57). Leeren setzt jetzt den lokalen State sofort zurück (`file_ready`, `filename`, `thumbnail`) und löscht alle Dialog-Sperren — Vorschaubild und Aktions-Buttons verschwinden sofort und kommen nicht zurück.
+- **Material-Matching für „PLA Silk", „Matte PLA" etc.** (PR #64, @p2l). Modifier+Basis-Muster in beliebiger Wortreihenfolge werden jetzt auf den Basis-Typ normalisiert; Dash-Varianten (PLA-CF) bleiben weiterhin korrekt inkompatibel mit ihrem Basis-Typ.
+
 ## [0.9.25] – 2026-06-17
 
 ### Behoben

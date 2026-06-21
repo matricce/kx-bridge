@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.9.26] – 2026-06-21
+
+### New
+- **Italian language support** (PR #66, @Alex_M). The bridge UI is now fully
+  available in Italian.
+
+### Fixed
+- **Camera always started at print begin** (issue #50). `camera_on_print` was
+  missing from the `/api/state` response — JavaScript read `undefined` and started
+  the camera regardless of the setting. Now correctly exposed in state.
+- **Auto-leveling setting ignored in Moonraker print path** (issue #57).
+  `handle_print_start` read the value only from bridge args, not from the request
+  body, so the dialog checkbox and the per-print override had no effect. Now
+  behaves identically to the direct print path.
+- **Filament mapping free-text fields replaced by dropdowns** (issue #57). A
+  mistyped vendor/name broke profile matching silently; fields are now dropdowns
+  (vendor → profile, vendor-filtered) so only valid combinations can be saved.
+- **Dashboard showed generic material type instead of profile name** (issue #57).
+  AMS slot cards now display the mapped profile name (e.g. "eSUN PLA-Basic")
+  instead of just "PLA". Falls back to the generic type when no profile is mapped.
+- **Ghost profile shown on empty slot** (issue #57). Stale mappings for empty
+  slots were still rendered; empty slots now correctly show "–".
+- **Skip-Objects panel missing in Orca upload flow** (issue #57). Panel now
+  appears in all print flows; on fresh upload the bridge requests `fileDetails`
+  from the printer and retries the object list for up to 6 s.
+- **Banner and dialog appeared simultaneously** (issue #57). Settings save now
+  resets the dialog cancel state so the slot mapper reliably opens after toggling
+  Start Print Behavior.
+- **"Clear" reloaded idle file on next poll** (issue #57). Clear now immediately
+  resets local state (`file_ready`, `filename`, `thumbnail`) and clears all dialog
+  locks — the preview and action buttons disappear instantly and do not return.
+- **Material matching for "PLA Silk", "Matte PLA" etc.** (PR #64, @p2l).
+  Modifier+base patterns in any word order are now normalised to the base type;
+  dash-suffix variants (PLA-CF) remain correctly incompatible with their base.
+
 ## [0.9.25] – 2026-06-17
 
 ### Fixed
