@@ -1,0 +1,3 @@
+services:
+  kx-bridge:
+    image: gitea.it-drui.de/viewit/kx-bridge:nightly

@@ -180,6 +180,22 @@ docker compose pull && docker compose up -d   # update to the latest published i
 docker compose up -d --build           # rebuild locally (instead of pulling)
 ```
 
+### 🌙 Nightly Builds
+
+Nightly builds contain the latest unreleased features and are built on every development commit.
+They may be unstable — use them for testing or early access to new functionality.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.nightly.yml pull
+docker compose -f docker-compose.yml -f docker-compose.nightly.yml up -d
+```
+
+To go back to the stable release:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
 ---
 
 ## 🩹 Troubleshooting
