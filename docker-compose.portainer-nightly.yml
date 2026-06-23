@@ -9,8 +9,8 @@ services:
   kx-bridge:
     image: gitea.it-drui.de/viewit/kx-bridge:nightly
     volumes:
-      - kx-bridge-config:/app/config
-      - kx-bridge-data:/app/data
+      - /mnt/dockerdata/kx-nightly/config:/app/config
+      - /mnt/dockerdata/kx-nightly/data:/app/data
     ports:
       # Port 7125 = first printer. Add 7126, 7127, … for each additional printer.
       - "7125:7125"
@@ -21,6 +21,5 @@ services:
         max-size: "10m"
         max-file: "3"
 
-volumes:
-  kx-bridge-config:
-  kx-bridge-data:
+# Verzeichnisse müssen auf dem Host existieren:
+# mkdir -p /mnt/dockerdata/kx-nightly/config /mnt/dockerdata/kx-nightly/data
