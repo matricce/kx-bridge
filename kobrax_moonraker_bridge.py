@@ -733,6 +733,40 @@ class CameraCache:
             await asyncio.sleep(2.0)
 
 
+class SpoolmanClient:
+    """Thin synchronous HTTP client for Spoolman filament tracking.
+
+    Designed to be called from daemon threads (poll loop, _on_print callbacks).
+    Uses requests (already in requirements) so no event-loop dependency.
+    """
+
+    def __init__(self, server_url: str, sync_rate: int = 0):
+        self.server_url = server_url.rstrip("/")
+        self.sync_rate = sync_rate
+
+    def _req(self, method: str, path: str, **kwargs):
+        import requests
+        r = requests.request(method, f"{self.server_url}{path}", timeout=5, **kwargs)
+        r.raise_for_status()
+        return r.json()
+
+    def health_check(self) -> bool:
+        try:
+            self._req("GET", "/api/v1/health")
+            return True
+        except Exception:
+            return False
+
+    def list_spools(self) -> list:
+        return self._req("GET", "/api/v1/spool")
+
+    def use_filament(self, spool_id: int, use_length_mm: float) -> None:
+        """Report consumed filament length in mm. Spoolman converts to weight
+        using the spool's filament profile density."""
+        self._req("PUT", f"/api/v1/spool/{spool_id}/use",
+                  json={"use_length": round(use_length_mm, 2)})
+
+
 class KobraXBridge:
     def __init__(self, client: KobraXClient, args=None, store=None, printer_id: str = "1", all_bridges=None):
         self.client = client
@@ -793,6 +827,7 @@ class KobraXBridge:
           "file_ready":         "",
           "print_start_dialog": getattr(args, "print_start_dialog", 1),
           "filament_mode":      "toolhead",
+          "supplies_usage":     0,
           "ace_drying": {"status": 0, "target_temp": 0, "duration": 0, "remain_time": 0, "humidity": None, "current_temp": None},
         }
         self._ams_slots: list[dict] = []       # flat global list; each entry has global_index + box_id
@@ -819,6 +854,18 @@ class KobraXBridge:
         self._pending_preprint_skip: list[str] = []
         self._pending_preprint_skip_deadline: float = 0.0
 
+        # Spoolman filament tracking
+        _sm_url = (getattr(args, "spoolman_server", "") or "").strip()
+        self._spoolman: SpoolmanClient | None = (
+            SpoolmanClient(_sm_url, getattr(args, "spoolman_sync_rate", 0))
+            if _sm_url else None
+        )
+        self._spoolman_slot_spools: dict[int, int] = {}  # {ams_slot_idx: spoolman_spool_id}
+        self._spoolman_slot_usage: dict[int, float] = {}   # per-slot accumulated mm this print
+        self._spoolman_slot_reported: dict[int, float] = {}  # per-slot mm already sent to Spoolman
+        self._spoolman_last_usage: float = 0.0   # supplies_usage at last attribution tick
+        self._spoolman_last_sync: float = 0.0
+
         # Theme-Name prüfen (keine Sonderzeichen oder Umlaute)
         raw_theme = (getattr(args, "ui_theme", None) or "default").strip()
         if not _UI_THEME_NAME_RE.match(raw_theme):
@@ -836,6 +883,139 @@ class KobraXBridge:
         client.callbacks["multiColorBox/report"]  = self._on_multicolor_box
         client.callbacks["light/report"]          = self._on_light
         client.callbacks["skip/report"]           = self._on_skip
+
+        if self._spoolman:
+            threading.Thread(
+                target=lambda: log.info(
+                    f"Spoolman: {'OK' if self._spoolman.health_check() else 'unreachable'} "
+                    f"at {self._spoolman.server_url}"
+                ),
+                daemon=True, name="spoolman-health",
+            ).start()
+
+    # ── Spoolman helpers ──────────────────────────────────────────────────────
+
+    def _spoolman_filament_mm(self) -> float:
+        """Total filament_used_mm for the current print file from the GCode DB."""
+        filename = self._state.get("filename", "")
+        if not filename:
+            return 0.0
+        try:
+            gf = self._store.get_file_by_name(filename)
+            return float(gf.get("filament_used_mm") or 0.0) if gf else 0.0
+        except Exception:
+            return 0.0
+
+    def _spoolman_attribute_tick(self, activity_map: dict) -> None:
+        """Attribute the supplies_usage delta since last tick to the active slot.
+
+        Skips attribution during loading/unloading transitions (tool changes +
+        purges) to avoid charging the wrong spool for purge material."""
+        if not self._spoolman or not self._spoolman_slot_spools:
+            return
+        if self._state.get("print_state") != "printing":
+            return
+        current = self._state.get("supplies_usage", 0)
+        delta = current - self._spoolman_last_usage
+        self._spoolman_last_usage = current
+        if delta <= 0:
+            return
+        loaded = self._ams_loaded_slot
+        if loaded < 0:
+            return
+        if activity_map.get(loaded):
+            return
+        self._spoolman_slot_usage[loaded] = self._spoolman_slot_usage.get(loaded, 0.0) + delta
+
+    def _spoolman_unreported(self) -> dict[int, float]:
+        """Return {slot_idx: mm} of usage not yet reported to Spoolman.
+
+        Falls back to equal split of total supplies_usage when per-slot
+        attribution data is absent (e.g. single-extruder with no AMS)."""
+        total_used = self._state.get("supplies_usage", 0)
+        if self._spoolman_slot_usage:
+            return {
+                slot: self._spoolman_slot_usage.get(slot, 0.0)
+                       - self._spoolman_slot_reported.get(slot, 0.0)
+                for slot in self._spoolman_slot_spools
+            }
+        n = len(self._spoolman_slot_spools)
+        already = sum(self._spoolman_slot_reported.values())
+        per = (total_used - already) / n if n else 0.0
+        return {slot: per for slot in self._spoolman_slot_spools}
+
+    def _spoolman_report(self, unreported: dict[int, float], min_mm: float = 0.1) -> None:
+        """Fire-and-forget report of unreported mm to each mapped spool."""
+        sm = self._spoolman
+        for slot_idx, mm in unreported.items():
+            if mm < min_mm:
+                continue
+            spool_id = self._spoolman_slot_spools.get(slot_idx)
+            if not spool_id:
+                continue
+            self._spoolman_slot_reported[slot_idx] = (
+                self._spoolman_slot_reported.get(slot_idx, 0.0) + mm
+            )
+            def _send(sid=spool_id, length=mm):
+                try:
+                    sm.use_filament(sid, length)
+                    log.info(f"Spoolman: {length:.1f} mm → spool {sid}")
+                except Exception as e:
+                    log.warning(f"Spoolman: report failed (spool {sid}): {e}")
+            threading.Thread(target=_send, daemon=True, name="spoolman-report").start()
+
+    def _spoolman_notify_end(self):
+        """Report remaining filament on print end."""
+        if not self._spoolman or not self._spoolman_slot_spools:
+            return
+        self._spoolman_report(self._spoolman_unreported())
+
+    def _spoolman_sync_midprint(self):
+        """Report incremental filament usage during a print (sync_rate interval)."""
+        if not self._spoolman or not self._spoolman_slot_spools:
+            return
+        self._spoolman_report(self._spoolman_unreported(), min_mm=10.0)
+
+    # ── Spoolman API handlers ─────────────────────────────────────────────────
+
+    async def handle_kx_spoolman_status(self, request):
+        """GET /kx/spoolman/status"""
+        return self._json_cors({
+            "configured":   bool(self._spoolman),
+            "server":       self._spoolman.server_url if self._spoolman else "",
+            "sync_rate":    self._spoolman.sync_rate if self._spoolman else 0,
+            "slot_spools":  {str(k): v for k, v in self._spoolman_slot_spools.items()},
+        })
+
+    async def handle_kx_spoolman_spools(self, request):
+        """GET /kx/spoolman/spools — proxied from Spoolman."""
+        if not self._spoolman:
+            return self._json_cors({"error": "Spoolman not configured"}, status=503)
+        try:
+            spools = await asyncio.get_event_loop().run_in_executor(
+                None, self._spoolman.list_spools
+            )
+            return self._json_cors({"spools": spools})
+        except Exception as e:
+            log.warning(f"Spoolman: list_spools failed: {e}")
+            return self._json_cors({"error": str(e)}, status=502)
+
+    async def handle_kx_spoolman_set_active(self, request):
+        """POST /kx/spoolman/active-spool
+        Body: {"slot_map": {"0": 42, "2": 17}}  — AMS slot index → Spoolman spool ID."""
+        try:
+            data = await request.json()
+        except Exception:
+            return self._json_cors({"error": "invalid JSON"}, status=400)
+        slot_map = data.get("slot_map") or {}
+        self._spoolman_slot_spools = {
+            int(k): int(v) for k, v in slot_map.items()
+            if str(v).isdigit() and int(v) > 0
+        }
+        self._spoolman_slot_usage = {}
+        self._spoolman_slot_reported = {}
+        self._spoolman_last_usage = 0.0
+        return self._json_cors({"slot_spools": {str(k): v for k, v in self._spoolman_slot_spools.items()}})
 
     def _default_ace_dry_presets(self) -> dict[str, dict]:
         return {
@@ -951,15 +1131,21 @@ class KobraXBridge:
                         printer_id=self._printer_id,
                     )
                     log.info(f"Job started: {self._current_job_id} for {filename}")
+            self._spoolman_slot_usage = {}
+            self._spoolman_slot_reported = {}
+            self._spoolman_last_usage = 0.0
+            self._spoolman_last_sync = 0.0
 
         # Job-History: Druckende erkennen
         if kobra_state in ("finished",) and self._current_job_id:
             self._store.finish_job(self._current_job_id, status="completed")
             log.info(f"Job abgeschlossen: {self._current_job_id}")
+            self._spoolman_notify_end()
             self._current_job_id = ""
         elif kobra_state in ("stoped", "canceled") and self._current_job_id:
             self._store.finish_job(self._current_job_id, status="cancelled")
             log.info(f"Job abgebrochen: {self._current_job_id}")
+            self._spoolman_notify_end()
             self._current_job_id = ""
 
         # Nach Druckende das Upload-Banner verschwinden lassen (Issue #29): der
@@ -976,6 +1162,7 @@ class KobraXBridge:
             self._state["slicer_time"] = 0
             self._state["layer_height"] = 0.0
             self._state["first_layer_height"] = 0.0
+            self._state["supplies_usage"] = 0
             self._thumbnail_b64 = ""
         self._state["filename"]       = d.get("filename", self._state["filename"])
         if "progress" in d:
@@ -990,6 +1177,8 @@ class KobraXBridge:
             self._state["total_layers"] = d["total_layers"]
         if "taskid" in d:
             self._state["taskid"] = str(d["taskid"])
+        if "supplies_usage" in d:
+            self._state["supplies_usage"] = int(d["supplies_usage"])
         settings = d.get("settings") or {}
         if "print_speed_mode" in settings:
             self._state["print_speed_mode"] = int(settings["print_speed_mode"])
@@ -2967,10 +3156,10 @@ class KobraXBridge:
         if not file_data:
             return web.json_response({"error": "no file received"}, status=400)
 
-        # Nur druckbare Dateien zulassen (Issue #59) — verhindert dass z.B. ein
-        # JPG im File-Browser landet. OrcaSlicer-Uploads sind .gcode/.gcode.3mf,
-        # der Kobra X akzeptiert .gcode/.3mf/.bgcode.
-        _allowed_ext = (".gcode", ".gcode.3mf", ".3mf", ".bgcode")
+        # Nur druckbare Dateien zulassen (Issue #59) — der Kobra X akzeptiert
+        # ausschließlich .gcode und .bgcode; .3mf-Uploads werden vom Drucker
+        # nicht verarbeitet und daher abgelehnt (Issue #59, @gangoke).
+        _allowed_ext = (".gcode", ".bgcode")
         _fn_lower = (remote_filename or "").lower()
         if not _fn_lower.endswith(_allowed_ext):
             log.warning(f"Upload abgelehnt (kein GCode): {remote_filename}")
@@ -4804,6 +4993,14 @@ class KobraXBridge:
                     print_r = self.client.publish("print", "query", timeout=3.0)
                     if print_r:
                         self._on_print(print_r)
+                    # Spoolman mid-print sync
+                    if (self._spoolman and self._spoolman.sync_rate > 0
+                            and self._spoolman_slot_spools
+                            and self._state.get("print_state") == "printing"):
+                        now = time.time()
+                        if now - self._spoolman_last_sync >= self._spoolman.sync_rate:
+                            self._spoolman_sync_midprint()
+                            self._spoolman_last_sync = now
                 box = self.client.query_multicolor_box()
                 if box:
                     data = box.get("data") or {}
@@ -4820,6 +5017,10 @@ class KobraXBridge:
                         if global_slots:
                             self._ams_slots = global_slots
                         self._ams_loaded_slot = global_loaded
+                        self._spoolman_attribute_tick(activity_map)
+                    else:
+                        # No multiColorBox data — still attribute (no transitions to skip)
+                        self._spoolman_attribute_tick({})
             except Exception as e:
                 log.warning(f"Poll-Fehler: {e}")
                 # Prüfen ob Drucker wirklich weg ist
@@ -4954,6 +5155,9 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_post("/kx/skip",                 bridge.handle_kx_skip)
     r.add_post("/kx/skip/query",           bridge.handle_kx_skip_query)
     r.add_get("/kx/skip/state",            bridge.handle_kx_skip_state)
+    r.add_get("/kx/spoolman/status",       bridge.handle_kx_spoolman_status)
+    r.add_get("/kx/spoolman/spools",       bridge.handle_kx_spoolman_spools)
+    r.add_post("/kx/spoolman/active-spool", bridge.handle_kx_spoolman_set_active)
     r.add_route("OPTIONS", "/kx/{path:.*}", bridge.handle_kx_options)
 
     # Root + Printer-Routen (Single-Page, JS liest Pathname)
@@ -5119,6 +5323,10 @@ def main():
     parser.add_argument("--web-upload-warning", type=int, default=env_loader.WEB_UPLOAD_WARNING)
     parser.add_argument("--print-start-dialog", dest="print_start_dialog", type=int, default=env_loader.PRINT_START_DIALOG)
     parser.add_argument("--file-ready-dialog",  dest="print_start_dialog", type=int)
+    parser.add_argument("--spoolman-server",    default=env_loader.SPOOLMAN_SERVER,
+                        help="Spoolman URL (e.g. http://192.168.x.x:7912); leave empty to disable")
+    parser.add_argument("--spoolman-sync-rate", type=int, default=env_loader.SPOOLMAN_SYNC_RATE,
+                        help="Mid-print filament sync interval in seconds (0 = only on print end)")
 
     parser.add_argument("--host",            default="0.0.0.0",
                         help="Bind-Adresse für den Bridge-Server")

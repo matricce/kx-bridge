@@ -13,6 +13,7 @@ _BASE = pathlib.Path(sys.executable).parent if getattr(sys, "frozen", False) els
 CONFIG_SECTION_CONNECTION = "connection"
 CONFIG_SECTION_PRINT      = "print"
 CONFIG_SECTION_BRIDGE     = "bridge"
+CONFIG_SECTION_SPOOLMAN   = "spoolman"
 
 
 def _find_config_file() -> pathlib.Path | None:
@@ -63,6 +64,8 @@ def _load_config_file(path: pathlib.Path):
         "WEB_UPLOAD_WARNING":   (CONFIG_SECTION_PRINT,   "web_upload_warning"),
         "PRINT_START_DIALOG":   (CONFIG_SECTION_PRINT,   "print_start_dialog"),
         "BRIDGE_PRINTER_NAME":  (CONFIG_SECTION_BRIDGE,  "printer_name"),
+        "SPOOLMAN_SERVER":      (CONFIG_SECTION_SPOOLMAN, "server"),
+        "SPOOLMAN_SYNC_RATE":   (CONFIG_SECTION_SPOOLMAN, "sync_rate"),
     }
     for env_key, (section, option) in mapping.items():
         if env_key not in os.environ:
@@ -317,3 +320,5 @@ AUTO_LEVELING    = int(get("AUTO_LEVELING","1"))
 CAMERA_ON_PRINT  = int(get("CAMERA_ON_PRINT","0"))
 WEB_UPLOAD_WARNING = int(get("WEB_UPLOAD_WARNING", "1"))
 PRINT_START_DIALOG = int(get("PRINT_START_DIALOG", get("FILE_READY_DIALOG", "1")))
+SPOOLMAN_SERVER    = get("SPOOLMAN_SERVER",    "")
+SPOOLMAN_SYNC_RATE = int(get("SPOOLMAN_SYNC_RATE", "0"))

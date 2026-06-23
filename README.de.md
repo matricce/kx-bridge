@@ -182,22 +182,6 @@ docker compose pull && docker compose up -d   # auf neueste veröffentlichte Ver
 docker compose up -d --build           # lokal selber bauen (statt zu pullen)
 ```
 
-### 🌙 Nightly-Builds
-
-Nightly-Builds enthalten die neuesten unveröffentlichten Funktionen und werden bei jedem Entwicklungs-Commit gebaut.
-Sie können instabil sein — für Tests oder frühzeitigen Zugang zu neuen Features geeignet.
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.nightly.yml pull
-docker compose -f docker-compose.yml -f docker-compose.nightly.yml up -d
-```
-
-Zurück zum stabilen Release:
-
-```bash
-docker compose pull && docker compose up -d
-```
-
 ---
 
 ## 🩹 Troubleshooting

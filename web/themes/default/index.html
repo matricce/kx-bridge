@@ -646,6 +646,13 @@
         <label for="fd-auto-leveling" style="margin:0;cursor:pointer;font-size:13px" id="fd-lbl-auto-leveling">Auto-Leveling</label>
       </div>
     </div>
+    <div id="fd-spoolman-section" style="display:none;margin-bottom:16px;border-top:1px solid var(--border);padding-top:12px">
+      <p style="font-size:12px;color:var(--txt2);margin-bottom:8px;display:flex;align-items:center;gap:6px">
+        <span id="fd-spoolman-lbl">🧵 Spoolman</span>
+        <span id="fd-spoolman-loading" style="display:none;font-size:10px">…</span>
+      </p>
+      <div id="fd-spoolman-rows" style="display:flex;flex-direction:column;gap:6px"></div>
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button id="fd-cancel" onclick="closeFilamentDialog()" style="padding:8px 16px;background:var(--raised);border:1px solid var(--border);border-radius:8px;color:var(--txt);cursor:pointer">Abbrechen</button>
       <button id="fd-print" onclick="confirmFilamentPrint()" style="padding:8px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">▶ Drucken</button>
