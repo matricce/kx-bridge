@@ -4218,6 +4218,8 @@ class KobraXBridge:
             "filament_profiles": {str(k): v for k, v in self._filament_profiles.items()},
             "visible_vendors":  self._visible_vendors,
             "ace_dry_presets":  self._ace_dry_presets,
+            "spoolman_server":  getattr(self._args, "spoolman_server", "") or "",
+            "spoolman_sync_rate": getattr(self._args, "spoolman_sync_rate", 0),
         })
 
     async def handle_api_settings_post(self, request):
@@ -4232,7 +4234,7 @@ class KobraXBridge:
             cfg.read(config_path, encoding="utf-8")
 
         # Sections sicherstellen
-        for section in ("connection", "print", "bridge", "ace_dry_presets"):
+        for section in ("connection", "print", "bridge", "ace_dry_presets", "spoolman"):
             if not cfg.has_section(section):
                 cfg.add_section(section)
 
@@ -4261,6 +4263,16 @@ class KobraXBridge:
             cfg.set("bridge", "printer_name", printer_name)
         elif cfg.has_option("bridge", "printer_name"):
             cfg.remove_option("bridge", "printer_name")
+
+        # Spoolman
+        if "spoolman_server" in data:
+            cfg.set("spoolman", "server", str(data["spoolman_server"]).strip())
+        if "spoolman_sync_rate" in data:
+            try:
+                sr = max(0, int(data["spoolman_sync_rate"]))
+            except (TypeError, ValueError):
+                sr = 30
+            cfg.set("spoolman", "sync_rate", str(sr))
 
         incoming_presets = data.get("ace_dry_presets") if isinstance(data, dict) else None
         presets = self._sanitize_ace_dry_presets(incoming_presets if isinstance(incoming_presets, dict) else self._ace_dry_presets)

@@ -287,5 +287,10 @@
   "log_clear": "✕ Leeren",
   "log_filter_placeholder": "Filtern…",
   "skip_cancel": "Abbrechen",
-  "skip_confirm": "Überspringen"
+  "skip_confirm": "Überspringen",
+  "settings_integrations": "Integrationen",
+  "modal_sec_spoolman": "Spoolman",
+  "lbl_spoolman_url": "Server-URL",
+  "lbl_spoolman_sync_rate": "Sync-Rate (s, 0=aus)",
+  "modal_sec_obico": "Obico"
 }

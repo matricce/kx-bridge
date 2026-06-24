@@ -53,7 +53,18 @@ function _loadSpoolmanStatus(){
   fetch(_apiUrl('/kx/spoolman/status')).then(function(r){return r.json();}).then(function(d){
     _spoolmanStatus=d;
     _slotSpoolMap=d.slot_spools||{};
+    _updateSpoolmanStatusDot();
   }).catch(function(){});
+}
+function _updateSpoolmanStatusDot(){
+  var dot=document.getElementById('spoolman-status-dot');
+  var lbl=document.getElementById('spoolman-status-lbl');
+  if(!dot||!lbl)return;
+  if(_spoolmanStatus.configured){
+    dot.style.color='var(--ok)';lbl.textContent=_spoolmanStatus.server||'verbunden';
+  } else {
+    dot.style.color='var(--txt2)';lbl.textContent='nicht konfiguriert';
+  }
 }
 
 function _buildSpoolmanSection(){
@@ -385,6 +396,11 @@ function applyLang(){
   setText('setcat-lbl-display',T.settings_cat_display||'Darstellung');
   setText('setcat-lbl-display2',T.settings_cat_display||'Darstellung');
   setText('setcat-lbl-filament',T.settings_cat_filament||'Filament');
+  setText('setcat-lbl-integrations',T.settings_integrations||'Integrationen');
+  setText('modal-sec-spoolman',T.modal_sec_spoolman||'Spoolman');
+  setText('lbl-spoolman-url',T.lbl_spoolman_url||'Server-URL');
+  setText('lbl-spoolman-sync-rate',T.lbl_spoolman_sync_rate||'Sync-Rate (s, 0=aus)');
+  setText('modal-sec-obico',T.modal_sec_obico||'Obico');
   setText('setcat-lbl-system',T.settings_version||'System');
   setText('lbl-set-lang',T.settings_cat_language||'Sprache');
   setText('lbl-set-theme',T.settings_cat_theme||'Hell / Dunkel umschalten');
@@ -1058,6 +1074,10 @@ function openSettings(){
       pi.value=sec;
     }
     renderFilamentMapping(d.filament_profiles||{});
+    // Spoolman
+    var su=document.getElementById('s-spoolman-url');if(su)su.value=d.spoolman_server||'';
+    var sr=document.getElementById('s-spoolman-sync-rate');if(sr)sr.value=(d.spoolman_sync_rate!==undefined?d.spoolman_sync_rate:30);
+    _updateSpoolmanStatusDot();
   });
   // Sprach-Select im Settings-Panel mit aktueller Sprache spiegeln
   var ls=document.getElementById('s-lang-select');
@@ -1626,6 +1646,8 @@ function saveSettings(){
     print_start_dialog: parseInt((document.getElementById('s-file-ready-mode')||{}).value||'1',10),
     web_upload_warning:webUploadWarning,
     poll_interval:    Math.min(60,Math.max(1,parseInt((document.getElementById('s-poll-interval')||{}).value,10)||3)),
+    spoolman_server:  (document.getElementById('s-spoolman-url')||{}).value||'',
+    spoolman_sync_rate: Math.max(0,parseInt((document.getElementById('s-spoolman-sync-rate')||{}).value||'30',10)),
   }).then(function(){
     btn.textContent=T.update_restarting;
     setTimeout(function(){

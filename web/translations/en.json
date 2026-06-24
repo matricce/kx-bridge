@@ -287,5 +287,10 @@
   "sf_new": "New",
   "ss_date": "↓ Date",
   "ss_name": "A–Z Name",
-  "ss_dur": "⏱ Print time"
+  "ss_dur": "⏱ Print time",
+  "settings_integrations": "Integrations",
+  "modal_sec_spoolman": "Spoolman",
+  "lbl_spoolman_url": "Server URL",
+  "lbl_spoolman_sync_rate": "Sync rate (s, 0=off)",
+  "modal_sec_obico": "Obico"
 }
