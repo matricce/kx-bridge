@@ -35,12 +35,15 @@ jobs:
         run: |
           REF="${GITHUB_REF}"
           if [[ "$REF" == refs/tags/v* ]]; then
+            # Stable Release: :latest + :<VERSION>
             VER=$(cat VERSION)
             TAGS="gitea.it-drui.de/viewit/kx-bridge:latest"
             TAGS="$TAGS,gitea.it-drui.de/viewit/kx-bridge:$VER"
           else
-            # Push auf nightly-Branch oder workflow_dispatch
+            # Nightly-Branch-Push: :nightly + :nightly-<DATUM>
+            DATE=$(date +%Y%m%d)
             TAGS="gitea.it-drui.de/viewit/kx-bridge:nightly"
+            TAGS="$TAGS,gitea.it-drui.de/viewit/kx-bridge:nightly-$DATE"
           fi
           echo "tags=$TAGS" >>"$GITHUB_OUTPUT"
           echo "Pushing tags: $TAGS"
