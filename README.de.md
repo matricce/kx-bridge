@@ -112,13 +112,6 @@ Drucker → Verbindungstyp **Moonraker** → Host: `http://BRIDGE-IP:7125`
 > ⚠️ Verbindungstyp muss **Moonraker** sein (nicht „Bambu" oder „Klipper").
 > Vollständige URL inkl. `http://` und Port `:7125` im Host-Feld eintragen.
 
----
-
-## 📺 Video-Tutorial
-
-[![KX-Bridge Setup & Usage](https://img.youtube.com/vi/1Ql4wfH27fM/hqdefault.jpg)](https://www.youtube.com/watch?v=1Ql4wfH27fM)
-
----
 
 ## 🎨 Empfohlener Slicer
 
