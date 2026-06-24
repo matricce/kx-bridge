@@ -14,6 +14,15 @@ ninguna está oficialmente probada ni soportada. Se agradece el feedback.</sub>
 
 <sub>🇬🇧 <a href="README.md">English version</a>  ·  🇩🇪 <a href="README.de.md">Deutsche Version</a></sub>
 
+</div>
+
+> [!CAUTION]
+> **Trabajos de mantenimiento en curso esta semana** — Estamos reestructurando el repositorio (modelo de ramas, flujos CI, proceso de contribución). Es posible que notes cambios en los nombres de ramas, plantillas de PR y la forma en que se publican las versiones. Pedimos disculpas por los inconvenientes. El manejo, el flujo de trabajo y la mantenibilidad a largo plazo mejorarán significativamente como resultado.
+>
+> 👉 ¿Quieres contribuir? Por favor lee primero [CONTRIBUTING.md](CONTRIBUTING.md).
+
+<div align="center">
+
 <br>
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Apoya%20este%20proyecto-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/viewitde)
