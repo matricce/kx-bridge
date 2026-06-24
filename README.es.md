@@ -139,11 +139,6 @@ Impresora → Tipo de conexión **Moonraker** → Host: `http://IP-DEL-PUENTE:71
 
 ---
 
-## 📺 Vídeo tutorial
-
-[![Configuración y uso de KX-Bridge](https://img.youtube.com/vi/1Ql4wfH27fM/hqdefault.jpg)](https://www.youtube.com/watch?v=1Ql4wfH27fM)
-
----
 
 ## 🎨 Slicer recomendado
 
