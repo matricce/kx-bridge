@@ -17,4 +17,8 @@ config/*.ini
 data/
 
 !data/orca_filaments.json
+
+# Sensitive files — never commit
 .runner-token
+secrets/
+*.token
