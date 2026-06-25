@@ -602,9 +602,22 @@ class CameraCache:
         self._task_jpeg: "asyncio.Task | None" = None
         self._task_h264: "asyncio.Task | None" = None
         self._lock = asyncio.Lock()
+        self._fail_count_jpeg: int = 0
+        self._fail_count_h264: int = 0
 
     def set_url(self, url: str):
         self._url = url
+
+    def reset(self):
+        """Backoff-Zähler zurücksetzen und laufende ffmpeg-Prozesse killen."""
+        self._fail_count_jpeg = 0
+        self._fail_count_h264 = 0
+        for proc in (self._proc_jpeg, self._proc_h264):
+            if proc is not None:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
 
     async def ensure_running(self):
         if self._proc_jpeg is None or self._proc_jpeg.returncode is not None:
@@ -629,13 +642,13 @@ class CameraCache:
                 continue
             try:
                 self._proc_jpeg = await asyncio.create_subprocess_exec(
-                    _find_ffmpeg(), "-loglevel", "quiet",
+                    _find_ffmpeg(), "-loglevel", "warning",
                     *self._input_args(url), "-i", url,
                     "-vf", "fps=2",
                     "-f", "image2pipe", "-vcodec", "mjpeg", "-q:v", "3",
                     "-flush_packets", "1", "pipe:1",
                     stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.PIPE,
                 )
             except Exception as e:
                 log.warning(f"CameraCache: ffmpeg-jpeg start fehlgeschlagen: {e}")
@@ -643,6 +656,7 @@ class CameraCache:
                 continue
 
             buf = b""
+            rc = None
             try:
                 while True:
                     chunk = await self._proc_jpeg.stdout.read(self.TS_CHUNK)
@@ -676,8 +690,23 @@ class CameraCache:
                         await self._proc_jpeg.wait()
                     except Exception:
                         pass
+                    rc = self._proc_jpeg.returncode
+                    if rc:
+                        try:
+                            err = await self._proc_jpeg.stderr.read(500)
+                            if err:
+                                log.warning(f"CameraCache: ffmpeg-jpeg stderr: {err.decode(errors='replace').strip()}")
+                        except Exception:
+                            pass
                 self._proc_jpeg = None
-            await asyncio.sleep(2.0)  # restart delay
+            if rc:
+                self._fail_count_jpeg += 1
+                delay = min(2.0 * (2 ** self._fail_count_jpeg), 300.0)
+                log.warning(f"CameraCache: ffmpeg-jpeg exit {rc}, retry in {delay:.0f}s (Versuch {self._fail_count_jpeg})")
+                await asyncio.sleep(delay)
+            else:
+                self._fail_count_jpeg = 0
+                await asyncio.sleep(2.0)
 
     async def _run_h264_loop(self):
         """Hält einen ffmpeg-Prozess am Leben der MPEG-TS an alle Subscriber fanoutet."""
@@ -688,18 +717,19 @@ class CameraCache:
                 continue
             try:
                 self._proc_h264 = await asyncio.create_subprocess_exec(
-                    _find_ffmpeg(), "-loglevel", "quiet",
+                    _find_ffmpeg(), "-loglevel", "warning",
                     *self._input_args(url), "-i", url,
                     "-c:v", "copy", "-an",
                     "-f", "mpegts", "pipe:1",
                     stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.PIPE,
                 )
             except Exception as e:
                 log.warning(f"CameraCache: ffmpeg-h264 start fehlgeschlagen: {e}")
                 await asyncio.sleep(3.0)
                 continue
 
+            rc = None
             try:
                 while True:
                     chunk = await self._proc_h264.stdout.read(self.TS_CHUNK)
@@ -729,8 +759,57 @@ class CameraCache:
                         await self._proc_h264.wait()
                     except Exception:
                         pass
+                    rc = self._proc_h264.returncode
+                    if rc:
+                        try:
+                            err = await self._proc_h264.stderr.read(500)
+                            if err:
+                                log.warning(f"CameraCache: ffmpeg-h264 stderr: {err.decode(errors='replace').strip()}")
+                        except Exception:
+                            pass
                 self._proc_h264 = None
-            await asyncio.sleep(2.0)
+            if rc:
+                self._fail_count_h264 += 1
+                delay = min(2.0 * (2 ** self._fail_count_h264), 300.0)
+                log.warning(f"CameraCache: ffmpeg-h264 exit {rc}, retry in {delay:.0f}s (Versuch {self._fail_count_h264})")
+                await asyncio.sleep(delay)
+            else:
+                self._fail_count_h264 = 0
+                await asyncio.sleep(2.0)
+
+
+class SpoolmanClient:
+    """Thin synchronous HTTP client for Spoolman filament tracking.
+
+    Designed to be called from daemon threads (poll loop, _on_print callbacks).
+    Uses requests (already in requirements) so no event-loop dependency.
+    """
+
+    def __init__(self, server_url: str, sync_rate: int = 0):
+        self.server_url = server_url.rstrip("/")
+        self.sync_rate = sync_rate
+
+    def _req(self, method: str, path: str, **kwargs):
+        import requests
+        r = requests.request(method, f"{self.server_url}{path}", timeout=5, **kwargs)
+        r.raise_for_status()
+        return r.json()
+
+    def health_check(self) -> bool:
+        try:
+            self._req("GET", "/api/v1/health")
+            return True
+        except Exception:
+            return False
+
+    def list_spools(self) -> list:
+        return self._req("GET", "/api/v1/spool")
+
+    def use_filament(self, spool_id: int, use_length_mm: float) -> None:
+        """Report consumed filament length in mm. Spoolman converts to weight
+        using the spool's filament profile density."""
+        self._req("PUT", f"/api/v1/spool/{spool_id}/use",
+                  json={"use_length": round(use_length_mm, 2)})
 
 
 class SpoolmanClient:
@@ -3863,6 +3942,16 @@ class KobraXBridge:
         self._camera_user_stopped = True
         return web.json_response({"result": "ok"})
 
+    async def handle_api_camera_reset(self, request):
+        """Backoff-Zähler zurücksetzen und ffmpeg sofort neu starten.
+        Nützlich nach 429-Sperre (Retry-After abgelaufen) oder nach Drucker-Neustart."""
+        self.camera_cache.reset()
+        url = self._state.get("camera_url", "")
+        if url:
+            self.camera_cache.set_url(url)
+            await self.camera_cache.ensure_running()
+        return web.json_response({"result": "ok"})
+
     async def handle_api_camera_snapshot(self, request):
         """Letzter JPEG-Frame aus dem CameraCache — instant aus dem RAM,
         keine eigene ffmpeg-Instanz mehr (verhindert Single-Client-429 am
@@ -5132,6 +5221,7 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_get("/api/camera/snapshot",      bridge.handle_api_camera_snapshot)
     r.add_post("/api/camera/start",        bridge.handle_api_camera_start)
     r.add_post("/api/camera/stop",         bridge.handle_api_camera_stop)
+    r.add_post("/api/camera/reset",        bridge.handle_api_camera_reset)
     r.add_get("/api/state",                bridge.handle_api_state)
     r.add_get("/api/settings",             bridge.handle_api_settings_get)
     r.add_post("/api/settings",            bridge.handle_api_settings_post)

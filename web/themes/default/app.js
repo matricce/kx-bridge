@@ -1871,6 +1871,7 @@ function camStart(){
   post('/api/camera/start',{}).then(function(){
     camOn=true;
     document.getElementById('cam-toggle-btn').textContent=tr('btn_cam_stop');
+    var rb=document.getElementById('cam-reset-btn');if(rb)rb.style.display='';
     clog(tr('log_cam_start'),'msg-ok');
     setTimeout(function(){ sp.style.display='none'; img.style.display='block'; },1200);
     if(/Android/i.test(navigator.userAgent)){
@@ -1905,6 +1906,7 @@ function camStop(){
   camOn=false;
   camUserStopped=true; // suppress auto-restart for remainder of this print
   document.getElementById('cam-toggle-btn').textContent=tr('btn_cam_start');
+  var rb=document.getElementById('cam-reset-btn');if(rb)rb.style.display='none';
   clog(tr('log_cam_stop'),'msg-ok');
 }
 
@@ -2154,6 +2156,13 @@ function aceDryToggle(aceId,on){
 }
 
 function toggleCam(){if(camOn)camStop();else camStart()}
+
+function resetCamera(){
+  post('/api/camera/reset',{}).then(function(){
+    var btn=document.getElementById('cam-reset-btn');
+    if(btn){btn.textContent='↻';setTimeout(function(){btn.textContent='↺';},1000);}
+  }).catch(function(){});
+}
 
 function aceDryStop(aceId){
   aceId=(typeof aceId==='number'&&aceId>=0)?aceId:0;
