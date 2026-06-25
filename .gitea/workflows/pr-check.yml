@@ -11,21 +11,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Python Setup
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - name: Dependencies installieren
-        run: pip install -r requirements.txt
+        run: pip3 install -r requirements.txt
 
       - name: Lint
         run: |
-          pip install flake8
+          pip3 install flake8
           flake8 *.py --max-line-length=120 --extend-ignore=E501
 
       - name: Tests
         run: |
-          pip install pytest
+          pip3 install pytest
           pytest tests/ -v
         if: ${{ hashFiles('tests/') != '' }}
