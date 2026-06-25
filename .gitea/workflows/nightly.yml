@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - nightly
+    paths:
+      - '**.py'
+      - 'Dockerfile'
+      - 'requirements.txt'
+      - 'web/**'
+      - 'data/**'
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:
