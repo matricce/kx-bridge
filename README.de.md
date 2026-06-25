@@ -21,13 +21,18 @@ Feedback willkommen.</sub>
 &nbsp;
 [![Releases](https://img.shields.io/badge/Download-Releases-2EA043?style=for-the-badge&logo=gitea&logoColor=white)](https://gitea.it-drui.de/viewit/KX-Bridge-Release/releases)
 &nbsp;
-[![Downloads](https://img.shields.io/badge/Downloads-800%2B-8957E5?style=for-the-badge&logo=gitea&logoColor=white)](https://gitea.it-drui.de/viewit/KX-Bridge-Release/releases)
+[![Downloads](https://img.shields.io/badge/Downloads-3.1k%2B-8957E5?style=for-the-badge&logo=gitea&logoColor=white)](https://gitea.it-drui.de/viewit/KX-Bridge-Release/releases)
 &nbsp;
 [![Video](https://img.shields.io/badge/YouTube-Tutorial-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=1Ql4wfH27fM)
 
 <sub>Gefällt dir KX-Bridge? Ein Kaffee auf <a href="https://ko-fi.com/viewitde">Ko-fi</a> hält das Projekt am Leben. ☕</sub>
 
 </div>
+
+> [!CAUTION]
+> **Laufende Wartungsarbeiten** — Wir strukturieren das Repository um (Branch-Modell, CI-Workflows, Beitragsprozess). Es kann zu Änderungen bei Branch-Namen, PR-Templates und der Art der Veröffentlichungen kommen. Wir entschuldigen uns für etwaige Unannehmlichkeiten. Handhabung, Workflow und langfristige Wartbarkeit werden dadurch deutlich verbessert.
+>
+> 👉 Möchtest du beitragen? Bitte zuerst [CONTRIBUTING.md](CONTRIBUTING.md) lesen.
 
 ---
 
@@ -45,7 +50,7 @@ Feedback willkommen.</sub>
 | 🧩 | **Multi-Printer** — mehrere Drucker in **einer** Bridge-Instanz, Umschalten per Dropdown |
 | ➕ | **Drucker hinzufügen per Klick** — nur die IP eingeben, Zugangsdaten werden automatisch importiert |
 | 🔁 | **Robuster MQTT-Reconnect** — Bridge überlebt nächtlichen Drucker-Reboot ohne manuellen Neustart |
-| 🌐 | **Mehrsprachiges UI** — DE / EN / ES / 中文, Browser-Sprache automatisch erkannt |
+| 🌐 | **Mehrsprachiges UI** — DE / EN / ES / FR / IT / 中文, Browser-Sprache automatisch erkannt |
 | 🔄 | **Self-Update** — neue Versionen direkt im Browser installieren |
 | 🧠 | **OrcaSlicer** — volles Moonraker-Protokoll (HTTP + WebSocket); für korrekten Vendor-Match pro Slot den [OrcaSlicer-KX-Build](#-empfohlener-slicer) nutzen |
 
@@ -180,6 +185,24 @@ docker compose logs -f                 # Logs anzeigen
 docker compose down                    # Bridge stoppen
 docker compose pull && docker compose up -d   # auf neueste veröffentlichte Version updaten
 docker compose up -d --build           # lokal selber bauen (statt zu pullen)
+```
+
+---
+
+## 🌙 Nightly-Builds
+
+Nightly-Builds enthalten die neuesten unveröffentlichten Features und werden automatisch bei jedem Entwicklungs-Push gebaut.
+Sie können instabil sein — für Tests oder frühen Zugriff auf neue Funktionen geeignet.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.nightly.yml pull
+docker compose -f docker-compose.yml -f docker-compose.nightly.yml up -d
+```
+
+Zurück zum stabilen Release:
+
+```bash
+docker compose pull && docker compose up -d
 ```
 
 ---
