@@ -31,6 +31,88 @@ default_ams_slot = auto
 # Auto-Leveling vor jedem Druck (1 = an, 0 = aus)
 auto_leveling    = 1
 
+# Kamera-Stream bei Druckstart automatisch einschalten (1 = an, 0 = aus)
+camera_on_print  = 0
+
+# Warnung vor Druck von Web-Uploads (1 = an, 0 = aus)
+web_upload_warning = 1
+
+# Nach Upload: Filament/Color-Selector automatisch öffnen (1 = an, 0 = aus)
+print_start_dialog = 1
+
+# ─── Filament-Profile pro AMS-Slot (optional) ────────────────────────────────
+# Beim Slicer-Sync nimmt OrcaSlicer per Default immer "Generic PLA/PETG/...".
+# Mit diesen Mappings sendet die Bridge die konkrete Orca-Filament-ID +
+# Vendor mit (Anzeige im Slicer dann z.B. "PolyTerra PLA — Polymaker" statt
+# nur "Generic PLA"). Mapping wird über die Web-UI gepflegt.
+# Beispiel:
+#   [filament_profiles]
+#   slot_0_id     = OGFL01
+#   slot_0_vendor = Polymaker
+#   slot_1_id     = OGFG23
+#   slot_1_vendor = Polymaker
+
 [bridge]
 # Poll-Intervall in Sekunden
 poll_interval    = 3
+
+# ─── Multi-Printer (optional) ──────────────────────────────────────────────────
+# Mehrere Drucker können als [printer_1], [printer_2], … definiert werden.
+# Jede Bridge-Instanz verbindet sich mit einem Drucker (je eigener Port).
+# bridge_url zeigt auf die jeweilige Bridge-Instanz (für den /kx/printers-Endpunkt).
+# Die [connection]-Sektion wird weiterhin als Fallback für diese Instanz verwendet.
+#
+# Beispiel:
+# [printer_1]
+# name         = Kobra X Links
+# bridge_url   = http://192.168.178.95:7125
+# printer_ip   = 192.168.178.95
+# mqtt_port    = 9883
+# username     = userXXXXXXXXXX
+# password     = XXXXXXXXXXXXXXX
+# device_id    = xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# mode_id      = 20030
+#
+# [printer_2]
+# name         = Kobra X Rechts
+# bridge_url   = http://192.168.178.96:7125
+# printer_ip   = 192.168.178.96
+# mqtt_port    = 9883
+# username     = userYYYYYYYYYY
+# password     = YYYYYYYYYYYYYYY
+# device_id    = yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+# mode_id      = 20030
+
+[ace_dry_presets]
+# Vordefinierte Dry-Set Presets (Temp in °C, Dauer in Sekunden)
+pla_temp = 45
+pla_duration_sec = 14400
+pla_plus_temp = 45
+pla_plus_duration_sec = 14400
+petg_temp = 50
+petg_duration_sec = 14400
+tpu_temp = 55
+tpu_duration_sec = 14400
+abs_asa_temp = 45
+abs_asa_duration_sec = 28800
+pa_pc_temp = 55
+pa_pc_duration_sec = 43200
+
+# Custom Presets (Name + Temp + Dauer)
+custom_1_name = Custom 1
+custom_1_temp = 45
+custom_1_duration_sec = 14400
+custom_2_name = Custom 2
+custom_2_temp = 45
+custom_2_duration_sec = 14400
+custom_3_name = Custom 3
+custom_3_temp = 45
+custom_3_duration_sec = 14400
+
+[spoolman]
+# URL der Spoolman-Instanz (leer lassen um Spoolman zu deaktivieren)
+# server = http://192.168.x.x:7912
+
+# Wie oft (Sekunden) der Filamentverbrauch während des Drucks gemeldet wird
+# (0 = nur beim Druckende)
+# sync_rate = 0

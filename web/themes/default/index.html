@@ -157,6 +157,7 @@
               <div style="font-size:12px;color:#fff" id="cam-fname"></div>
             </div>
             <button class="cam-toggle" onclick="toggleCam()" id="cam-toggle-btn">▶ Kamera</button>
+            <button class="cam-toggle" onclick="resetCamera()" id="cam-reset-btn" style="display:none;margin-left:4px" title="Kamera-Stream neu verbinden (nach 429-Sperre)">↺</button>
           </div>
         </div>
 
@@ -435,6 +436,7 @@
           <button class="set-cat" id="setcat-printer" onclick="showSettingsCat('printer')"><span>🖨</span> <span id="setcat-lbl-printer">Drucker</span></button>
           <button class="set-cat" id="setcat-display" onclick="showSettingsCat('display')"><span>🎨</span> <span id="setcat-lbl-display">Darstellung</span></button>
           <button class="set-cat" id="setcat-filament" onclick="showSettingsCat('filament')"><span>🧵</span> <span id="setcat-lbl-filament">Filament</span></button>
+          <button class="set-cat" id="setcat-integrations" onclick="showSettingsCat('integrations')"><span>⚡</span> <span id="setcat-lbl-integrations">Integrationen</span></button>
           <button class="set-cat" id="setcat-system" onclick="showSettingsCat('system')"><span>⚙</span> <span id="setcat-lbl-system">System</span></button>
         </div>
 
@@ -570,6 +572,33 @@
             </div>
           </div>
 
+          <!-- Integrationen -->
+          <div class="set-group" id="setgrp-integrations">
+            <!-- Spoolman -->
+            <div class="card">
+              <div class="card-title"><span>🧵</span> <span id="modal-sec-spoolman">Spoolman</span></div>
+              <div class="set-row">
+                <label id="lbl-spoolman-url">Server-URL</label>
+                <input type="text" id="s-spoolman-url" placeholder="http://spoolman:7912" style="width:200px">
+              </div>
+              <div class="set-row">
+                <label id="lbl-spoolman-sync-rate">Sync-Rate (s, 0=aus)</label>
+                <input type="number" id="s-spoolman-sync-rate" min="0" max="3600" value="30" style="width:80px">
+              </div>
+              <div id="spoolman-status-row" style="margin-top:6px;font-size:12px;color:var(--txt2)">
+                <span id="spoolman-status-dot">●</span> <span id="spoolman-status-lbl"></span>
+              </div>
+            </div>
+            <!-- Obico -->
+            <div class="card" style="margin-top:10px">
+              <div class="card-title"><span>🕵</span> <span id="modal-sec-obico">Obico</span></div>
+              <div style="font-size:12px;color:var(--txt2);line-height:1.6" id="obico-info-box">
+                Obico wird über den <code>moonraker-obico</code>-Container konfiguriert.<br>
+                Config-Datei: <code id="obico-cfg-path">/mnt/dockerdata/KobraXStack/moonraker-obico/moonraker-obico.cfg</code>
+              </div>
+            </div>
+          </div>
+
           <!-- System -->
           <div class="set-group" id="setgrp-system">
             <div class="card">
@@ -645,6 +674,13 @@
         <input type="checkbox" id="fd-auto-leveling" style="width:auto;margin:0">
         <label for="fd-auto-leveling" style="margin:0;cursor:pointer;font-size:13px" id="fd-lbl-auto-leveling">Auto-Leveling</label>
       </div>
+    </div>
+    <div id="fd-spoolman-section" style="display:none;margin-bottom:16px;border-top:1px solid var(--border);padding-top:12px">
+      <p style="font-size:12px;color:var(--txt2);margin-bottom:8px;display:flex;align-items:center;gap:6px">
+        <span id="fd-spoolman-lbl">🧵 Spoolman</span>
+        <span id="fd-spoolman-loading" style="display:none;font-size:10px">…</span>
+      </p>
+      <div id="fd-spoolman-rows" style="display:flex;flex-direction:column;gap:6px"></div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button id="fd-cancel" onclick="closeFilamentDialog()" style="padding:8px 16px;background:var(--raised);border:1px solid var(--border);border-radius:8px;color:var(--txt);cursor:pointer">Abbrechen</button>

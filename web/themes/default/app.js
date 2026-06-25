@@ -44,6 +44,73 @@ var ACE_DRY_PRESETS={
   custom_3:{name:'Custom 3',temp:45,duration_sec:4*3600}
 };
 
+// Spoolman state
+var _spoolmanStatus={configured:false,server:'',sync_rate:0,slot_spools:{}};
+var _spoolmanSpools=[];
+var _slotSpoolMap={};  // {String(global_index): spoolman_spool_id} — last committed assignment
+
+function _loadSpoolmanStatus(){
+  fetch(_apiUrl('/kx/spoolman/status')).then(function(r){return r.json();}).then(function(d){
+    _spoolmanStatus=d;
+    _slotSpoolMap=d.slot_spools||{};
+    _updateSpoolmanStatusDot();
+  }).catch(function(){});
+}
+function _updateSpoolmanStatusDot(){
+  var dot=document.getElementById('spoolman-status-dot');
+  var lbl=document.getElementById('spoolman-status-lbl');
+  if(!dot||!lbl)return;
+  if(_spoolmanStatus.configured){
+    dot.style.color='var(--ok)';lbl.textContent=_spoolmanStatus.server||'verbunden';
+  } else {
+    dot.style.color='var(--txt2)';lbl.textContent='nicht konfiguriert';
+  }
+}
+
+function _buildSpoolmanSection(){
+  var sec=document.getElementById('fd-spoolman-section');
+  var rows=document.getElementById('fd-spoolman-rows');
+  var loading=document.getElementById('fd-spoolman-loading');
+  if(!sec||!rows)return;
+  if(!_spoolmanStatus.configured){sec.style.display='none';return;}
+  sec.style.display='';
+  rows.innerHTML='';
+  if(loading)loading.style.display='';
+
+  var usedSlots={};
+  document.querySelectorAll('#fd-slots select').forEach(function(sel){
+    var idx=parseInt(sel.value);
+    if(idx>=0){
+      var slot=(_amsSlots||[]).find(function(s){return s.slot_index===idx;});
+      if(slot&&!usedSlots[idx])usedSlots[idx]=slot;
+    }
+  });
+
+  fetch(_apiUrl('/kx/spoolman/spools')).then(function(r){return r.json();}).then(function(d){
+    if(loading)loading.style.display='none';
+    _spoolmanSpools=d.spools||[];
+    var slotKeys=Object.keys(usedSlots).map(Number).sort(function(a,b){return a-b;});
+    if(!slotKeys.length){rows.innerHTML='<span style="font-size:11px;color:var(--txt2)">–</span>';return;}
+    rows.innerHTML=slotKeys.map(function(idx){
+      var slot=usedSlots[idx];
+      var col=(slot.color_hex||'#888');
+      var currentSpool=_slotSpoolMap[String(idx)]||'';
+      var opts='<option value="">–</option>'+_spoolmanSpools.map(function(sp){
+        var rem=sp.remaining_weight!=null?' ('+sp.remaining_weight.toFixed(0)+'g)':'';
+        var vendor=sp.filament&&sp.filament.vendor?sp.filament.vendor+' ':'';
+        var name=sp.filament&&sp.filament.name?sp.filament.name:'Spool';
+        return '<option value="'+sp.id+'"'+(sp.id==currentSpool?' selected':'')+'>'+
+               escHtml('#'+sp.id+' '+vendor+name+rem)+'</option>';
+      }).join('');
+      return '<div style="display:flex;align-items:center;gap:8px;font-size:12px">'+
+        '<span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'+col+';border:1px solid var(--border);flex-shrink:0"></span>'+
+        '<span style="color:var(--txt2);min-width:46px">Slot '+(idx+1)+'</span>'+
+        '<select data-spool-slot="'+idx+'" style="flex:1;padding:3px 6px;border-radius:6px;border:1px solid var(--border);background:var(--raised);color:var(--txt);font-size:12px">'+
+        opts+'</select></div>';
+    }).join('');
+  }).catch(function(){if(loading)loading.style.display='none';});
+}
+
 function _aceAutoRefillGet(aceId){return !!aceAutoRefillPrefs[String(aceId)];}
 function _aceAutoRefillSet(aceId,on){
   aceAutoRefillPrefs[String(aceId)]=!!on;
@@ -329,6 +396,11 @@ function applyLang(){
   setText('setcat-lbl-display',T.settings_cat_display||'Darstellung');
   setText('setcat-lbl-display2',T.settings_cat_display||'Darstellung');
   setText('setcat-lbl-filament',T.settings_cat_filament||'Filament');
+  setText('setcat-lbl-integrations',T.settings_integrations||'Integrationen');
+  setText('modal-sec-spoolman',T.modal_sec_spoolman||'Spoolman');
+  setText('lbl-spoolman-url',T.lbl_spoolman_url||'Server-URL');
+  setText('lbl-spoolman-sync-rate',T.lbl_spoolman_sync_rate||'Sync-Rate (s, 0=aus)');
+  setText('modal-sec-obico',T.modal_sec_obico||'Obico');
   setText('setcat-lbl-system',T.settings_version||'System');
   setText('lbl-set-lang',T.settings_cat_language||'Sprache');
   setText('lbl-set-theme',T.settings_cat_theme||'Hell / Dunkel umschalten');
@@ -1002,6 +1074,10 @@ function openSettings(){
       pi.value=sec;
     }
     renderFilamentMapping(d.filament_profiles||{});
+    // Spoolman
+    var su=document.getElementById('s-spoolman-url');if(su)su.value=d.spoolman_server||'';
+    var sr=document.getElementById('s-spoolman-sync-rate');if(sr)sr.value=(d.spoolman_sync_rate!==undefined?d.spoolman_sync_rate:30);
+    _updateSpoolmanStatusDot();
   });
   // Sprach-Select im Settings-Panel mit aktueller Sprache spiegeln
   var ls=document.getElementById('s-lang-select');
@@ -1570,6 +1646,8 @@ function saveSettings(){
     print_start_dialog: parseInt((document.getElementById('s-file-ready-mode')||{}).value||'1',10),
     web_upload_warning:webUploadWarning,
     poll_interval:    Math.min(60,Math.max(1,parseInt((document.getElementById('s-poll-interval')||{}).value,10)||3)),
+    spoolman_server:  (document.getElementById('s-spoolman-url')||{}).value||'',
+    spoolman_sync_rate: Math.max(0,parseInt((document.getElementById('s-spoolman-sync-rate')||{}).value||'30',10)),
   }).then(function(){
     btn.textContent=T.update_restarting;
     setTimeout(function(){
@@ -1793,6 +1871,7 @@ function camStart(){
   post('/api/camera/start',{}).then(function(){
     camOn=true;
     document.getElementById('cam-toggle-btn').textContent=tr('btn_cam_stop');
+    var rb=document.getElementById('cam-reset-btn');if(rb)rb.style.display='';
     clog(tr('log_cam_start'),'msg-ok');
     setTimeout(function(){ sp.style.display='none'; img.style.display='block'; },1200);
     if(/Android/i.test(navigator.userAgent)){
@@ -1827,6 +1906,7 @@ function camStop(){
   camOn=false;
   camUserStopped=true; // suppress auto-restart for remainder of this print
   document.getElementById('cam-toggle-btn').textContent=tr('btn_cam_start');
+  var rb=document.getElementById('cam-reset-btn');if(rb)rb.style.display='none';
   clog(tr('log_cam_stop'),'msg-ok');
 }
 
@@ -2076,6 +2156,13 @@ function aceDryToggle(aceId,on){
 }
 
 function toggleCam(){if(camOn)camStop();else camStart()}
+
+function resetCamera(){
+  post('/api/camera/reset',{}).then(function(){
+    var btn=document.getElementById('cam-reset-btn');
+    if(btn){btn.textContent='↻';setTimeout(function(){btn.textContent='↺';},1000);}
+  }).catch(function(){});
+}
 
 function aceDryStop(aceId){
   aceId=(typeof aceId==='number'&&aceId>=0)?aceId:0;
@@ -2494,6 +2581,7 @@ function openFilamentDialog(slots){
   _amsSlots=slots
     .filter(function(s){return s.status==='loaded';})
     .sort(function(a,b){return (a.slot_index||0)-(b.slot_index||0);});
+  _loadSpoolmanStatus();
   var dlg=document.getElementById('filament-dialog');
   var title=document.getElementById('fd-title');
   var body=document.getElementById('fd-slots');
@@ -2623,6 +2711,8 @@ function openFilamentDialog(slots){
     }).join('');
   }
   if(dlg)dlg.classList.add('open');
+  // Spoolman-Section nach Slot-Render aufbauen (braucht die selects im DOM)
+  setTimeout(_buildSpoolmanSection, 0);
 }
 
 function closeFilamentDialog(){
@@ -2675,6 +2765,17 @@ function confirmFilamentPrint(){
   var excludedObjects=_printObjects.filter(function(o){return o.skip;}).map(function(o){return o.name;});
   var fdAlEl=document.getElementById('fd-auto-leveling');
   var fdAutoLeveling=fdAlEl?( fdAlEl.checked?1:0):(S.auto_leveling===undefined?1:S.auto_leveling?1:0);
+  // Spoolman: Slot→Spool-Mapping aus Dialog sammeln und senden
+  if(_spoolmanStatus.configured){
+    var slotMap={};
+    document.querySelectorAll('[data-spool-slot]').forEach(function(sel){
+      var idx=sel.dataset.spoolSlot;
+      var val=parseInt(sel.value);
+      if(val>0)slotMap[idx]=val;
+    });
+    _slotSpoolMap=slotMap;
+    post('/kx/spoolman/active-spool',{slot_map:slotMap}).catch(function(){});
+  }
   closeFilamentDialog();
   if(_filamentDialogMode==='banner'){
     // Banner-Modus: /kx/print bevorzugen wenn _storeFileId bekannt (gleicher Pfad wie File-Browser).
