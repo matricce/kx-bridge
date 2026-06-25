@@ -14,15 +14,6 @@ officially tested or supported. Feedback welcome.</sub>
 
 <sub>🇩🇪 <a href="README.de.md">Deutsche Version</a>  ·  🇪🇸 <a href="README.es.md">Versión española</a></sub>
 
-</div>
-
-> [!CAUTION]
-> **Ongoing maintenance work this week** — We are restructuring the repository (branch model, CI workflows, contribution process). You may notice changes to branch names, PR templates, and how releases are published. We apologise for any inconvenience. Handling, workflow, and long-term maintainability will be significantly improved as a result.
->
-> 👉 Want to contribute? Please read [CONTRIBUTING.md](CONTRIBUTING.md) first.
-
-<div align="center">
-
 <br>
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20this%20project-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/viewitde)
@@ -111,7 +102,13 @@ Printer → Connection type **Moonraker** → Host: `http://BRIDGE-IP:7125`
 > ⚠️ Connection type must be **Moonraker** (not "Bambu" or "Klipper").
 > Enter the full URL including `http://` and port `:7125` in the host field.
 
+---
 
+## 📺 Video Tutorial
+
+[![KX-Bridge Setup & Usage](https://img.youtube.com/vi/1Ql4wfH27fM/hqdefault.jpg)](https://www.youtube.com/watch?v=1Ql4wfH27fM)
+
+---
 
 ## 🎨 Recommended Slicer
 
