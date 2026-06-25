@@ -16,7 +16,7 @@ on:
 
 jobs:
   build:
-    runs-on: self-hosted
+    runs-on: server-runner
     steps:
       - name: Checkout
         uses: actions/checkout@v4
