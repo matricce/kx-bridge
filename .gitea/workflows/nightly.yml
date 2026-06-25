@@ -117,8 +117,11 @@ jobs:
             "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases/tags/${TAG}" \
             2>/dev/null || true
 
-          # Release erstellen
-          BODY_JSON=$(python3 -c "import sys,json; print(json.dumps(open(sys.argv[1]).read()))" "$BODY_FILE")
+          # Release erstellen (JSON-Body via awk escapen, kein python3 nötig)
+          BODY_JSON=$(awk '{
+            gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, "\\t");
+            printf "%s\\n", $0
+          }' "$BODY_FILE" | awk 'BEGIN{printf "\""} {printf "%s", $0} END{printf "\""}')
           curl -s -X POST \
             -H "Authorization: token ${GITEA_TOKEN}" \
             -H "Content-Type: application/json" \
