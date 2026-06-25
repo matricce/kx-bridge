@@ -812,40 +812,6 @@ class SpoolmanClient:
                   json={"use_length": round(use_length_mm, 2)})
 
 
-class SpoolmanClient:
-    """Thin synchronous HTTP client for Spoolman filament tracking.
-
-    Designed to be called from daemon threads (poll loop, _on_print callbacks).
-    Uses requests (already in requirements) so no event-loop dependency.
-    """
-
-    def __init__(self, server_url: str, sync_rate: int = 0):
-        self.server_url = server_url.rstrip("/")
-        self.sync_rate = sync_rate
-
-    def _req(self, method: str, path: str, **kwargs):
-        import requests
-        r = requests.request(method, f"{self.server_url}{path}", timeout=5, **kwargs)
-        r.raise_for_status()
-        return r.json()
-
-    def health_check(self) -> bool:
-        try:
-            self._req("GET", "/api/v1/health")
-            return True
-        except Exception:
-            return False
-
-    def list_spools(self) -> list:
-        return self._req("GET", "/api/v1/spool")
-
-    def use_filament(self, spool_id: int, use_length_mm: float) -> None:
-        """Report consumed filament length in mm. Spoolman converts to weight
-        using the spool's filament profile density."""
-        self._req("PUT", f"/api/v1/spool/{spool_id}/use",
-                  json={"use_length": round(use_length_mm, 2)})
-
-
 class KobraXBridge:
     def __init__(self, client: KobraXClient, args=None, store=None, printer_id: str = "1", all_bridges=None):
         self.client = client
@@ -4558,9 +4524,10 @@ class KobraXBridge:
 
     # ─── Update ──────────────────────────────────────────────────────────────
 
-    STABLE_RELEASE_API = "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases?limit=1"
-    DEV_RELEASE_API    = "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases?limit=10&pre-release=true"
-    GITEA_RAW_BASE     = "https://gitea.it-drui.de/viewit/KX-Bridge-Release/raw/tag"
+    STABLE_RELEASE_API  = "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases?limit=1"
+    NIGHTLY_RELEASE_API = "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases?limit=5&pre-release=true"
+    DEV_RELEASE_API     = "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases?limit=10&pre-release=true"
+    GITEA_RAW_BASE      = "https://gitea.it-drui.de/viewit/KX-Bridge-Release/raw/tag"
 
     def _read_version(self) -> str:
         # PyInstaller-Onefile entpackt VERSION (per kx-bridge.spec datas) nach
@@ -4635,8 +4602,14 @@ class KobraXBridge:
 
     async def handle_api_update_check(self, request):
         current = self._read_version()
+        is_nightly = "nightly" in current
         is_dev = "-dev+" in current
-        api_url = self.DEV_RELEASE_API if is_dev else self.STABLE_RELEASE_API
+        if is_nightly:
+            api_url = self.NIGHTLY_RELEASE_API
+        elif is_dev:
+            api_url = self.DEV_RELEASE_API
+        else:
+            api_url = self.STABLE_RELEASE_API
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(api_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
@@ -4645,14 +4618,44 @@ class KobraXBridge:
                     releases = await resp.json(content_type=None)
             if not releases:
                 return web.json_response({"error": "Keine Releases gefunden"}, status=404)
-            # Dev: neuestes Release mit "-dev+" im Tag suchen
-            if is_dev:
+
+            if is_nightly:
+                # Neuestes Prerelease mit nightly-Tag suchen
+                nightly_releases = [r for r in releases if r.get("prerelease") and "nightly" in r.get("tag_name", "")]
+                if not nightly_releases:
+                    return web.json_response({"error": "Keine Nightly-Releases gefunden"}, status=404)
+                data = nightly_releases[0]
+                tag = data.get("tag_name", "")
+                # Vergleich über Datum im Tag: nightly-YYYYMMDD vs aktuellem Datum in VERSION
+                # Aktuelles Datum aus VERSION extrahieren (Format: 0.9.27-nightlyN oder nightly-YYYYMMDD)
+                import re as _re
+                latest_date = _re.search(r"nightly-(\d{8})", tag)
+                current_date = _re.search(r"nightly-(\d{8})", current)
+                if latest_date and current_date:
+                    update_available = latest_date.group(1) > current_date.group(1)
+                else:
+                    # Fallback: Tag-Name unterschiedlich = Update verfügbar
+                    update_available = tag != current and tag != f"nightly-{current}"
+                latest = tag
+                return web.json_response({
+                    "current":          current,
+                    "latest":           latest,
+                    "update_available": update_available,
+                    "tag":              tag,
+                    "docker_only":      True,
+                    "changelog":        data.get("body", ""),
+                })
+            elif is_dev:
                 dev_releases = [r for r in releases if "-dev+" in r.get("tag_name", "")]
                 if not dev_releases:
                     return web.json_response({"error": "Keine Dev-Releases gefunden"}, status=404)
                 data = dev_releases[0]
             else:
-                data = releases[0]
+                # Stable: nur non-prerelease nehmen
+                stable_releases = [r for r in releases if not r.get("prerelease")]
+                if not stable_releases:
+                    return web.json_response({"error": "Keine Stable-Releases gefunden"}, status=404)
+                data = stable_releases[0]
             tag = data.get("tag_name", "")
             latest = tag.lstrip("v")
             if is_dev:
@@ -4666,6 +4669,7 @@ class KobraXBridge:
                 "update_available": update_available,
                 "tag":              tag,
                 "download_url":     download_url,
+                "docker_only":      False,
                 "changelog":        data.get("body", ""),
             })
         except Exception as e:
@@ -4686,6 +4690,10 @@ class KobraXBridge:
     async def handle_api_update_apply(self, request):
         data = await request.json()
         new_tag = data.get("tag", "")
+        if "nightly" in self._read_version():
+            return web.json_response(
+                {"error": "Nightly-Updates laufen über Docker: "
+                          "docker compose pull && docker compose up -d"}, status=400)
         if getattr(sys, "frozen", False):
             return web.json_response(
                 {"error": "Self-Update wird im Binary-Modus nicht unterstützt – "

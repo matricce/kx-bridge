@@ -1661,21 +1661,33 @@ function saveSettings(){
     clog('Settings-Fehler: '+e,'msg-err');
   });
 }
+var _updateDockerOnly=false;
 function checkUpdate(){
   var sb=document.getElementById('update-status');
   sb.textContent=T.update_checking;
   document.getElementById('btn-update-apply').style.display='none';
-  _updateTag='';_updateUrl='';
+  _updateTag='';_updateUrl='';_updateDockerOnly=false;
   fetch(_apiUrl('/api/update/check')).then(function(r){return r.json()}).then(function(d){
     if(d.error){sb.textContent=T.update_error+': '+d.error;return;}
     var cl=document.getElementById('update-changelog');
-    if(d.changelog&&d.changelog.trim()){cl.textContent=d.changelog;cl.style.display='block';}
-    else{cl.style.display='none';}
+    if(d.changelog&&d.changelog.trim()){
+      // Changelog als Markdown-Text (pre-formatiert) anzeigen
+      cl.textContent=d.changelog;cl.style.display='block';
+    } else {cl.style.display='none';}
+    _updateDockerOnly=!!d.docker_only;
     if(d.update_available){
-      sb.textContent='v'+d.latest+' '+T.update_available;
+      sb.textContent=d.latest+' '+T.update_available;
       sb.style.color='var(--ok)';
-      _updateTag=d.tag;_updateUrl=d.download_url;
-      document.getElementById('btn-update-apply').style.display='inline-block';
+      _updateTag=d.tag;_updateUrl=d.download_url||'';
+      var btn=document.getElementById('btn-update-apply');
+      if(_updateDockerOnly){
+        btn.textContent=T.update_docker||'docker compose pull';
+        btn.title='docker compose pull && docker compose up -d';
+      } else {
+        btn.textContent=T.update_apply;
+        btn.title='';
+      }
+      btn.style.display='inline-block';
     } else {
       sb.textContent=T.update_none;
       sb.style.color='var(--txt2)';
@@ -1683,9 +1695,21 @@ function checkUpdate(){
   }).catch(function(e){sb.textContent=T.update_error+': '+e;});
 }
 function applyUpdate(){
-  if(!_updateUrl)return;
   var sb=document.getElementById('update-status');
   var btn=document.getElementById('btn-update-apply');
+  if(_updateDockerOnly){
+    // Nightly: kein Self-Update, Docker-Befehl in Zwischenablage kopieren
+    var cmd='docker compose pull && docker compose up -d';
+    if(navigator.clipboard){
+      navigator.clipboard.writeText(cmd).then(function(){
+        sb.textContent=T.update_docker_copied||'Befehl kopiert: '+cmd;
+      });
+    } else {
+      sb.textContent=cmd;
+    }
+    return;
+  }
+  if(!_updateUrl)return;
   btn.disabled=true;sb.textContent=T.update_applying;
   post('/api/update/apply',{download_url:_updateUrl,tag:_updateTag}).then(function(){
     sb.textContent=T.update_restarting;

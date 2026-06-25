@@ -321,6 +321,8 @@
   "update_available": "available",
   "update_check": "Check for Updates",
   "update_checking": "Checking...",
+  "update_docker": "Copy Command",
+  "update_docker_copied": "Copied! Run: docker compose pull && docker compose up -d",
   "update_error": "Error",
   "update_none": "Already up to date",
   "update_restarting": "Restarting..."
