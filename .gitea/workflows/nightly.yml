@@ -98,43 +98,30 @@ jobs:
           fi
           [ -z "$COMMITS" ] && COMMITS="- Automatischer Nightly-Build"
 
-          BODY="## KX-Bridge ${VERSION} — Nightly Build
-
-> ⚠️ **Experimentell** — ungetestete Features, nur für Tester geeignet.
-
-### Änderungen seit \`${PREV_TAG:-erstem Commit}\`
-
-${COMMITS}
-
----
-
-### Docker-Image aktualisieren
-
-\`\`\`bash
-docker compose pull && docker compose up -d
-\`\`\`
-
-Image-Tag: \`gitea.it-drui.de/viewit/kx-bridge:nightly\`"
+          # Body in Temp-Datei (vermeidet YAML-Probleme mit Sonderzeichen wie > oder ```)
+          BODY_FILE=$(mktemp)
+          printf '## KX-Bridge %s -- Nightly Build\n\n' "$VERSION" > "$BODY_FILE"
+          printf '[experimentell] Ungetestete Features, nur fuer Tester geeignet.\n\n' >> "$BODY_FILE"
+          printf '### Aenderungen seit `%s`\n\n' "${PREV_TAG:-erstem Commit}" >> "$BODY_FILE"
+          printf '%s\n\n---\n\n' "$COMMITS" >> "$BODY_FILE"
+          printf '### Docker-Image aktualisieren\n\n```bash\ndocker compose pull && docker compose up -d\n```\n\n' >> "$BODY_FILE"
+          printf 'Image-Tag: `gitea.it-drui.de/viewit/kx-bridge:nightly`\n' >> "$BODY_FILE"
 
           # Tag setzen
           git tag -f "$TAG"
           git push https://gitea-actions:${GITEA_TOKEN}@gitea.it-drui.de/viewit/KX-Bridge-Release.git "$TAG" --force
 
-          # Altes nightly-Release löschen falls vorhanden (Datum-Tag von heute)
+          # Altes nightly-Release loeschen falls vorhanden (Datum-Tag von heute)
           curl -s -X DELETE \
             -H "Authorization: token ${GITEA_TOKEN}" \
             "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases/tags/${TAG}" \
             2>/dev/null || true
 
           # Release erstellen
+          BODY_JSON=$(python3 -c "import sys,json; print(json.dumps(open(sys.argv[1]).read()))" "$BODY_FILE")
           curl -s -X POST \
             -H "Authorization: token ${GITEA_TOKEN}" \
             -H "Content-Type: application/json" \
             "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases" \
-            -d "{
-              \"tag_name\": \"${TAG}\",
-              \"name\": \"KX-Bridge ${VERSION} Nightly (${DATE})\",
-              \"body\": $(printf '%s' "$BODY" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))'),
-              \"draft\": false,
-              \"prerelease\": true
-            }"
+            -d "{\"tag_name\":\"${TAG}\",\"name\":\"KX-Bridge ${VERSION} Nightly (${DATE})\",\"body\":${BODY_JSON},\"draft\":false,\"prerelease\":true}"
+          rm -f "$BODY_FILE"
