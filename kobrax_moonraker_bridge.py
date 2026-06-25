@@ -4626,16 +4626,9 @@ class KobraXBridge:
                     return web.json_response({"error": "Keine Nightly-Releases gefunden"}, status=404)
                 data = nightly_releases[0]
                 tag = data.get("tag_name", "")
-                # Vergleich über Datum im Tag: nightly-YYYYMMDD vs aktuellem Datum in VERSION
-                # Aktuelles Datum aus VERSION extrahieren (Format: 0.9.27-nightlyN oder nightly-YYYYMMDD)
-                import re as _re
-                latest_date = _re.search(r"nightly-(\d{8})", tag)
-                current_date = _re.search(r"nightly-(\d{8})", current)
-                if latest_date and current_date:
-                    update_available = latest_date.group(1) > current_date.group(1)
-                else:
-                    # Fallback: Tag-Name unterschiedlich = Update verfügbar
-                    update_available = tag != current and tag != f"nightly-{current}"
+                # Tag-Format: "nightly-0.9.27-nightly4", current: "0.9.27-nightly4"
+                tag_version = tag[len("nightly-"):] if tag.startswith("nightly-") else tag
+                update_available = tag_version != current
                 latest = tag
                 return web.json_response({
                     "current":          current,
