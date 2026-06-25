@@ -66,23 +66,22 @@ jobs:
 
       - name: Build & push (amd64 + arm64)
         run: |
-          DATE=$(date +%Y%m%d)
+          VERSION=$(cat VERSION)
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
             --push \
             --provenance=false \
             --no-cache \
             -t "gitea.it-drui.de/viewit/kx-bridge:nightly" \
-            -t "gitea.it-drui.de/viewit/kx-bridge:nightly-$DATE" \
+            -t "gitea.it-drui.de/viewit/kx-bridge:nightly-${VERSION}" \
             .
 
       - name: Create Gitea Nightly Release
         env:
           GITEA_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
-          DATE=$(date +%Y%m%d)
-          TAG="nightly-$DATE"
           VERSION=$(cat VERSION)
+          TAG="nightly-${VERSION}"
           git config user.name "gitea-actions"
           git config user.email "actions@it-drui.de"
 
@@ -111,20 +110,23 @@ jobs:
           git tag -f "$TAG"
           git push https://gitea-actions:${GITEA_TOKEN}@gitea.it-drui.de/viewit/KX-Bridge-Release.git "$TAG" --force
 
-          # Altes nightly-Release loeschen falls vorhanden (Datum-Tag von heute)
-          curl -s -X DELETE \
-            -H "Authorization: token ${GITEA_TOKEN}" \
+          # Altes Release loeschen falls vorhanden
+          wget -q --method=DELETE \
+            --header="Authorization: token ${GITEA_TOKEN}" \
             "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases/tags/${TAG}" \
             2>/dev/null || true
 
-          # Release erstellen (JSON-Body via awk escapen, kein python3 nötig)
+          # Release erstellen (JSON-Body via awk escapen, kein python3/curl nötig)
           BODY_JSON=$(awk '{
             gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, "\\t");
             printf "%s\\n", $0
           }' "$BODY_FILE" | awk 'BEGIN{printf "\""} {printf "%s", $0} END{printf "\""}')
-          curl -s -X POST \
-            -H "Authorization: token ${GITEA_TOKEN}" \
-            -H "Content-Type: application/json" \
-            "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases" \
-            -d "{\"tag_name\":\"${TAG}\",\"name\":\"KX-Bridge ${VERSION} Nightly (${DATE})\",\"body\":${BODY_JSON},\"draft\":false,\"prerelease\":true}"
-          rm -f "$BODY_FILE"
+          JSON_PAYLOAD="{\"tag_name\":\"${TAG}\",\"name\":\"KX-Bridge ${VERSION} Nightly\",\"body\":${BODY_JSON},\"draft\":false,\"prerelease\":true}"
+          printf '%s' "$JSON_PAYLOAD" > /tmp/release_body.json
+          wget -q -O- \
+            --method=POST \
+            --header="Authorization: token ${GITEA_TOKEN}" \
+            --header="Content-Type: application/json" \
+            --body-file=/tmp/release_body.json \
+            "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases"
+          rm -f "$BODY_FILE" /tmp/release_body.json
