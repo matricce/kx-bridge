@@ -85,34 +85,18 @@ jobs:
           git config user.name "gitea-actions"
           git config user.email "actions@it-drui.de"
 
-          # Letzten stabilen Release-Tag finden (v* ohne nightly) als Changelog-Basis
-          git fetch --tags origin 2>/dev/null || true
-          PREV_TAG=$(git tag | grep -E '^v[0-9]+\.' | sort -V | tail -1)
-          # Fallback: letzter nightly-Tag
-          [ -z "$PREV_TAG" ] && PREV_TAG=$(git tag | grep '^nightly-' | sort | tail -1)
-
-          # Commits seit letztem stabilen Tag — chore/ci-Commits herausfiltern
-          if [ -n "$PREV_TAG" ]; then
-            COMMITS=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --no-merges 2>/dev/null \
-              | grep -v '^- chore: nightly' \
-              | grep -v '^- ci:' \
-              || true)
-          else
-            COMMITS=$(git log --pretty=format:"- %s" --no-merges -30 2>/dev/null \
-              | grep -v '^- chore: nightly' \
-              | grep -v '^- ci:' \
-              || true)
-          fi
-          [ -z "$COMMITS" ] && COMMITS="- Automatischer Nightly-Build (keine neuen Features seit ${PREV_TAG})"
-
-          # Body in Temp-Datei (vermeidet YAML-Probleme mit Sonderzeichen wie > oder ```)
+          # Changelog aus CHANGES.md lesen (wird von release.sh aus dem Dev-Repo generiert)
           BODY_FILE=$(mktemp)
-          printf '## KX-Bridge %s -- Nightly Build\n\n' "$VERSION" > "$BODY_FILE"
-          printf '[experimentell] Ungetestete Features, nur fuer Tester geeignet.\n\n' >> "$BODY_FILE"
-          printf '### Aenderungen seit `%s`\n\n' "${PREV_TAG:-erstem Commit}" >> "$BODY_FILE"
-          printf '%s\n\n---\n\n' "$COMMITS" >> "$BODY_FILE"
-          printf '### Docker-Image aktualisieren\n\n```bash\ndocker compose pull && docker compose up -d\n```\n\n' >> "$BODY_FILE"
-          printf 'Image-Tag: `gitea.it-drui.de/viewit/kx-bridge:nightly`\n' >> "$BODY_FILE"
+          if [ -f CHANGES.md ]; then
+            cat CHANGES.md > "$BODY_FILE"
+          else
+            # Fallback falls CHANGES.md fehlt
+            printf '## KX-Bridge %s -- Nightly Build\n\n' "$VERSION" > "$BODY_FILE"
+            printf '[experimentell] Ungetestete Features, nur fuer Tester geeignet.\n\n' >> "$BODY_FILE"
+            printf '- Automatischer Nightly-Build\n\n---\n\n' >> "$BODY_FILE"
+            printf '### Docker-Image aktualisieren\n\n```bash\ndocker compose pull && docker compose up -d\n```\n\n' >> "$BODY_FILE"
+            printf 'Image-Tag: `gitea.it-drui.de/viewit/kx-bridge:nightly`\n' >> "$BODY_FILE"
+          fi
 
           # Tag setzen
           git tag -f "$TAG"
