@@ -1,0 +1,271 @@
+## KX-Bridge 0.9.27-nightly8 — Nightly Build
+
+[experimentell] Ungetestete Features, nur für Tester geeignet.
+
+### Änderungen seit `v0.9.13`
+
+- chore: CHANGES.md mit echtem Changelog aus Dev-Repo ins Release-Repo schreiben
+- fix(spoolman): SPOOLMAN_* env-Cache bei Restart leeren, Status-Dot nach Save aktualisieren
+- chore: README.es.md + CONTRIBUTING.md in release.sh-Sync aufnehmen
+- docs: Nightly-Sektion, Wartungshinweis + CONTRIBUTING.md, FR/IT-Sprachen, Downloads-Badge
+- fix(update): Nightly-Vergleich auf Versions-String umstellen (statt Datum)
+- feat(update): Nightly-Track vom Stable-Track trennen
+- fix(release): nightly immer auf nightly-Branch pushen, kein master-Push
+- fix(camera): exponentielles Backoff bei ffmpeg-Fehler + /api/camera/reset + ↺-Button
+- fix(release): Nightly-Release vom nightly-Branch erlauben
+- feat(i18n): fehlende UI-Übersetzungen ergänzt + Keys alphabetisch sortiert (PR #70 @fenopy)
+- fix: config/config.ini.example beim Release-Sync mitübertragen (Issue #72)
+- feat(ui): Integrationen-Tab in Settings (Spoolman + Obico-Hinweis)
+- feat(stack): KobraX Full Stack Compose für Portainer (KX-Bridge + Obico + Spoolman)
+- feat(release): Nightly/Stable Release-Workflow mit eigenem Docker-Tag
+- feat(spoolman): optionale Spoolman-Filamentverbrauch-Integration (PR #65, @p2l)
+- fix(release): Artifact-Download per HTTP statt lokalem Dateipfad
+- feat(ui): PR #60 — Print-Workflow + Skip-Dialog Fixes (@gangoke)
+- Revert "feat(ui): PR #60 — Print-Workflow + Skip-Dialog Fixes (@gangoke)"
+- feat(ui): PR #60 — Print-Workflow + Skip-Dialog Fixes (@gangoke)
+- fix(release): PyInstaller-Cache zwischen Builds via extra_git_cmds leeren
+- fix(upload): File-Browser nur GCode zulassen (Issue #59)
+- fix(mqtt): TLS-Socket Read/Write-Race — Segfault in libcrypto (Issue #53)
+- feat(ui): Slot-Mapper Skip-Parität + konkrete Profilnamen (Issue #57)
+- feat(print): Auto-Open-Druckdialog + Per-Print-Auto-Leveling + Skip-Fix (PR #56)
+- feat(ui): Idle-Buttons im Progress-Card + fix(moonraker): Mobileraker-Kompatibilität (Issue #48, #55)
+- feat(filament): Vendor-Visibility-Filter für Profil-Dropdown (Issue #41)
+- feat(ui): Settings als Master-Detail-Panel mit Kategorie-Sidebar
+- chore: CodeBuilder-URL auf 192.168.178.204 gesetzt
+- docs(changelog): 0.9.21 — Android-Kamera, IPv4, Debian-Bookworm, Mobileraker-Fix
+- fix(ui): Kamera-Stream auf Android via Snapshot-Polling
+- fix(docker): python:3.11-slim-bookworm pinnen (glibc 2.41 GPF auf älteren Kerneln, Issue #53)
+- fix(moonraker): configfile extruder-Stub um sensor_type + filament_diameter erweitert (Mobileraker #48)
+- fix(release): Artifact-Pfad /app/ → Host-Pfad umschreiben
+- docs(changelog): 0.9.20 — French, Z-height, camera fixes, light bug
+- fix(docker): ffmpeg ins Image aufnehmen
+- chore(i18n): Log-Meldungen auf Englisch umgestellt
+- chore(security): 04_configs/decrypted/ zu .gitignore hinzugefügt
+- fix(camera): Kamera-Autostart ignoriert Setting nach Bridge-Restart (#50)
+- feat(i18n): Französisch hinzugefügt (PR #45, @Nathacks)
+- merge: PR #49 — Z-Höhe in der Print-UI anzeigen (@Nathacks)
+- Revert "fix(ace): ACE-Slot-Offset um 1 korrigiert (Issue #47)"
+- fix(ace): ACE-Slot-Offset um 1 korrigiert (Issue #47)
+- fix(compat): configfile-Stub + absolute Webcam-URLs für Mobileraker/Obico
+- docs(claude): CLAUDE.md auf aktuellen Stand 0.9.19.1
+- docs(changelog): translate 0.9.19.1 entry to English (CHANGELOG.md was German by mistake)
+- fix(spec): VERSION-Datei ins Onefile einbetten — beseitigt vunknown in standalone Binaries
+- chore: CHANGELOG 0.9.19.1 + VERSION zurueck fuer release.sh-Bump
+- feat(filaments): nur Kobra-X-sichtbare Profile (209 statt 399)
+- fix(mqtt): klare Meldung wenn anycubic_slicer.crt/.key fehlen (statt Errno 2)
+- chore(gitignore): ignore lokale Build-/Test-/TODO-Pfade
+- fix(spec): VERSION-Datei ins Onefile einbetten — beseitigt vunknown in standalone Binaries
+- docs(changelog): 0.9.19.1 hotfix entry
+- docs(changelog): remove internal test-profile name 'Bert - PLA'
+- docs: README — Features für 0.9.17/18/19 + OrcaSlicer-KX-PR-Liste + Kobra S1/S1Max-Hinweis
+- chore: 0.9.19 — filament sync matches real presets, custom profile import
+- fix(profile-import): User-Profile mit Inherits-Kette parsen
+- fix(ui): Slot-Card direkt nach Speichern neu rendern
+- fix(filament-sync): Default ist Generic <Typ> statt Anycubic <Typ>
+- fix(filament-sync): Phantom-Profile raus, Default-Lookup aus JSON
+- feat(filament-sync): gate_filament_name im HH-MMU-Objekt befüllen
+- feat(filament-sync): sende name + vendor_name pro Lane (PR #13719-kompatibel)
+- fix(ace-dryer): setDry fire-and-forget (PR #42 von @gangoke)
+- feat(filament): Custom-Profile-Import via Bridge-UI Upload (Issue #41)
+- fix(filament): Kobra-X-kompatible IDs in orca_filaments.json + Defaults
+- chore: 0.9.18 — Filament set from bridge works, Obico Z-height, slot profile picker fixes
+- feat(ui): Slot-Profil-Dropdown auf (vendor,name) + Pause/Resume-Toggle + Vendor-Badge auf Slot-Karte
+- feat(bridge): Slot-Profil-Roundtrip + Z-Höhe für Obico + multiColorBox/setInfo via web/printer (Issue #39)
+- feat(filament): (vendor,name)-Selector statt filament_id im config-Schema
+- feat(i18n): sync Spanish translation refactor from KX-Bridge-Release PR #40
+- fix(mqtt): persistenter Reconnect — Bridge erkennt Drucker-Reboot (Issue #33)
+- chore: 0.9.17 — Obico (experimental), multi-language UI, filament-profile sync, H.264 stream
+- fix(i18n): GCode-Browser nach Sprachwechsel neu rendern
+- fix(upload): trennt Connect-/Send-/Read-Timeout für große GCode-Uploads
+- feat(bridge): CameraCache + Translations-Route + h264-Endpoint
+- feat(i18n): sync translation refactor from KX-Bridge-Release PR #37
+- fix(temp): tempature/set über web/printer-Topic mit type-Feld
+- fix(obico): Klipper-SET_HEATER_TEMPERATURE + korrekter MQTT-Pfad für Temp-Set
+- fix(filament-list): erweiterte Vendor-Profile + Dropdown-Refresh bei Material-Wechsel
+- feat(ams-sync): User-Override pro Slot für konkrete OrcaSlicer-Filament-Marke
+- refactor(release): alle 3 kx-bridge-Targets via CodeBuilder-API
+- feat(obico): Layer-aligned Time-Lapse + First-Layer-Scan Pseudo-Macros
+- fix(obico): start_time/end_time als Unix-Timestamp (float) statt ISO-String
+- feat(obico): Moonraker-Kompatibilität für moonraker-obico-Plugin
+- feat: GCode Web-Upload + Download + Verify-Dialog (PR #32 von @gangoke)
+- docs: OrcaSlicer-KX (gepatchter Slicer) im README verlinken
+- docs: CHANGELOG 0.9.16 — Filament-Sync-Fix ergänzt
+- fix: Filament-Sync positionstreu + Happy-Hare-Farbformat (OrcaSlicer)
+- docs: CHANGELOG 0.9.16
+- fix: i18n-Lücken im ACE-Dry-Dialog (DE-Übersetzungen + fehlender Key)
+- fix: Slicer-Zeit + Thumbnail nach Reload / bei OrcaSlicer-Druck anzeigen
+- feat: Settings-Option "Kamera bei Druckstart einschalten"
+- feat: Log-Verbesserungen (Dedup-Zähler, Level-Filter, Fehler-Toast, mehr Infos)
+- fix: einfarbiger Druck blockiert durch leeren AMS-Slot (OrcaSlicer)
+- fix: release.sh resynct Windows-Agent hart vor dem Build
+- docs: CHANGELOG 0.9.15 (Issue #29 OrcaSlicer-Webview-Fixes)
+- fix: Print-Banner + UI im OrcaSlicer-Webview (Issue #29)
+- fix: Upload-Banner nach Druckende ausblenden (Issue #29)
+- docs: CHANGELOG 0.9.14 (Theme-System #27, API-Restart #28)
+- feat: POST /api/restart Endpoint (PR #28 von @gangoke)
+- fix: release.sh stellt kx-bridge.spec im Release-Repo sicher (Windows-Theme-Build)
+- chore: kx-bridge.spec von *.spec-ignore ausnehmen
+- build: kx-bridge.spec ins Repo aufnehmen (war durch *.spec geignored)
+- build: einheitlicher PyInstaller-Spec für Linux + Windows (Theme-Einbettung)
+- feat: Theme-System (PR #27 von hirnwunde/Olli)
+- docs: klare Update-Warnung (EXE/Docker) im 0.9.13-CHANGELOG
+- docs: CHANGELOG 0.9.13 (Self-Update-Fix)
+- fix: Self-Update lädt alle Bridge-Module (nicht nur Hauptdatei)
+- docs: CHANGELOG 0.9.12
+- docs: Downloads-Badge in READMEs (800+ App-Downloads)
+- docs: Home-Assistant-Integration (Community) verlinken (Issue #24)
+- revert: Moonraker-UI-Integration entfernen (Mainsail/Fluidd/Mobileraker)
+- fix: Mainsail Live-Werte + Pause-State (Issue #25)
+- feat: Moonraker-Kompatibilität für Mainsail/Fluidd/Mobileraker (Issue #25)
+- refactor: Frontend aus kobrax_moonraker_bridge.py auslagern
+- docs: CHANGELOG 0.9.11 (ACE Pro 2 experimentell) + Version-Bump
+- feat: ACE Pro 2 Support (PR #26 von gangoke)
+- release: LICENSE + NOTICE.md ins Release-Repo syncen
+- docs: GPLv3-Lizenz + NOTICE für Anycubic-Drittmaterial
+- release: PyBuilder statt GitHub Actions fuer Windows-Build
+- release: Versions-Marker-Check entfernt (Binary enthaelt VERSION nicht)
+- release: verify_binary nutzt kobrax_moonraker_bridge + VERSION als Marker
+- docs: CHANGELOG fuer 0.9.10 + Fokus-Hinweis Stabilisierung
+- release: release.sh haerten – Sanity-Checks + Build-Verifikation
+- feat: Part-Skip (Exclude Object) – pre-print + mid-print
+- release: rohe kx-bridge + kx-bridge.exe Binaries als Release-Assets hochladen
+- docs: CHANGELOG für 0.9.9 (bridge_url + Windows config_loader)
+- fix: bridge_url leer im Single-Printer-Modus → relative Pfade (Issue #21)
+- fix: release.sh kopiert config_loader.py ins Windows-Build-Repo
+- docs: README EN/DE getrennt — README.md englisch, README.de.md deutsch (neues Design); release.sh kopiert beide ins Release-Repo
+- docs: CHANGELOG für 0.9.8
+- feat: Standalone-Tauglichkeit + Drucker add/remove + leerer Zustand
+- feat: Multi-Printer in einer Bridge-Instanz
+- feat: T14 Suche/Filter/Sortierung im Browser-Tab + T17 GCode-Filamente
+- feat: Drucker-Name editierbar in Settings
+- fix: Settings und Update-Check zeigen aktiven Drucker (via _apiUrl)
+- fix: i18n für Drucker-Tab (DE/EN)
+- feat: Drucker-Tab mit Live-Status aller Instanzen
+- feat: Print-History im Browser-Tab (T10)
+- fix: CORS-Middleware für alle Endpunkte + bridge_url via request.host
+- feat: Slot-Auswahl auch im Upload-Banner (3. Button)
+- feat: Filament-Slot-Dialog + POST /kx/print (T06+T08)
+- feat: Multi-Printer WebUI + Routing (T05)
+- feat: Multi-Printer Config-Format (T04)
+- feat: i18n für Browser-Tab (DE/EN)
+- chore: Browser-Tab umbenennen (Store → Browser)
+- feat: GCode Store Tab in WebUI (T03)
+- feat: GCode Store — SQLite-Persistenz, /kx/ API, Thumbnail-Extraktion (T01+T02)
+- feat: Happy Hare MMU-Emulation für OrcaSlicer Filament-Sync
+- chore: Changelog für 0.9.7 ergänzt
+- fix: Upload großer GCode-Dateien (client_max_size 256MB, Socket-Timeout 120s)
+- docs: CHANGELOG 0.9.6 nachgetragen (Licht-Sync, Zeit-Cards, Status-Strings, Fixes)
+- build: fetch_credentials in release.sh ergänzt, build.sh auf Linux-only bereinigt
+- build: sudo durch rm+cp ersetzt für Windows EXE-Copy (Docker root-owned)
+- build: fetch_credentials Linux + Windows Binary in build.sh ergänzt
+- docs: fetch_credentials als primärer Setup-Weg, Ko-fi Button ergänzt
+- feat: fetch_credentials --write-config ersetzt extract_credentials Workflow
+- feat: fetch_credentials.py aus PR #19 übernommen
+- fix: YouTube Thumbnail auf hqdefault (maxresdefault nicht verfügbar)
+- feat: Licht-Status live vom Drucker synchronisieren, Video Tutorial in README
+- fix: Zeiten (verstrichen/rest/slicer) werden bei Stopp/Abbruch zurückgesetzt
+- fix: file_ready-Banner nach Stopp/Abbruch wird nicht mehr angezeigt
+- feat: Progress-Card mit Zeit-Minicards und Layer-Badge, Slicer-Zeit aus GCode-Ende (OrcaSlicer)
+- fix: start.sh erstellt config/ und kopiert config.ini.example automatisch (Issue #15)
+- feat: Upload-Banner mit Start/Abbrechen, Thumbnail bei Nur-hochladen, Auto-Print-Fix, Log-Scroll-Fix
+- fix: auto_print-Reset nach Multipart-Loop entfernt, Log-Scroll-Position bei deaktiviertem Auto-Scroll erhalten
+- feat: file_ready Banner – nach Upload-only Druck-Start-Button anzeigen
+- fix: Upload-only vs. Upload+Print korrekt unterscheiden
+- fix: release.sh – Release-Name einheitlich als 'v0.9.x' (wie bisherige Releases)
+- fix: release.sh – CHANGELOG-Body automatisch in Gitea-Release schreiben
+- fix: release.sh – stabile Releases nicht als Pre-Release markieren
+- fix: i18n – Kamera-Placeholder und Log-Dir-Button übersetzt
+- feat: AMS-Slot-Dialog vollständig i18n (DE/EN)
+- fix: AMS-Slot onclick – JSON.stringify im HTML-Attribut vermeiden
+- feat: AMS-Slot-Editor – Farbe und Material per Klick ändern
+- feat: Log-Tab erweitert – volle Payload + TX/RX/Topic-Filter
+- docs: CHANGELOG und README auf v0.9.3 aktualisiert
+- fix: Update-Check liefert stable statt Dev, VERSION im Dockerfile, Version im Header (#14)
+- docs: README.de.md hinzugefügt, README.en.md entfernt – einheitliche Benennung
+- docs: CHANGELOG.de.md – deutsche Version des Changelogs
+- chore: README und CHANGELOG auf Englisch, UI-Fehlertexte englisch, i18n für connection_error Banner
+- chore: 0.9.2 CHANGELOG, toter Code in config_loader entfernt
+- chore: Dev-Version auf 0.9.1-dev+1a8ee2a gesetzt
+- chore: Release-Binaries und Logs aus Git-Index entfernen, .gitignore erweitert
+- fix: Verbindungsfehler in Web-UI als Banner anzeigen (#11); README: OrcaSlicer-URL und extract_credentials-Link präzisiert (#12/#13)
+- feat: config.ini statt .env – persistente Settings über docker-compose restart
+- docs: CHANGELOG dev – Slicer-Schätzzeit und Update-Dialog Changelog ergänzt
+- chore: Dev-Version auf 0.9.1-dev+14cfb27 gesetzt
+- feat: Slicer-Schätzzeit im Fortschritts-Panel anzeigen
+- revert: Obico-Integration entfernt
+- feat(obico): Kamera-Snapshots aktiv zu Obico hochladen
+- fix(obico): BRIDGE_URL für Docker-Netzwerk-Kompatibilität
+- feat(obico): Layer-Fortschritt in Obico anzeigen
+- fix(obico): Snapshot-Endpoint und Layer-Anzeige
+- feat(obico): Obico Selfhosted Integration vollständig
+- chore: Dev-Version auf 0.9.1-dev+ea587fc gesetzt
+- feat: Obico Verbindungsstatus – Badge im Header, connected-Tracking in ObicoAgent
+- chore: Dev-Version auf 0.9.1-dev+aca91a5 gesetzt
+- feat: Obico Selfhosted Integration – ObicoAgent, Snapshot-Endpoint, Settings-Modal
+- chore: Dev-Version auf 0.9.1-dev+5ddfa13 gesetzt
+- feat: Changelog aus Gitea-Release im Update-Dialog anzeigen
+- chore: Dev-Version auf 0.9.1-dev+60d4287 gesetzt
+- docs: CHANGELOG für dev-Branch ergänzt
+- chore: Dev-Version auf 0.9.1-dev+374af9e gesetzt
+- chore: Log-Buffer auf 500 Einträge vereinheitlicht (Server + Browser)
+- chore: Dev-Version auf 0.9.1-dev+1aa8a75 gesetzt
+- feat: Log-Tab – Auto-Scroll toggle, Textfilter, Error-Badge im Nav-Tab
+- chore: Dev-Version auf 0.9.1-dev+da0bf51 gesetzt
+- feat: Server-Log live in Browser-Console (SSE) + Download-Button
+- chore: Dev-Version auf 0.9.1-dev+a52f76f gesetzt
+- feat: MQTT-Logging – strukturiertes TX/RX-Log mit Duplikat-Filter
+- chore: Dev-Version auf 0.9.1-dev+1828eec gesetzt
+- feat: Dev-Infrastruktur – Versionsschema 0.9.1-dev+hash, separater Update-Kanal, README.dev.md
+- feat: AMS Slot-Auswahl und Auto-Leveling-Option im Settings-Modal (Issue #6)
+- chore: _archive/releases Binaries aus Git-Tracking entfernt
+- chore: knlogo.png aus Dev-Repo entfernt (nur Release-Repo)
+- fix: Bridge zeigt beim Start lokale IP statt 0.0.0.0; README-Hinweis verbessert
+- chore: release.sh aktualisiert Version in Release-Repo-READMEs und kopiert Logo
+- feat: Logo ins englische README hinzugefügt
+- feat: Logo ins README und Projektverzeichnis hinzugefügt
+- fix: AMS leere Slots in UI grau darstellen (Issue #5)
+- fix: use_ams nur true wenn belegte Slots vorhanden
+- fix: leere AMS-Slots beim Druckstart filtern (status!=5), material_type-Feld korrigiert
+- fix: apt ffmpeg entfernt, imageio-ffmpeg übernimmt
+- fix: Home X/Y entfernt, homeAxis durch homeZ/homeXY ersetzt
+- feat: beta14 – imageio-ffmpeg, Z-Buttons fix, Home XY/All, Motors Off
+- feat: beta13 – Windows-Fixes, Projektstruktur-Reorganisation
+- refactor: Projektstruktur überarbeitet
+- feat: Changelog, Tests, start.sh und Dockerfile-Fixes hinzufügen
+- docs: Version auf 0.9.1-beta10 korrigieren
+- docs: LAN-Modus korrekt beschreiben (Drucker-Menüoption)
+- feat: Offline-Start + Verbinden/Trennen-Button im Header
+- feat: Release-ZIPs mit Zertifikaten (linux/windows/certs-only)
+- fix: PyInstaller frozen-Binary – __file__ durch sys.executable-Pfad ersetzen
+- feat: Windows kx-bridge.exe via GitHub Actions bauen
+- fix: release.sh kopiert READMEs nicht mehr (Release-Repo hat eigene)
+- docs: README.md aktualisiert, README.en.md hinzugefügt, release.sh kopiert READMEs
+- docs: Benutzerdoku aktualisiert (v0.9.1-beta4) + englische Version hinzugefügt
+- fix: progress und filename auf 0 zurücksetzen bei stoped/canceled
+- feat: neue Drucker-Zustände – pausing/paused/resuming/resumed/stopping/stoped
+- fix: release.sh – rm Fehler nach Docker-Build abfangen
+- fix: release.sh – Windows-EXE Build korrigiert (leeres Workdir, richtiger dist-Pfad)
+- feat: release.sh – Binaries bauen + als Gitea-Assets hochladen
+- feat: Print-Speed-Card, Übersetzungen vervollständigt
+- fix: Temperatursteuerung während des Drucks
+- chore: release.sh – Version-Bump und Release-Sync Skript
+- feat: UI-Komplettüberarbeitung – Settings, Self-Update, Dashboard, Responsive
+- feat: UI-Überarbeitung – KX-Bridge Titel, ViewIT Footer, Kobra-State-Anzeige, Dashboard-Erweiterung
+- feat: UI Titel KX-Bridge, Footer ViewIT 2026
+- fix: README Fehlerbehebung – Credential-Rotation entfernt, --verbose Hinweis ergänzt
+- fix: sensible Credentials aus README entfernt (Beispielausgabe anonymisiert)
+- docs: CLAUDE.md Projektstruktur + Deployment-Status aktualisiert
+- feat: Public Beta 0.9.0-beta1 – Docker, Binaries, README, Build-Prozess
+- feat: extract_credentials.py + Bridge Tip-Forming & lane_data Endpoint
+- feat: AMS Einziehen/Ausziehen UI + feedFilament-Protokoll dokumentiert
+- Initial commit: KX-Bridge + Protokoll-Dokumentation
+
+---
+
+### Docker-Image aktualisieren
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+Image-Tag: `gitea.it-drui.de/viewit/kx-bridge:nightly`
