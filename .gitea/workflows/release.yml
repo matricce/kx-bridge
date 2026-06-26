@@ -3,7 +3,7 @@ name: Stable Release
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v*'
 
 jobs:
   release:
@@ -56,9 +56,10 @@ jobs:
           echo "${{ secrets.REGISTRY_TOKEN }}" | \
             docker login gitea.it-drui.de -u "${{ secrets.REGISTRY_USER }}" --password-stdin
 
+      # Strip fuehrendes 'v' fuer den Image-Tag (VERSION-Datei hat kein 'v').
       - name: Build & push (amd64 + arm64)
         run: |
-          VERSION="${GITHUB_REF#refs/tags/}"
+          VERSION="${GITHUB_REF#refs/tags/v}"
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
             --push \
@@ -68,20 +69,6 @@ jobs:
             -t "gitea.it-drui.de/viewit/kx-bridge:${VERSION}" \
             .
 
-      - name: Create Gitea Release
-        env:
-          GITEA_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-        run: |
-          VERSION="${GITHUB_REF#refs/tags/}"
-          CHANGELOG=$(awk "/^## \[${VERSION}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md || echo "")
-          curl -s -X POST \
-            -H "Authorization: token ${GITEA_TOKEN}" \
-            -H "Content-Type: application/json" \
-            "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases" \
-            -d "{
-              \"tag_name\": \"${VERSION}\",
-              \"name\": \"KX-Bridge ${VERSION}\",
-              \"body\": $(echo "$CHANGELOG" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))'),
-              \"draft\": false,
-              \"prerelease\": false
-            }"
+      # Hinweis: Das Gitea-Release (inkl. englischem Auto-Changelog + Binaries als
+      # Assets) erstellt release.sh synchron, da es die lokal via CodeBuilder
+      # gebauten Binaries direkt hochlaedt. Dieser Workflow baut nur das Docker-Image.
