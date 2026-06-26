@@ -85,17 +85,25 @@ jobs:
           git config user.name "gitea-actions"
           git config user.email "actions@it-drui.de"
 
-          # Letzten nightly-Tag finden (für Changelog-Range)
+          # Letzten stabilen Release-Tag finden (v* ohne nightly) als Changelog-Basis
           git fetch --tags origin 2>/dev/null || true
-          PREV_TAG=$(git tag | grep '^nightly-' | sort | tail -1)
+          PREV_TAG=$(git tag | grep -E '^v[0-9]+\.' | sort -V | tail -1)
+          # Fallback: letzter nightly-Tag
+          [ -z "$PREV_TAG" ] && PREV_TAG=$(git tag | grep '^nightly-' | sort | tail -1)
 
-          # Commits seit letztem Tag sammeln
+          # Commits seit letztem stabilen Tag — chore/ci-Commits herausfiltern
           if [ -n "$PREV_TAG" ]; then
-            COMMITS=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --no-merges 2>/dev/null || true)
+            COMMITS=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --no-merges 2>/dev/null \
+              | grep -v '^- chore: nightly' \
+              | grep -v '^- ci:' \
+              || true)
           else
-            COMMITS=$(git log --pretty=format:"- %s" --no-merges -20 2>/dev/null || true)
+            COMMITS=$(git log --pretty=format:"- %s" --no-merges -30 2>/dev/null \
+              | grep -v '^- chore: nightly' \
+              | grep -v '^- ci:' \
+              || true)
           fi
-          [ -z "$COMMITS" ] && COMMITS="- Automatischer Nightly-Build"
+          [ -z "$COMMITS" ] && COMMITS="- Automatischer Nightly-Build (keine neuen Features seit ${PREV_TAG})"
 
           # Body in Temp-Datei (vermeidet YAML-Probleme mit Sonderzeichen wie > oder ```)
           BODY_FILE=$(mktemp)

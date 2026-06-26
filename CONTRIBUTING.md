@@ -63,13 +63,13 @@ The PR template will be pre-filled. Set the target branch to **`nightly`**.
 ## Branch model
 
 ```
-main      ← stable releases only (merged by maintainer)
+master    ← stable releases only (merged by maintainer)
 nightly   ← integration branch — PRs go here
 feature/* ← your feature branch (in your fork)
 fix/*     ← your bugfix branch (in your fork)
 ```
 
-Your PR always targets `nightly`. The maintainer periodically merges `nightly → main` for a new stable release.
+Your PR always targets `nightly`. The maintainer periodically merges `nightly → master` for a new stable release.
 
 ---
 

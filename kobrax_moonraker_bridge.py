@@ -4488,7 +4488,8 @@ class KobraXBridge:
         for _k in ("PRINTER_IP", "MQTT_PORT", "MQTT_USERNAME", "MQTT_PASSWORD",
                    "MODE_ID", "DEVICE_ID", "DEFAULT_AMS_SLOT", "AUTO_LEVELING",
                    "CAMERA_ON_PRINT", "WEB_UPLOAD_WARNING", "PRINT_START_DIALOG",
-                   "FILE_READY_DIALOG", "BRIDGE_PRINTER_NAME"):
+                   "FILE_READY_DIALOG", "BRIDGE_PRINTER_NAME",
+                   "SPOOLMAN_SERVER", "SPOOLMAN_SYNC_RATE"):
             os.environ.pop(_k, None)
 
         in_docker = os.path.exists("/.dockerenv") or os.environ.get("KX_IN_DOCKER")

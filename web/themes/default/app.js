@@ -1654,6 +1654,7 @@ function saveSettings(){
       btn.disabled=false;
       setText('btn-save-settings',T.settings_save);
       closeSettings();
+      _loadSpoolmanStatus();
       poll();
     },4000);
   }).catch(function(e){
