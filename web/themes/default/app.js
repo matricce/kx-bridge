@@ -550,6 +550,7 @@ function ensureAceDryCards(){
   // defer until DOM ready
   window.addEventListener('DOMContentLoaded',function(){
     setLanguage(currentLang).catch(function(){});
+    _loadSpoolmanStatus();
     // Kein Drucker konfiguriert? → direkt in den Drucker-Tab (zeigt "+ Drucker hinzufügen")
     fetch('/kx/printers').then(function(r){return r.json()}).then(function(d){
       if(!d.result||!d.result.length){showPanel('printers');loadPrinterTab();}
