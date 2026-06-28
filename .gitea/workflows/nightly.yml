@@ -22,11 +22,11 @@ jobs:
       - name: Checkout
         run: |
           if [ -d .git ]; then
-            git fetch origin nightly
+            git fetch --tags origin nightly
             git reset --hard origin/nightly
             git clean -fd
           else
-            git clone --depth=1 --branch nightly https://gitea.it-drui.de/viewit/KX-Bridge-Release.git .
+            git clone --branch nightly https://gitea.it-drui.de/viewit/KX-Bridge-Release.git .
           fi
 
       - name: Install Docker CLI
