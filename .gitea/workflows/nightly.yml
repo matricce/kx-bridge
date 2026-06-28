@@ -108,19 +108,24 @@ jobs:
           . /tmp/nightly_version.env
           TAG="nightly-${VERSION}"
 
-          # Letzten nightly-Tag als Changelog-Basis ermitteln
-          PREV_TAG=$(git tag --list 'nightly-*' --sort=-version:refname | head -1)
-          [ -z "$PREV_TAG" ] && PREV_TAG="$LAST_STABLE"
+          # Letzten Stable-Tag als Changelog-Basis (nur echte vX.Y.Z-Tags)
+          PREV_TAG=$(git tag --list 'v*' --sort=-version:refname \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+          [ -z "$PREV_TAG" ] && PREV_TAG=$(git rev-list --max-parents=0 HEAD)
 
-          # Changelog generieren
+          # Changelog generieren — nur feat/fix, keine ci/release/build-Scopes
           BODY_FILE=$(mktemp)
           printf '## KX-Bridge %s — Nightly Build\n\n' "$VERSION" > "$BODY_FILE"
           printf '[experimental] Untested features, for testers only.\n\n' >> "$BODY_FILE"
           printf '### Changes since `%s`\n\n' "$PREV_TAG" >> "$BODY_FILE"
-          git log "${PREV_TAG}..HEAD" --pretty=format:'- %s' \
-            --no-merges \
-            --invert-grep --grep='^chore: nightly' \
+          git log "${PREV_TAG}..HEAD" --pretty=format:'%s' --no-merges \
+            | grep -E '^(feat|fix)[:(]' \
+            | grep -Ev '^(feat|fix)\((ci|release|build|workflow)\)' \
+            | sed 's/^/- /' \
             >> "$BODY_FILE" || true
+          if ! grep -q '^- ' "$BODY_FILE"; then
+            printf '- No user-facing changes in this build\n' >> "$BODY_FILE"
+          fi
           printf '\n\n---\n\n### Update Docker image\n\n```bash\ndocker compose pull && docker compose up -d\n```\n\n' >> "$BODY_FILE"
           printf 'Image tag: `gitea.it-drui.de/viewit/kx-bridge:nightly`\n' >> "$BODY_FILE"
 
