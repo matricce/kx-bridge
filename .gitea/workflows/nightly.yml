@@ -87,21 +87,11 @@ jobs:
           echo "LAST_STABLE=${LAST_STABLE}" >> /tmp/nightly_version.env
           echo "Computed nightly version: ${VERSION} (after ${LAST_STABLE})"
 
-      - name: Write VERSION file & commit
-        env:
-          GITEA_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-        run: |
-          . /tmp/nightly_version.env
-          git config user.name "gitea-actions"
-          git config user.email "actions@it-drui.de"
-          echo "$VERSION" > VERSION
-          git add VERSION
-          git commit -m "chore: nightly ${VERSION}" || true
-          git push https://gitea-actions:${GITEA_TOKEN}@gitea.it-drui.de/viewit/KX-Bridge-Release.git nightly
-
       - name: Build & push (amd64 + arm64)
         run: |
           . /tmp/nightly_version.env
+          # VERSION-Datei im Arbeitsverzeichnis für den Docker-Build setzen (kein Commit)
+          echo "$VERSION" > VERSION
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
             --push \
