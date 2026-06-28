@@ -10,6 +10,7 @@ on:
       - 'requirements.txt'
       - 'web/**'
       - 'data/**'
+      - '.gitea/workflows/nightly.yml'
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:
