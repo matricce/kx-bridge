@@ -1,0 +1,34 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches:
+      - nightly
+
+jobs:
+  lint-and-test:
+    runs-on: server-runner
+    steps:
+      - name: Checkout
+        run: |
+          if [ -d .git ]; then
+            git fetch origin
+            git reset --hard origin/nightly
+            git clean -fd
+          else
+            git clone --depth=1 --branch nightly https://gitea.it-drui.de/viewit/KX-Bridge-Release.git .
+          fi
+
+      - name: Dependencies installieren
+        run: pip3 install -r requirements.txt
+
+      - name: Lint
+        run: |
+          pip3 install flake8
+          flake8 *.py --max-line-length=120 --extend-ignore=E501
+
+      - name: Tests
+        run: |
+          pip3 install pytest
+          pytest tests/ -v
+        if: ${{ hashFiles('tests/') != '' }}

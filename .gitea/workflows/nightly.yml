@@ -1,0 +1,132 @@
+name: Nightly Build
+
+on:
+  push:
+    branches:
+      - nightly
+    paths:
+      - '**.py'
+      - 'Dockerfile'
+      - 'requirements.txt'
+      - 'web/**'
+      - 'data/**'
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: server-runner
+    steps:
+      - name: Checkout
+        run: |
+          if [ -d .git ]; then
+            git fetch origin nightly
+            git reset --hard origin/nightly
+            git clean -fd
+          else
+            git clone --depth=1 --branch nightly https://gitea.it-drui.de/viewit/KX-Bridge-Release.git .
+          fi
+
+      - name: Install Docker CLI
+        run: |
+          if ! command -v docker >/dev/null 2>&1; then
+            ARCH=$(uname -m)
+            if [ "$ARCH" = "x86_64" ]; then
+              DARCH="x86_64"
+              BARCH="amd64"
+            else
+              DARCH="aarch64"
+              BARCH="arm64"
+            fi
+            wget -qO- "https://download.docker.com/linux/static/stable/${DARCH}/docker-27.5.1.tgz" \
+              | tar xz --strip-components=1 -C /usr/local/bin docker/docker
+            chmod +x /usr/local/bin/docker
+            mkdir -p /usr/local/lib/docker/cli-plugins
+            wget -qO /usr/local/lib/docker/cli-plugins/docker-buildx \
+              "https://github.com/docker/buildx/releases/download/v0.23.0/buildx-v0.23.0.linux-${BARCH}"
+            chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
+          fi
+          docker version --format '{{.Client.Version}}'
+
+      - name: Set up QEMU
+        run: |
+          docker run --rm --privileged tonistiigi/binfmt:latest --install all
+
+      - name: Set up buildx
+        run: |
+          docker buildx inspect kxbuilder 2>/dev/null || \
+            docker buildx create --name kxbuilder --use
+          docker buildx use kxbuilder
+
+      - name: Login to Gitea registry
+        run: |
+          echo "${{ secrets.REGISTRY_TOKEN }}" | \
+            docker login gitea.it-drui.de -u "${{ secrets.REGISTRY_USER }}" --password-stdin
+
+      - name: Build & push (amd64 + arm64)
+        run: |
+          VERSION=$(cat VERSION)
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --push \
+            --provenance=false \
+            --no-cache \
+            -t "gitea.it-drui.de/viewit/kx-bridge:nightly" \
+            -t "gitea.it-drui.de/viewit/kx-bridge:nightly-${VERSION}" \
+            .
+
+      - name: Create Gitea Nightly Release
+        env:
+          GITEA_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          VERSION=$(cat VERSION)
+          TAG="nightly-${VERSION}"
+          git config user.name "gitea-actions"
+          git config user.email "actions@it-drui.de"
+
+          # Changelog aus CHANGES.md lesen (wird von release.sh aus dem Dev-Repo generiert)
+          BODY_FILE=$(mktemp)
+          if [ -f CHANGES.md ]; then
+            cat CHANGES.md > "$BODY_FILE"
+          else
+            # Fallback falls CHANGES.md fehlt
+            printf '## KX-Bridge %s -- Nightly Build\n\n' "$VERSION" > "$BODY_FILE"
+            printf '[experimentell] Ungetestete Features, nur fuer Tester geeignet.\n\n' >> "$BODY_FILE"
+            printf '- Automatischer Nightly-Build\n\n---\n\n' >> "$BODY_FILE"
+            printf '### Docker-Image aktualisieren\n\n```bash\ndocker compose pull && docker compose up -d\n```\n\n' >> "$BODY_FILE"
+            printf 'Image-Tag: `gitea.it-drui.de/viewit/kx-bridge:nightly`\n' >> "$BODY_FILE"
+          fi
+
+          # Tag setzen
+          git tag -f "$TAG"
+          git push https://gitea-actions:${GITEA_TOKEN}@gitea.it-drui.de/viewit/KX-Bridge-Release.git "$TAG" --force
+
+          # curl installieren (BusyBox wget kann kein DELETE/POST mit Headers)
+          if ! command -v curl >/dev/null 2>&1; then
+            if ! apk add --no-cache curl 2>/dev/null; then
+              wget -qO /usr/local/bin/curl \
+                "https://github.com/moparisthebest/static-curl/releases/download/v8.6.0/curl-amd64"
+              chmod +x /usr/local/bin/curl
+            fi
+          fi
+
+          # Altes Release loeschen falls vorhanden
+          curl -s -X DELETE \
+            -H "Authorization: token ${GITEA_TOKEN}" \
+            "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases/tags/${TAG}" \
+            2>/dev/null || true
+
+          # Release erstellen (JSON-Body via awk escapen)
+          BODY_JSON=$(awk '{
+            gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, "\\t");
+            printf "%s\\n", $0
+          }' "$BODY_FILE" | awk 'BEGIN{printf "\""} {printf "%s", $0} END{printf "\""}')
+          JSON_PAYLOAD="{\"tag_name\":\"${TAG}\",\"name\":\"KX-Bridge ${VERSION} Nightly\",\"body\":${BODY_JSON},\"draft\":false,\"prerelease\":true}"
+          printf '%s' "$JSON_PAYLOAD" > /tmp/release_body.json
+          curl -s -X POST \
+            -H "Authorization: token ${GITEA_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/release_body.json \
+            "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases"
+          rm -f "$BODY_FILE" /tmp/release_body.json

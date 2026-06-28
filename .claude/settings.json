@@ -1,0 +1,12 @@
+{
+  "project": "KX-Bridge",
+  "language": "de",
+  "defaultAgent": "reviewer",
+  "context": {
+    "repoBase": "gitea.it-drui.de/viewit/KX-Bridge-Release",
+    "defaultBranch": "nightly",
+    "stableBranch": "main",
+    "registry": "gitea.it-drui.de/viewit/kx-bridge",
+    "moonrakerPort": 7125
+  }
+}

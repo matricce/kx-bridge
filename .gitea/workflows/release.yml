@@ -1,0 +1,74 @@
+name: Stable Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: server-runner
+    steps:
+      - name: Checkout
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          if [ -d .git ]; then
+            git fetch --tags origin
+            git checkout "$TAG"
+            git clean -fd
+          else
+            git clone --depth=1 --branch "$TAG" https://gitea.it-drui.de/viewit/KX-Bridge-Release.git .
+          fi
+
+      - name: Install Docker CLI
+        run: |
+          if ! command -v docker >/dev/null 2>&1; then
+            ARCH=$(uname -m)
+            if [ "$ARCH" = "x86_64" ]; then
+              DARCH="x86_64"
+              BARCH="amd64"
+            else
+              DARCH="aarch64"
+              BARCH="arm64"
+            fi
+            wget -qO- "https://download.docker.com/linux/static/stable/${DARCH}/docker-27.5.1.tgz" \
+              | tar xz --strip-components=1 -C /usr/local/bin docker/docker
+            chmod +x /usr/local/bin/docker
+            mkdir -p /usr/local/lib/docker/cli-plugins
+            wget -qO /usr/local/lib/docker/cli-plugins/docker-buildx \
+              "https://github.com/docker/buildx/releases/download/v0.23.0/buildx-v0.23.0.linux-${BARCH}"
+            chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
+          fi
+          docker version --format '{{.Client.Version}}'
+
+      - name: Set up QEMU
+        run: |
+          docker run --rm --privileged tonistiigi/binfmt:latest --install all
+
+      - name: Set up buildx
+        run: |
+          docker buildx inspect kxbuilder 2>/dev/null || \
+            docker buildx create --name kxbuilder --use
+          docker buildx use kxbuilder
+
+      - name: Login to Gitea registry
+        run: |
+          echo "${{ secrets.REGISTRY_TOKEN }}" | \
+            docker login gitea.it-drui.de -u "${{ secrets.REGISTRY_USER }}" --password-stdin
+
+      # Strip fuehrendes 'v' fuer den Image-Tag (VERSION-Datei hat kein 'v').
+      - name: Build & push (amd64 + arm64)
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --push \
+            --provenance=false \
+            --no-cache \
+            -t "gitea.it-drui.de/viewit/kx-bridge:latest" \
+            -t "gitea.it-drui.de/viewit/kx-bridge:${VERSION}" \
+            .
+
+      # Hinweis: Das Gitea-Release (inkl. englischem Auto-Changelog + Binaries als
+      # Assets) erstellt release.sh synchron, da es die lokal via CodeBuilder
+      # gebauten Binaries direkt hochlaedt. Dieser Workflow baut nur das Docker-Image.

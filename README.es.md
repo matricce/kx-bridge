@@ -20,13 +20,18 @@ ninguna está oficialmente probada ni soportada. Se agradece el feedback.</sub>
 &nbsp;
 [![Releases](https://img.shields.io/badge/Descargar-Lanzamientos-2EA043?style=for-the-badge&logo=gitea&logoColor=white)](https://gitea.it-drui.de/viewit/KX-Bridge-Release/releases)
 &nbsp;
-[![Downloads](https://img.shields.io/badge/Descargas-800%2B-8957E5?style=for-the-badge&logo=gitea&logoColor=white)](https://gitea.it-drui.de/viewit/KX-Bridge-Release/releases)
+[![Downloads](https://img.shields.io/badge/Descargas-3.1k%2B-8957E5?style=for-the-badge&logo=gitea&logoColor=white)](https://gitea.it-drui.de/viewit/KX-Bridge-Release/releases)
 &nbsp;
 [![Video](https://img.shields.io/badge/YouTube-Tutorial-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=1Ql4wfH27fM)
 
 <sub>¿Te gusta KX-Bridge? Un café en <a href="https://ko-fi.com/viewitde">Ko-fi</a> mantiene el proyecto vivo. ☕</sub>
 
 </div>
+
+> [!CAUTION]
+> **Trabajos de mantenimiento en curso** — Estamos reestructurando el repositorio (modelo de ramas, flujos CI, proceso de contribución). Es posible que notes cambios en los nombres de ramas, plantillas de PR y la forma en que se publican las versiones. Pedimos disculpas por las molestias. El manejo, el flujo de trabajo y la mantenibilidad a largo plazo mejorarán considerablemente.
+>
+> 👉 ¿Quieres contribuir? Por favor lee [CONTRIBUTING.md](CONTRIBUTING.md) primero.
 
 ---
 
@@ -44,7 +49,7 @@ ninguna está oficialmente probada ni soportada. Se agradece el feedback.</sub>
 | 🧩 | **Multi-impresora** — múltiples impresoras en **una** instancia del puente, cambia mediante un menú desplegable |
 | ➕ | **Añade una impresora con un clic** — solo introduce la IP, las credenciales se importan automáticamente |
 | 🔁 | **Reconexión MQTT robusta** — el puente sobrevive a reinicios nocturnos de la impresora sin reinicio manual |
-| 🌐 | **Interfaz multilingüe** — DE / EN / ES / 中文, detecta automáticamente el idioma del navegador |
+| 🌐 | **Interfaz multilingüe** — DE / EN / ES / FR / IT / 中文, detecta automáticamente el idioma del navegador |
 | 🔄 | **Actualización automática** — instala nuevas versiones directamente desde el navegador |
 | 🧠 | **OrcaSlicer** — protocolo Moonraker completo (HTTP + WebSocket); usa el [build OrcaSlicer-KX](#-slicer-recomendado) para emparejamiento correcto de vendor por ranura |
 
@@ -66,43 +71,17 @@ docker compose up -d
 
 **Binario Linux (sin Docker):**
 ```bash
-chmod +x kx-bridge-linux-amd64 && ./kx-bridge-linux-amd64
+chmod +x kx-bridge && ./kx-bridge
 ```
 
 **EXE Windows (sin Docker):**
 ```
 kx-bridge.exe
 ```
+> `config\` y `data\` se crean junto al EXE — instalación portátil.
 
-> ⚠️ **Certificados TLS necesarios para el binario standalone**
->
-> El bridge habla con el MQTT de la impresora vía mTLS y necesita dos
-> ficheros de certificado **junto al binario**:
->
-> - `anycubic_slicer.crt`
-> - `anycubic_slicer.key`
->
-> Ambos vienen en **`anycubic-certs.zip`** en la misma página de release.
-> Descárgalo y extrae los dos ficheros en el mismo directorio que
-> `kx-bridge-linux-amd64` o `kx-bridge.exe`. Sin ellos verás
-> `Verbindung fehlgeschlagen: TLS-Zertifikate fehlen …` (0.9.19.1+) o
-> `[Errno 2] No such file or directory` (versiones anteriores).
->
-> Estructura correcta:
-> ```
-> ~/kx-bridge/
-> ├── kx-bridge-linux-amd64   (o kx-bridge.exe)
-> ├── anycubic_slicer.crt     ← de anycubic-certs.zip
-> ├── anycubic_slicer.key     ← de anycubic-certs.zip
-> └── config/                 (se crea en el primer arranque)
-> ```
->
-> Los usuarios de Docker no necesitan hacer esto — los certificados
-> están incluidos en la imagen.
-
-> Con los binarios de Linux y Windows, `config/` y `data/` (configuración,
-> SQLite, almacén de GCode) viven junto al programa. Copia toda la carpeta
-> para mover la instalación.
+> Con los binarios de Linux y Windows, `config/` y `data/` (configuración, SQLite, almacén de GCode)
+> viven junto al programa. Copia toda la carpeta para mover la instalación.
 
 **Python directamente:**
 ```bash
@@ -204,6 +183,24 @@ docker compose logs -f                 # mostrar registros
 docker compose down                    # detener el puente
 docker compose pull && docker compose up -d   # actualizar a la imagen publicada más reciente
 docker compose up -d --build           # recompilar localmente (en lugar de descargar)
+```
+
+---
+
+## 🌙 Builds nocturnos (Nightly)
+
+Los builds nocturnos contienen las últimas funciones no publicadas y se generan automáticamente en cada push de desarrollo.
+Pueden ser inestables — úsalos para pruebas o acceso anticipado a nuevas funciones.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.nightly.yml pull
+docker compose -f docker-compose.yml -f docker-compose.nightly.yml up -d
+```
+
+Volver a la versión estable:
+
+```bash
+docker compose pull && docker compose up -d
 ```
 
 ---

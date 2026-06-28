@@ -321,6 +321,8 @@
   "update_available": "可用",
   "update_check": "检查更新",
   "update_checking": "检查中...",
+  "update_docker": "复制命令",
+  "update_docker_copied": "已复制！执行：docker compose pull && docker compose up -d",
   "update_error": "错误",
   "update_none": "已是最新版本",
   "update_restarting": "重启中..."

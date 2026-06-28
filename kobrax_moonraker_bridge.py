@@ -4488,7 +4488,8 @@ class KobraXBridge:
         for _k in ("PRINTER_IP", "MQTT_PORT", "MQTT_USERNAME", "MQTT_PASSWORD",
                    "MODE_ID", "DEVICE_ID", "DEFAULT_AMS_SLOT", "AUTO_LEVELING",
                    "CAMERA_ON_PRINT", "WEB_UPLOAD_WARNING", "PRINT_START_DIALOG",
-                   "FILE_READY_DIALOG", "BRIDGE_PRINTER_NAME"):
+                   "FILE_READY_DIALOG", "BRIDGE_PRINTER_NAME",
+                   "SPOOLMAN_SERVER", "SPOOLMAN_SYNC_RATE"):
             os.environ.pop(_k, None)
 
         in_docker = os.path.exists("/.dockerenv") or os.environ.get("KX_IN_DOCKER")
@@ -4524,9 +4525,10 @@ class KobraXBridge:
 
     # ─── Update ──────────────────────────────────────────────────────────────
 
-    STABLE_RELEASE_API = "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases?limit=1"
-    DEV_RELEASE_API    = "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases?limit=10&pre-release=true"
-    GITEA_RAW_BASE     = "https://gitea.it-drui.de/viewit/KX-Bridge-Release/raw/tag"
+    STABLE_RELEASE_API  = "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases?limit=1"
+    NIGHTLY_RELEASE_API = "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases?limit=5&pre-release=true"
+    DEV_RELEASE_API     = "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases?limit=10&pre-release=true"
+    GITEA_RAW_BASE      = "https://gitea.it-drui.de/viewit/KX-Bridge-Release/raw/tag"
 
     def _read_version(self) -> str:
         # PyInstaller-Onefile entpackt VERSION (per kx-bridge.spec datas) nach
@@ -4601,8 +4603,14 @@ class KobraXBridge:
 
     async def handle_api_update_check(self, request):
         current = self._read_version()
+        is_nightly = "nightly" in current
         is_dev = "-dev+" in current
-        api_url = self.DEV_RELEASE_API if is_dev else self.STABLE_RELEASE_API
+        if is_nightly:
+            api_url = self.NIGHTLY_RELEASE_API
+        elif is_dev:
+            api_url = self.DEV_RELEASE_API
+        else:
+            api_url = self.STABLE_RELEASE_API
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(api_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
@@ -4611,14 +4619,37 @@ class KobraXBridge:
                     releases = await resp.json(content_type=None)
             if not releases:
                 return web.json_response({"error": "Keine Releases gefunden"}, status=404)
-            # Dev: neuestes Release mit "-dev+" im Tag suchen
-            if is_dev:
+
+            if is_nightly:
+                # Neuestes Prerelease mit nightly-Tag suchen
+                nightly_releases = [r for r in releases if r.get("prerelease") and "nightly" in r.get("tag_name", "")]
+                if not nightly_releases:
+                    return web.json_response({"error": "Keine Nightly-Releases gefunden"}, status=404)
+                data = nightly_releases[0]
+                tag = data.get("tag_name", "")
+                # Tag-Format: "nightly-0.9.27-nightly4", current: "0.9.27-nightly4"
+                tag_version = tag[len("nightly-"):] if tag.startswith("nightly-") else tag
+                update_available = tag_version != current
+                latest = tag
+                return web.json_response({
+                    "current":          current,
+                    "latest":           latest,
+                    "update_available": update_available,
+                    "tag":              tag,
+                    "docker_only":      True,
+                    "changelog":        data.get("body", ""),
+                })
+            elif is_dev:
                 dev_releases = [r for r in releases if "-dev+" in r.get("tag_name", "")]
                 if not dev_releases:
                     return web.json_response({"error": "Keine Dev-Releases gefunden"}, status=404)
                 data = dev_releases[0]
             else:
-                data = releases[0]
+                # Stable: nur non-prerelease nehmen
+                stable_releases = [r for r in releases if not r.get("prerelease")]
+                if not stable_releases:
+                    return web.json_response({"error": "Keine Stable-Releases gefunden"}, status=404)
+                data = stable_releases[0]
             tag = data.get("tag_name", "")
             latest = tag.lstrip("v")
             if is_dev:
@@ -4632,6 +4663,7 @@ class KobraXBridge:
                 "update_available": update_available,
                 "tag":              tag,
                 "download_url":     download_url,
+                "docker_only":      False,
                 "changelog":        data.get("body", ""),
             })
         except Exception as e:
@@ -4652,6 +4684,10 @@ class KobraXBridge:
     async def handle_api_update_apply(self, request):
         data = await request.json()
         new_tag = data.get("tag", "")
+        if "nightly" in self._read_version():
+            return web.json_response(
+                {"error": "Nightly-Updates laufen über Docker: "
+                          "docker compose pull && docker compose up -d"}, status=400)
         if getattr(sys, "frozen", False):
             return web.json_response(
                 {"error": "Self-Update wird im Binary-Modus nicht unterstützt – "
