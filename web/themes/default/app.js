@@ -55,6 +55,12 @@ function _loadSpoolmanStatus(){
     _slotSpoolMap=d.slot_spools||{};
     _updateSpoolmanStatusDot();
     _buildSpoolmanSection();
+    renderSpoolmanSlotCard();
+    if(d.configured){
+      fetch(_apiUrl('/kx/spoolman/spools')).then(function(r){return r.json();}).then(function(sd){
+        _spoolmanSpools=sd.spools||[];
+      });
+    }
   }).catch(function(){});
 }
 function _updateSpoolmanStatusDot(){
@@ -79,12 +85,8 @@ function _buildSpoolmanSection(){
   if(loading)loading.style.display='';
 
   var usedSlots={};
-  document.querySelectorAll('#fd-slots select').forEach(function(sel){
-    var idx=parseInt(sel.value);
-    if(idx>=0){
-      var slot=(_amsSlots||[]).find(function(s){return s.slot_index===idx;});
-      if(slot&&!usedSlots[idx])usedSlots[idx]=slot;
-    }
+  (_amsSlots||[]).forEach(function(slot){
+    usedSlots[slot.slot_index]=slot;
   });
 
   fetch(_apiUrl('/kx/spoolman/spools')).then(function(r){return r.json();}).then(function(d){
@@ -377,12 +379,10 @@ function applyLang(){
   setText('d-chart-label',T.panel_temps_chart);
   // Axis labels
   setText('ptitle-motion-xy',T.panel_motion_xy);
-  setText('ptitle-motion-z',T.panel_motion_z);
   document.querySelectorAll('.lbl-home-z').forEach(e=>e.textContent=T.btn_home_z);
   document.querySelectorAll('.lbl-home-xy').forEach(e=>e.textContent=T.btn_home_xy);
   document.querySelectorAll('.lbl-home-all').forEach(e=>e.textContent=T.btn_home_all);
   document.querySelectorAll('.lbl-disable-motors').forEach(e=>e.textContent=T.btn_disable_motors);
-  document.querySelectorAll('.lbl-step').forEach(e=>e.textContent=T.label_step);
   document.querySelectorAll('.temp-input').forEach(e=>e.setAttribute('placeholder',T.label_target_c.replace(':','')));
   // Console
   setText('ptitle-console',T.panel_console_title);
@@ -750,7 +750,7 @@ function applyState(){
         frb.style.display='none';
         if(!_fdDialogOpen&&!_fdUserCancelled&&_fdAutoOpenedFile!==s.file_ready){
           _fdAutoOpenedFile=s.file_ready;
-          startReadyFileWithSlots(s.file_ready,true);
+          startReadyFileWithSlots(s.file_ready,true,s.filament_mismatch||null);
         }
       } else {
         frb.style.display='flex';
@@ -963,6 +963,22 @@ function applyState(){
           var tt=(profile.name||'')+(profile.id?' ('+profile.id+')':'');
           vendorBadge='<div class="slot-label" style="font-size:9px;color:var(--accent);font-weight:600;margin-top:1px" title="'+tt+'">'+profile.vendor+'</div>';
         }
+        var spoolSel='';
+        if(_spoolmanStatus.configured&&!empty&&_spoolmanSpools.length){
+          var curSpool=_slotSpoolMap[String(globalIdx)]||'';
+          var spoolOpts='<option value="">–</option>'+_spoolmanSpools.map(function(sp){
+            var vendor=sp.filament&&sp.filament.vendor?sp.filament.vendor.name+' ':'';
+            var name=sp.filament?sp.filament.name:'#'+sp.id;
+            var rem=sp.remaining_weight!=null?' '+sp.remaining_weight.toFixed(0)+'g':'';
+            return '<option value="'+sp.id+'"'+(String(sp.id)==String(curSpool)?' selected':'')+'>'+
+                   escHtml(vendor+name+rem)+'</option>';
+          }).join('');
+          spoolSel='<div onclick="event.stopPropagation()" style="margin-top:6px;border-top:1px solid rgba(255,255,255,.07);padding-top:5px">'
+            +'<div style="font-size:8px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">🧵 Spoolman</div>'
+            +'<select data-spool-slot="'+globalIdx+'" onchange="onAmsSpoolChange(this)" '
+            +'style="width:100%;padding:3px 5px;font-size:10px;border-radius:5px;border:1px solid var(--border);background:var(--card);color:var(--txt);cursor:pointer">'+spoolOpts+'</select>'
+            +'</div>';
+        }
         html+='<div class="ams-slot'+(active?' active':'')+(loaded?' loaded':'')+(activity?' '+activity:'')+(empty?' empty':'')
           +'" style="--slot-color:'+col+';opacity:'+(empty?0.4:1)+';cursor:pointer" onclick="openSlotEdit('+i+')">'
           +'<div class="slot-circle" style="background:'+col+'"></div>'
@@ -970,6 +986,7 @@ function applyState(){
           +vendorBadge
           +'<div class="slot-label">'+slotLabel+'</div>'
           +'<div class="slot-label" style="font-size:10px;color:var(--txt2)">'+pct+'</div>'
+          +spoolSel
           +'<div style="font-size:9px;color:var(--txt2);margin-top:2px">✏</div>'
           +'</div>';
       });
@@ -1076,6 +1093,7 @@ function openSettings(){
       pi.value=sec;
     }
     renderFilamentMapping(d.filament_profiles||{});
+    renderSpoolmanSlotCard();
     // Spoolman
     var su=document.getElementById('s-spoolman-url');if(su)su.value=d.spoolman_server||'';
     var sr=document.getElementById('s-spoolman-sync-rate');if(sr)sr.value=(d.spoolman_sync_rate!==undefined?d.spoolman_sync_rate:30);
@@ -1223,6 +1241,64 @@ function _vendorCheck(cb){
   var v=cb.getAttribute('data-vendor');
   if(cb.checked)_vendorChecklistSel[v]=true; else delete _vendorChecklistSel[v];
 }
+function renderSpoolmanSlotCard(){
+  var card=document.getElementById('spoolman-slot-card');
+  var rows=document.getElementById('spoolman-slot-rows');
+  if(!card||!rows)return;
+  if(!_spoolmanStatus.configured){card.style.display='none';return;}
+  card.style.display='';
+  Promise.all([
+    fetch(_apiUrl('/kx/spoolman/spools')).then(function(r){return r.json();}),
+    fetch(_apiUrl('/kx/filament/slots')).then(function(r){return r.json();})
+  ]).then(function(res){
+    var spools=res[0].spools||[];
+    var slots=(res[1].result||[]).sort(function(a,b){return a.slot_index-b.slot_index;});
+    if(!slots.length){rows.innerHTML='<span style="font-size:11px;color:var(--txt2)">Keine AMS-Slots bekannt.</span>';return;}
+    rows.innerHTML=slots.map(function(slot){
+      var idx=parseInt(slot.slot_index);
+      var col=slot.color_hex||'#888';
+      var mat=slot.material||'';
+      var current=_slotSpoolMap[String(idx)]||'';
+      var opts='<option value="">–</option>'+spools.map(function(sp){
+        var rem=sp.remaining_weight!=null?' ('+sp.remaining_weight.toFixed(0)+'g)':'';
+        var vendor=sp.filament&&sp.filament.vendor?sp.filament.vendor.name+' ':'';
+        var name=sp.filament?sp.filament.name:'Spool #'+sp.id;
+        var mat2=sp.filament&&sp.filament.material?' · '+sp.filament.material:'';
+        return '<option value="'+sp.id+'"'+(String(sp.id)==String(current)?' selected':'')+'>'+
+               escHtml('#'+sp.id+' '+vendor+name+mat2+rem)+'</option>';
+      }).join('');
+      return '<div style="display:flex;align-items:center;gap:8px;font-size:12px">'+
+        '<span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'+col+';border:1px solid var(--border);flex-shrink:0"></span>'+
+        '<span style="color:var(--txt2);min-width:60px">Slot '+(idx+1)+' <span style="color:var(--txt2);font-size:10px">'+escHtml(mat)+'</span></span>'+
+        '<select data-spool-slot="'+idx+'" style="flex:1;padding:3px 6px;border-radius:6px;border:1px solid var(--border);background:var(--raised);color:var(--txt);font-size:12px">'+opts+'</select></div>';
+    }).join('');
+  }).catch(function(){rows.innerHTML='<span style="font-size:11px;color:var(--err)">Spoolman nicht erreichbar</span>';});
+}
+
+function onAmsSpoolChange(sel){
+  var idx=sel.getAttribute('data-spool-slot');
+  var val=sel.value;
+  if(val) _slotSpoolMap[String(idx)]=parseInt(val);
+  else delete _slotSpoolMap[String(idx)];
+  var mapping={};
+  Object.keys(_slotSpoolMap).forEach(function(k){mapping[k]=_slotSpoolMap[k];});
+  fetch(_apiUrl('/kx/spoolman/active-spool'),{method:'POST',
+    headers:{'Content-Type':'application/json'},body:JSON.stringify({slot_spools:mapping})});
+}
+
+function saveSpoolmanSlots(){
+  var mapping={};
+  document.querySelectorAll('#spoolman-slot-rows select[data-spool-slot]').forEach(function(sel){
+    var idx=sel.getAttribute('data-spool-slot');
+    var val=sel.value;
+    if(val)mapping[idx]=parseInt(val);
+  });
+  fetch(_apiUrl('/kx/spoolman/active-spool'),{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({slot_spools:mapping})}).then(function(r){return r.json();}).then(function(d){
+    _slotSpoolMap=d.slot_spools||{};
+  });
+}
+
 function saveVisibleVendors(){
   var vendors=Object.keys(_vendorChecklistSel);
   fetch(_apiUrl('/kx/filament/visible_vendors'),{method:'POST',headers:{'Content-Type':'application/json'},
@@ -1792,7 +1868,15 @@ function setStep(btn,v){
   currentStep=v;
   document.querySelectorAll('.step-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  document.getElementById('step-display').textContent=v;
+  var ci=document.getElementById('step-custom');
+  if(ci)ci.value='';
+}
+function setStepCustom(inp){
+  var v=parseFloat(inp.value);
+  if(!isNaN(v)&&v>0){
+    currentStep=v;
+    document.querySelectorAll('.step-btn').forEach(b=>b.classList.remove('active'));
+  }
 }
 function move(axis,dir,dist){
   // axis: 0=X,1=Y,2=Z → printer axis codes: 1=X,2=Y,3=Z
@@ -2487,7 +2571,20 @@ function confirmStoreWebVerify(){
     });
 }
 
-function startReadyFileWithSlots(filename,_autoOpen){
+function _showMismatchWarn(mismatches){
+  var el=document.getElementById('fd-mismatch-warn');
+  if(!el)return;
+  if(!mismatches||!mismatches.length){el.style.display='none';el.innerHTML='';return;}
+  var lines=mismatches.map(function(m){
+    var slot='Slot '+(m.slot_index+1);
+    if(m.reason==='empty')
+      return '⚠ '+slot+': GCode needs '+m.gcode_material+' — slot is empty';
+    return '⚠ '+slot+': GCode needs '+m.gcode_material+', loaded: '+(m.ams_material||'?');
+  });
+  el.innerHTML='<strong>Filament mismatch detected</strong><br>'+lines.join('<br>');
+  el.style.display='';
+}
+function startReadyFileWithSlots(filename,_autoOpen,_mismatch){
   if(!_autoOpen) _fdAutoOpenedFile=null; // manueller Aufruf → Auto-Open-Sperre aufheben
   var fn=filename||S.file_ready;
   var currentFile=(storeFiles||[]).find(function(f){return f.filename===fn;});
@@ -2507,9 +2604,11 @@ function startReadyFileWithSlots(filename,_autoOpen){
     fetch(_apiUrl('/kx/filament/slots')).then(function(r){return r.json()}).then(function(d){
       if(_autoOpenFile && _fdUserCancelled){_fdDialogOpen=false;return;}
       openFilamentDialog(d.result||[]);
+      _showMismatchWarn(_mismatch||null);
     }).catch(function(){
       if(_autoOpenFile && _fdUserCancelled){_fdDialogOpen=false;return;}
       openFilamentDialog([]);
+      _showMismatchWarn(_mismatch||null);
     });
   }
 
@@ -2745,6 +2844,7 @@ function openFilamentDialog(slots){
 function closeFilamentDialog(){
   var dlg=document.getElementById('filament-dialog');
   if(dlg)dlg.classList.remove('open');
+  _showMismatchWarn(null);
   _fdDialogOpen=false;
   if(_fdAutoOpenedFile){
     _fdUserCancelled=true;

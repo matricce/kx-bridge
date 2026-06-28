@@ -870,6 +870,7 @@ class KobraXBridge:
           "print_speed_mode":   2,
           "connection_error":   "",
           "file_ready":         "",
+          "filament_mismatch":  None,
           "print_start_dialog": getattr(args, "print_start_dialog", 1),
           "filament_mode":      "toolhead",
           "supplies_usage":     0,
@@ -3273,6 +3274,31 @@ class KobraXBridge:
         self._state["last_upload_size"] = file_size
 
         if auto_print:
+            mismatch = self._check_filament_mismatch(gcode_filaments)
+            if mismatch:
+                log.info(f"Upload+Print blockiert — Filament-Mismatch: {mismatch}")
+                self._state["file_ready"] = remote_filename
+                self._state["filament_mismatch"] = mismatch
+                return web.json_response({
+                    "done": True,
+                    "filament_mismatch": True,
+                    "mismatch_details": mismatch,
+                    "files": {
+                        "local": {
+                            "name": remote_filename,
+                            "origin": "local",
+                            "path": remote_filename,
+                            "refs": {
+                                "download": f"http://{request.host}/api/files/local/{remote_filename}",
+                                "resource":  f"http://{request.host}/api/files/local/{remote_filename}",
+                            }
+                        }
+                    },
+                    "result": {
+                        "item": {"path": remote_filename, "root": "gcodes"},
+                        "action": "create_file",
+                    }
+                }, status=201)
             log.info(f"Upload+Print (print=true): {remote_filename}")
             self._state["file_ready"] = ""
             loop = asyncio.get_event_loop()
@@ -3300,6 +3326,45 @@ class KobraXBridge:
                 "action": "create_file",
             }
         }, status=201)
+
+    def _check_filament_mismatch(self, gcode_filaments: list | None) -> list[dict] | None:
+        """Vergleicht GCode-Filamente (is_used=True) mit aktuell belegten AMS-Slots.
+
+        Gibt Liste von Mismatch-Einträgen zurück wenn mindestens ein genutzter
+        GCode-Slot kein passendes Material im AMS hat — sonst None.
+        Wird nur ausgelöst wenn AMS-Daten vorhanden sind (mindestens 1 belegter Slot)."""
+        if not gcode_filaments:
+            return None
+        slots = self._ams_slots or []
+        occupied = {s["global_index"]: s for s in slots if s.get("type") and s.get("status") == 5}
+        if not occupied:
+            return None
+        mismatches = []
+        for f in gcode_filaments:
+            if not f.get("is_used"):
+                continue
+            idx = int(f.get("slot_index", -1))
+            gcode_mat = (f.get("material") or "").upper().strip()
+            if not gcode_mat:
+                continue
+            slot = occupied.get(idx)
+            if slot is None:
+                mismatches.append({
+                    "slot_index": idx,
+                    "gcode_material": gcode_mat,
+                    "ams_material": None,
+                    "reason": "empty",
+                })
+            else:
+                ams_mat = (slot.get("type") or "").upper().strip()
+                if ams_mat and ams_mat != gcode_mat:
+                    mismatches.append({
+                        "slot_index": idx,
+                        "gcode_material": gcode_mat,
+                        "ams_material": ams_mat,
+                        "reason": "mismatch",
+                    })
+        return mismatches if mismatches else None
 
     def _start_print(self, filename: str, url: str = "", md5: str = "", filesize: int = 0,
                      gcode_filaments: list | None = None):
@@ -3492,6 +3557,7 @@ class KobraXBridge:
 
     async def handle_api_file_ready_clear(self, request):
         self._state["file_ready"] = ""
+        self._state["filament_mismatch"] = None
         self._thumbnail_b64 = ""
         self._push_status_update()
         return web.json_response({"result": "ok"})
