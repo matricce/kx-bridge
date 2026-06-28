@@ -64,9 +64,43 @@ jobs:
           echo "${{ secrets.REGISTRY_TOKEN }}" | \
             docker login gitea.it-drui.de -u "${{ secrets.REGISTRY_USER }}" --password-stdin
 
+      - name: Compute nightly version
+        run: |
+          # Letzten Stable-Tag ermitteln (v0.9.27 → minor=27)
+          LAST_STABLE=$(git tag --list 'v*' --sort=-version:refname | head -1)
+          if [ -z "$LAST_STABLE" ]; then
+            echo "ERROR: kein Stable-Tag gefunden" >&2; exit 1
+          fi
+          # Nächste Minor-Version: v0.9.27 → 0.9.28
+          MAJOR=$(echo "$LAST_STABLE" | sed 's/^v//' | cut -d. -f1)
+          MINOR=$(echo "$LAST_STABLE" | sed 's/^v//' | cut -d. -f2)
+          PATCH=$(echo "$LAST_STABLE" | sed 's/^v//' | cut -d. -f3)
+          NEXT_PATCH=$((PATCH + 1))
+          BASE="${MAJOR}.${MINOR}.${NEXT_PATCH}"
+          # Laufende Nummer: Anzahl vorhandener nightly-<BASE>-nightlyX Tags + 1
+          COUNT=$(git tag --list "nightly-${BASE}-nightly*" | wc -l | tr -d ' ')
+          N=$((COUNT + 1))
+          VERSION="${BASE}-nightly${N}"
+          echo "VERSION=${VERSION}" > /tmp/nightly_version.env
+          echo "BASE=${BASE}" >> /tmp/nightly_version.env
+          echo "LAST_STABLE=${LAST_STABLE}" >> /tmp/nightly_version.env
+          echo "Computed nightly version: ${VERSION} (after ${LAST_STABLE})"
+
+      - name: Write VERSION file & commit
+        env:
+          GITEA_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          . /tmp/nightly_version.env
+          git config user.name "gitea-actions"
+          git config user.email "actions@it-drui.de"
+          echo "$VERSION" > VERSION
+          git add VERSION
+          git commit -m "chore: nightly ${VERSION}" || true
+          git push https://gitea-actions:${GITEA_TOKEN}@gitea.it-drui.de/viewit/KX-Bridge-Release.git nightly
+
       - name: Build & push (amd64 + arm64)
         run: |
-          VERSION=$(cat VERSION)
+          . /tmp/nightly_version.env
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
             --push \
@@ -80,52 +114,44 @@ jobs:
         env:
           GITEA_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
-          VERSION=$(cat VERSION)
+          . /tmp/nightly_version.env
           TAG="nightly-${VERSION}"
-          git config user.name "gitea-actions"
-          git config user.email "actions@it-drui.de"
 
-          # Changelog dynamisch aus Git-Log seit letztem nightly-Tag generieren
+          # Letzten nightly-Tag als Changelog-Basis ermitteln
+          PREV_TAG=$(git tag --list 'nightly-*' --sort=-version:refname | head -1)
+          [ -z "$PREV_TAG" ] && PREV_TAG="$LAST_STABLE"
+
+          # Changelog generieren
           BODY_FILE=$(mktemp)
-          PREV_TAG=$(git tag --list 'nightly-*' --sort=-version:refname | grep -v "^nightly-${VERSION}$" | head -1)
-          if [ -z "$PREV_TAG" ]; then
-            PREV_TAG=$(git tag --list 'v*' --sort=-version:refname | head -1)
-          fi
           printf '## KX-Bridge %s — Nightly Build\n\n' "$VERSION" > "$BODY_FILE"
           printf '[experimental] Untested features, for testers only.\n\n' >> "$BODY_FILE"
-          if [ -n "$PREV_TAG" ]; then
-            printf '### Changes since `%s`\n\n' "$PREV_TAG" >> "$BODY_FILE"
-            git log "${PREV_TAG}..HEAD" --pretty=format:'- %s' \
-              --no-merges \
-              --invert-grep --grep='^chore: nightly' \
-              --invert-grep --grep='^chore: releases/' \
-              >> "$BODY_FILE" || true
-          else
-            printf '### Changes\n\n- Initial nightly build\n' >> "$BODY_FILE"
-          fi
+          printf '### Changes since `%s`\n\n' "$PREV_TAG" >> "$BODY_FILE"
+          git log "${PREV_TAG}..HEAD" --pretty=format:'- %s' \
+            --no-merges \
+            --invert-grep --grep='^chore: nightly' \
+            >> "$BODY_FILE" || true
           printf '\n\n---\n\n### Update Docker image\n\n```bash\ndocker compose pull && docker compose up -d\n```\n\n' >> "$BODY_FILE"
           printf 'Image tag: `gitea.it-drui.de/viewit/kx-bridge:nightly`\n' >> "$BODY_FILE"
 
           # Tag setzen
-          git tag -f "$TAG"
-          git push https://gitea-actions:${GITEA_TOKEN}@gitea.it-drui.de/viewit/KX-Bridge-Release.git "$TAG" --force
+          git tag "$TAG"
+          git push https://gitea-actions:${GITEA_TOKEN}@gitea.it-drui.de/viewit/KX-Bridge-Release.git "$TAG"
 
-          # curl installieren (BusyBox wget kann kein DELETE/POST mit Headers)
+          # curl installieren falls nötig
           if ! command -v curl >/dev/null 2>&1; then
-            if ! apk add --no-cache curl 2>/dev/null; then
-              wget -qO /usr/local/bin/curl \
-                "https://github.com/moparisthebest/static-curl/releases/download/v8.6.0/curl-amd64"
-              chmod +x /usr/local/bin/curl
-            fi
+            apk add --no-cache curl 2>/dev/null || \
+              { wget -qO /usr/local/bin/curl \
+                  "https://github.com/moparisthebest/static-curl/releases/download/v8.6.0/curl-amd64" \
+                && chmod +x /usr/local/bin/curl; }
           fi
 
-          # Altes Release loeschen falls vorhanden
+          # Altes Release löschen falls vorhanden
           curl -s -X DELETE \
             -H "Authorization: token ${GITEA_TOKEN}" \
             "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases/tags/${TAG}" \
             2>/dev/null || true
 
-          # Release erstellen (JSON-Body via awk escapen)
+          # Release erstellen
           BODY_JSON=$(awk '{
             gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, "\\t");
             printf "%s\\n", $0
