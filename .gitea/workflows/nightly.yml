@@ -152,13 +152,21 @@ jobs:
             "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases/tags/${TAG}" \
             2>/dev/null || true
 
-          # Release erstellen
-          BODY_JSON=$(awk '{
-            gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, "\\t");
-            printf "%s\\n", $0
-          }' "$BODY_FILE" | awk 'BEGIN{printf "\""} {printf "%s", $0} END{printf "\""}')
-          JSON_PAYLOAD="{\"tag_name\":\"${TAG}\",\"name\":\"KX-Bridge ${VERSION} Nightly\",\"body\":${BODY_JSON},\"draft\":false,\"prerelease\":true}"
-          printf '%s' "$JSON_PAYLOAD" > /tmp/release_body.json
+          # Release erstellen — JSON via python3 serialisieren (kein SIGPIPE-Risiko)
+          python3 - "$TAG" "$VERSION" "$BODY_FILE" <<'PYEOF'
+import sys, json
+tag, version, body_file = sys.argv[1], sys.argv[2], sys.argv[3]
+body = open(body_file).read()
+payload = json.dumps({
+    "tag_name": tag,
+    "name": f"KX-Bridge {version} Nightly",
+    "body": body,
+    "draft": False,
+    "prerelease": True
+})
+with open("/tmp/release_body.json", "w") as f:
+    f.write(payload)
+PYEOF
           curl -s -X POST \
             -H "Authorization: token ${GITEA_TOKEN}" \
             -H "Content-Type: application/json" \
