@@ -4,9 +4,7 @@ __pycache__/
 build/
 dist/
 *.spec
-releases/*/kx-bridge
-releases/*/extract_credentials
-releases/*/extract_credentials.exe
+releases/
 
 !kx-bridge.spec
 
