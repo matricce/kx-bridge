@@ -18,3 +18,7 @@ data/
 
 !data/orca_filaments.json
 .runner-token
+
+# Dev-only Dateien — nicht ins öffentliche Repo
+CLAUDE.md
+release.sh
