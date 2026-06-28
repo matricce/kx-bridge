@@ -85,18 +85,26 @@ jobs:
           git config user.name "gitea-actions"
           git config user.email "actions@it-drui.de"
 
-          # Changelog aus CHANGES.md lesen (wird von release.sh aus dem Dev-Repo generiert)
+          # Changelog dynamisch aus Git-Log seit letztem nightly-Tag generieren
           BODY_FILE=$(mktemp)
-          if [ -f CHANGES.md ]; then
-            cat CHANGES.md > "$BODY_FILE"
-          else
-            # Fallback falls CHANGES.md fehlt
-            printf '## KX-Bridge %s -- Nightly Build\n\n' "$VERSION" > "$BODY_FILE"
-            printf '[experimentell] Ungetestete Features, nur fuer Tester geeignet.\n\n' >> "$BODY_FILE"
-            printf '- Automatischer Nightly-Build\n\n---\n\n' >> "$BODY_FILE"
-            printf '### Docker-Image aktualisieren\n\n```bash\ndocker compose pull && docker compose up -d\n```\n\n' >> "$BODY_FILE"
-            printf 'Image-Tag: `gitea.it-drui.de/viewit/kx-bridge:nightly`\n' >> "$BODY_FILE"
+          PREV_TAG=$(git tag --list 'nightly-*' --sort=-version:refname | grep -v "^nightly-${VERSION}$" | head -1)
+          if [ -z "$PREV_TAG" ]; then
+            PREV_TAG=$(git tag --list 'v*' --sort=-version:refname | head -1)
           fi
+          printf '## KX-Bridge %s — Nightly Build\n\n' "$VERSION" > "$BODY_FILE"
+          printf '[experimental] Untested features, for testers only.\n\n' >> "$BODY_FILE"
+          if [ -n "$PREV_TAG" ]; then
+            printf '### Changes since `%s`\n\n' "$PREV_TAG" >> "$BODY_FILE"
+            git log "${PREV_TAG}..HEAD" --pretty=format:'- %s' \
+              --no-merges \
+              --invert-grep --grep='^chore: nightly' \
+              --invert-grep --grep='^chore: releases/' \
+              >> "$BODY_FILE" || true
+          else
+            printf '### Changes\n\n- Initial nightly build\n' >> "$BODY_FILE"
+          fi
+          printf '\n\n---\n\n### Update Docker image\n\n```bash\ndocker compose pull && docker compose up -d\n```\n\n' >> "$BODY_FILE"
+          printf 'Image tag: `gitea.it-drui.de/viewit/kx-bridge:nightly`\n' >> "$BODY_FILE"
 
           # Tag setzen
           git tag -f "$TAG"
