@@ -54,6 +54,7 @@ function _loadSpoolmanStatus(){
     _spoolmanStatus=d;
     _slotSpoolMap=d.slot_spools||{};
     _updateSpoolmanStatusDot();
+    _buildSpoolmanSection();
   }).catch(function(){});
 }
 function _updateSpoolmanStatusDot(){
