@@ -153,13 +153,7 @@ jobs:
             2>/dev/null || true
 
           # Release erstellen — JSON via python3 serialisieren (kein SIGPIPE-Risiko)
-          python3 -c "
-import sys, json
-tag, version, body_file = sys.argv[1], sys.argv[2], sys.argv[3]
-body = open(body_file).read()
-payload = json.dumps({'tag_name': tag, 'name': 'KX-Bridge ' + version + ' Nightly', 'body': body, 'draft': False, 'prerelease': True})
-open('/tmp/release_body.json', 'w').write(payload)
-" "$TAG" "$VERSION" "$BODY_FILE"
+          python3 .gitea/make_release_json.py "$TAG" "$VERSION" "$BODY_FILE"
           curl -s -X POST \
             -H "Authorization: token ${GITEA_TOKEN}" \
             -H "Content-Type: application/json" \
