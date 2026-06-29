@@ -68,7 +68,8 @@ jobs:
       - name: Compute nightly version
         run: |
           # Letzten Stable-Tag ermitteln (v0.9.27 → minor=27)
-          LAST_STABLE=$(git tag --list 'v*' --sort=-version:refname | head -1)
+          LAST_STABLE=$(git tag --list 'v*' --sort=-version:refname \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' | { read -r line; echo "$line"; cat >/dev/null; } || true)
           if [ -z "$LAST_STABLE" ]; then
             echo "ERROR: kein Stable-Tag gefunden" >&2; exit 1
           fi
@@ -110,7 +111,8 @@ jobs:
 
           # Letzten Stable-Tag als Changelog-Basis (nur echte vX.Y.Z-Tags)
           PREV_TAG=$(git tag --list 'v*' --sort=-version:refname \
-            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | { read -r line; echo "$line"; cat >/dev/null; } || true)
           [ -z "$PREV_TAG" ] && PREV_TAG=$(git rev-list --max-parents=0 HEAD)
 
           # Changelog: NIGHTLY_CHANGELOG.md hat Vorrang (manuell gepflegt),
