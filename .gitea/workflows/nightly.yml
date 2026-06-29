@@ -154,8 +154,13 @@ jobs:
             "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases/tags/${TAG}" \
             2>/dev/null || true
 
-          # Release erstellen — JSON via python3 serialisieren (kein SIGPIPE-Risiko)
-          python3 .gitea/make_release_json.py "$TAG" "$VERSION" "$BODY_FILE"
+          # Release erstellen — JSON sicher via jq bauen
+          jq -n \
+            --arg tag "$TAG" \
+            --arg name "KX-Bridge ${VERSION} Nightly" \
+            --rawfile body "$BODY_FILE" \
+            '{"tag_name":$tag,"name":$name,"body":$body,"draft":false,"prerelease":true}' \
+            > /tmp/release_body.json
           curl -s -X POST \
             -H "Authorization: token ${GITEA_TOKEN}" \
             -H "Content-Type: application/json" \
