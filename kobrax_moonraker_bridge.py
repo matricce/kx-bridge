@@ -911,7 +911,23 @@ class KobraXBridge:
             SpoolmanClient(_sm_url, getattr(args, "spoolman_sync_rate", 0))
             if _sm_url else None
         )
-        self._spoolman_slot_spools: dict[int, int] = {}  # {ams_slot_idx: spoolman_spool_id}
+        # Persistierte Spool-Zuordnung aus config.ini laden
+        _slot_spools_init: dict[int, int] = {}
+        try:
+            import configparser as _cp2
+            _cfg_path2 = config_loader._find_config_file()
+            if _cfg_path2:
+                _cfg2 = _cp2.ConfigParser()
+                _cfg2.read(_cfg_path2, encoding="utf-8")
+                _raw = _cfg2.get("spoolman", "slot_spools", fallback="")
+                for _pair in _raw.split(","):
+                    if ":" in _pair:
+                        _k, _v = _pair.strip().split(":", 1)
+                        if _k.isdigit() and _v.isdigit():
+                            _slot_spools_init[int(_k)] = int(_v)
+        except Exception:
+            pass
+        self._spoolman_slot_spools: dict[int, int] = _slot_spools_init  # {ams_slot_idx: spoolman_spool_id}
         self._spoolman_slot_usage: dict[int, float] = {}   # per-slot accumulated mm this print
         self._spoolman_slot_reported: dict[int, float] = {}  # per-slot mm already sent to Spoolman
         self._spoolman_last_usage: float = 0.0   # supplies_usage at last attribution tick
@@ -1058,11 +1074,26 @@ class KobraXBridge:
             data = await request.json()
         except Exception:
             return self._json_cors({"error": "invalid JSON"}, status=400)
-        slot_map = data.get("slot_map") or {}
+        slot_map = data.get("slot_map") or data.get("slot_spools") or {}
         self._spoolman_slot_spools = {
             int(k): int(v) for k, v in slot_map.items()
             if str(v).isdigit() and int(v) > 0
         }
+        # Persistieren in config.ini damit die Zuordnung Bridge-Neustart überlebt
+        try:
+            import configparser as _cp
+            _cfg_path = config_loader._find_config_file()
+            if _cfg_path:
+                _cfg = _cp.ConfigParser()
+                _cfg.read(_cfg_path, encoding="utf-8")
+                if not _cfg.has_section("spoolman"):
+                    _cfg.add_section("spoolman")
+                _cfg.set("spoolman", "slot_spools", ",".join(
+                    f"{k}:{v}" for k, v in self._spoolman_slot_spools.items()))
+                with open(_cfg_path, "w", encoding="utf-8") as _f:
+                    _cfg.write(_f)
+        except Exception as _e:
+            log.debug(f"Spoolman slot_spools persist error: {_e}")
         self._spoolman_slot_usage = {}
         self._spoolman_slot_reported = {}
         self._spoolman_last_usage = 0.0
