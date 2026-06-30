@@ -828,14 +828,14 @@ class KobraXBridge:
         # Marke ("PolyTerra PLA — Polymaker") statt nur "Generic PLA" anzeigt.
         try:
             import config_loader as _cl
-            self._filament_profiles: dict[int, dict] = _cl.list_filament_profiles()
+            self._filament_profiles: dict[int, dict] = _cl.list_filament_profiles(self._printer_id)
         except Exception:
             self._filament_profiles = {}
         # Vendor-Sichtbarkeitsfilter fürs Slot-Profil-Dropdown (Issue #41 Option A).
         # Leere Liste = alle Vendoren sichtbar (rückwärtskompatibel).
         try:
             import config_loader as _cl
-            self._visible_vendors: list[str] = _cl.list_visible_vendors()
+            self._visible_vendors: list[str] = _cl.list_visible_vendors(self._printer_id)
         except Exception:
             self._visible_vendors = []
         self._last_state: dict = {}
@@ -2601,7 +2601,7 @@ class KobraXBridge:
         # Persistieren in config.ini
         try:
             import config_loader as _cl
-            _cl.save_filament_profiles(self._filament_profiles)
+            _cl.save_filament_profiles(self._filament_profiles, self._printer_id)
         except Exception as e:
             log.warning(f"save_filament_profiles failed: {e}")
             return self._json_cors({"error": str(e)}, status=500)
@@ -2631,7 +2631,7 @@ class KobraXBridge:
             self._visible_vendors = [str(v).strip() for v in vendors if str(v).strip()]
             try:
                 import config_loader as _cl
-                _cl.save_visible_vendors(self._visible_vendors)
+                _cl.save_visible_vendors(self._visible_vendors, self._printer_id)
             except Exception as e:
                 log.warning(f"save_visible_vendors failed: {e}")
                 return self._json_cors({"error": str(e)}, status=500)
