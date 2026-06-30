@@ -94,7 +94,7 @@ jobs:
           # VERSION-Datei im Arbeitsverzeichnis für den Docker-Build setzen (kein Commit)
           echo "$VERSION" > VERSION
           docker buildx build \
-            --platform linux/amd64,linux/arm64 \
+            --platform linux/amd64,linux/arm64,linux/arm/v7 \
             --push \
             --provenance=false \
             --no-cache \
