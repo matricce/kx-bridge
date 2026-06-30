@@ -7,6 +7,7 @@ import os
 import sys
 import pathlib
 import configparser
+from typing import Optional
 
 _BASE = pathlib.Path(sys.executable).parent if getattr(sys, "frozen", False) else pathlib.Path(__file__).parent
 
@@ -182,8 +183,26 @@ def list_printers() -> list[dict]:
     return printers
 
 
-def list_filament_profiles() -> dict[int, dict]:
+def _filament_section(printer_id: Optional[str] = None) -> str:
+    """Section name holding a printer's filament-profile mapping.
+
+    Multi-printer (one bridge, N printers): each printer keeps its own
+    ``[filament_profiles_<id>]`` section so the mappings cannot overwrite each
+    other. ``printer_id is None`` (single-printer / legacy callers) maps to the
+    original global ``[filament_profiles]`` section — full backward compatibility.
+    """
+    pid = str(printer_id).strip() if printer_id is not None else ""
+    if pid and pid != "0":
+        return f"filament_profiles_{pid}"
+    return "filament_profiles"
+
+
+def list_filament_profiles(printer_id: Optional[str] = None) -> dict[int, dict]:
     """Liest die [filament_profiles]-Sektion aus config.ini.
+
+    With ``printer_id`` set, reads the per-printer ``[filament_profiles_<id>]``
+    section and falls back to the legacy global ``[filament_profiles]`` while
+    that printer has no own section yet.
 
     Format pro AMS-Slot — primärer Selector ist (vendor, name), die `id` wird
     aus der orca_filaments.json beim Speichern nachgeschlagen und mitgeführt
@@ -208,10 +227,13 @@ def list_filament_profiles() -> dict[int, dict]:
         return {}
     cfg = configparser.ConfigParser()
     cfg.read(path, encoding="utf-8")
-    if not cfg.has_section("filament_profiles"):
+    section = _filament_section(printer_id)
+    if not cfg.has_section(section):
+        section = "filament_profiles"          # fallback: legacy global section
+    if not cfg.has_section(section):
         return {}
     result: dict[int, dict] = {}
-    for key, value in cfg.items("filament_profiles"):
+    for key, value in cfg.items(section):
         # Erwartet: slot_<idx>_id oder slot_<idx>_vendor oder slot_<idx>_name
         if not key.startswith("slot_"):
             continue
@@ -231,74 +253,97 @@ def list_filament_profiles() -> dict[int, dict]:
     return result
 
 
-def save_filament_profiles(profiles: dict[int, dict]) -> bool:
+def save_filament_profiles(profiles: dict[int, dict], printer_id: Optional[str] = None) -> bool:
     """Schreibt die übergebenen Slot-Profile in die [filament_profiles]-
     Sektion der config.ini. Existierende Einträge werden komplett ersetzt.
 
     profiles: {slot_index: {"id": "OGFL01", "vendor": "Polymaker", "name": "PolyTerra PLA"}}
     Mindestens vendor+name müssen gesetzt sein; id ist optional (Hint).
+
+    With ``printer_id`` set, writes the per-printer ``[filament_profiles_<id>]``
+    section only — other printers and the legacy global section are untouched.
     """
     path = _find_config_file()
     if not path:
         return False
     cfg = configparser.ConfigParser()
     cfg.read(path, encoding="utf-8")
+    section = _filament_section(printer_id)
     # visible_vendors (Issue #41) ist kein Slot-Mapping — beim Ersetzen der
     # Sektion erhalten, sonst geht der Vendor-Filter beim Slot-Save verloren.
+    # First save of a per-printer section inherits the legacy global filter.
     preserved_vendors = None
-    if cfg.has_option("filament_profiles", "visible_vendors"):
+    if cfg.has_option(section, "visible_vendors"):
+        preserved_vendors = cfg.get(section, "visible_vendors")
+    elif cfg.has_option("filament_profiles", "visible_vendors"):
         preserved_vendors = cfg.get("filament_profiles", "visible_vendors")
-    if cfg.has_section("filament_profiles"):
-        cfg.remove_section("filament_profiles")
+    if cfg.has_section(section):
+        cfg.remove_section(section)
     if profiles or preserved_vendors:
-        cfg["filament_profiles"] = {}
+        cfg[section] = {}
         if preserved_vendors:
-            cfg["filament_profiles"]["visible_vendors"] = preserved_vendors
+            cfg[section]["visible_vendors"] = preserved_vendors
         for slot_idx in sorted(profiles.keys()):
             entry = profiles[slot_idx] or {}
             if entry.get("vendor"):
-                cfg["filament_profiles"][f"slot_{slot_idx}_vendor"] = entry["vendor"]
+                cfg[section][f"slot_{slot_idx}_vendor"] = entry["vendor"]
             if entry.get("name"):
-                cfg["filament_profiles"][f"slot_{slot_idx}_name"] = entry["name"]
+                cfg[section][f"slot_{slot_idx}_name"] = entry["name"]
             if entry.get("id"):
-                cfg["filament_profiles"][f"slot_{slot_idx}_id"] = entry["id"]
+                cfg[section][f"slot_{slot_idx}_id"] = entry["id"]
     with open(path, "w", encoding="utf-8") as f:
         cfg.write(f)
     return True
 
 
-def list_visible_vendors() -> list[str]:
+def list_visible_vendors(printer_id: Optional[str] = None) -> list[str]:
     """Liest [filament_profiles] visible_vendors (komma-separiert) aus config.ini.
 
     Vendor-Sichtbarkeitsfilter für das Slot-Profil-Dropdown (Issue #41 Option A).
     Leere Liste = keine Einschränkung (rückwärtskompatibel: alle Vendoren).
+
+    With ``printer_id`` set, reads the per-printer section and falls back to the
+    legacy global ``[filament_profiles]`` filter.
     """
     path = _find_config_file()
     if not path:
         return []
     cfg = configparser.ConfigParser()
     cfg.read(path, encoding="utf-8")
-    if not cfg.has_option("filament_profiles", "visible_vendors"):
+    section = _filament_section(printer_id)
+    if not cfg.has_option(section, "visible_vendors"):
+        section = "filament_profiles"          # fallback: legacy global section
+    if not cfg.has_option(section, "visible_vendors"):
         return []
-    raw = cfg.get("filament_profiles", "visible_vendors")
+    raw = cfg.get(section, "visible_vendors")
     return [v.strip() for v in raw.split(",") if v.strip()]
 
 
-def save_visible_vendors(vendors: list[str]) -> bool:
+def save_visible_vendors(vendors: list[str], printer_id: Optional[str] = None) -> bool:
     """Schreibt visible_vendors in [filament_profiles], ohne die Slot-Mappings
-    (slot_N_*) zu verlieren. Leere Liste entfernt den Key wieder."""
+    (slot_N_*) zu verlieren. Leere Liste entfernt den Key wieder.
+
+    With ``printer_id`` set, writes the per-printer section. When that section is
+    created here for the first time, the slot mappings are seeded from the legacy
+    global section so they are not orphaned by the read-fallback in
+    ``list_filament_profiles``."""
     path = _find_config_file()
     if not path:
         return False
     cfg = configparser.ConfigParser()
     cfg.read(path, encoding="utf-8")
-    if not cfg.has_section("filament_profiles"):
-        cfg.add_section("filament_profiles")
+    section = _filament_section(printer_id)
+    if not cfg.has_section(section):
+        cfg.add_section(section)
+        if section != "filament_profiles" and cfg.has_section("filament_profiles"):
+            for key, value in cfg.items("filament_profiles"):
+                if key.startswith("slot_"):
+                    cfg[section][key] = value
     clean = [v.strip() for v in (vendors or []) if v and v.strip()]
     if clean:
-        cfg["filament_profiles"]["visible_vendors"] = ", ".join(clean)
-    elif cfg.has_option("filament_profiles", "visible_vendors"):
-        cfg.remove_option("filament_profiles", "visible_vendors")
+        cfg[section]["visible_vendors"] = ", ".join(clean)
+    elif cfg.has_option(section, "visible_vendors"):
+        cfg.remove_option(section, "visible_vendors")
     with open(path, "w", encoding="utf-8") as f:
         cfg.write(f)
     return True

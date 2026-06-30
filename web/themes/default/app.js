@@ -292,7 +292,7 @@ function renderPrinterDropdown(){
       menu.innerHTML=_printers.map(function(p){
         var active=_activePrinter&&String(p.id)===String(_activePrinter.id);
         var num=p.id;
-        return '<a href="/printer'+num+'" style="display:block;padding:10px 14px;color:'+(active?'var(--accent)':'var(--txt)')+';text-decoration:none;font-size:13px;border-bottom:1px solid var(--border)" '+(active?'style="font-weight:600"':'')+'>'+
+        return '<a href="'+((p.bridge_url||'').replace(/\/+$/,''))+'/printer'+num+'" style="display:block;padding:10px 14px;color:'+(active?'var(--accent)':'var(--txt)')+';text-decoration:none;font-size:13px;border-bottom:1px solid var(--border)" '+(active?'style="font-weight:600"':'')+'>'+
           (active?'▶ ':'')+p.name+'</a>';
       }).join('');
     }
@@ -3243,7 +3243,7 @@ function loadPrinterTab(){
           '<div style="font-size:12px;color:var(--txt2);display:flex;gap:12px">'+
             '<span>🌡 '+nt+'°C</span><span>🛏 '+bt+'°C</span>'+
           '</div>'+
-          (!isActive?'<a href="/printer'+printerNum+'" style="display:block;text-align:center;padding:7px;background:var(--accent);color:#fff;border-radius:7px;font-size:13px;font-weight:600;text-decoration:none;margin-top:4px">'+T.printers_switch+'</a>':'<div style="text-align:center;padding:7px;font-size:12px;color:var(--txt2)">'+T.printers_current+'</div>')+
+          (!isActive?'<a href="'+url+'/printer'+printerNum+'" style="display:block;text-align:center;padding:7px;background:var(--accent);color:#fff;border-radius:7px;font-size:13px;font-weight:600;text-decoration:none;margin-top:4px">'+T.printers_switch+'</a>':'<div style="text-align:center;padding:7px;font-size:12px;color:var(--txt2)">'+T.printers_current+'</div>')+
         '</div>';
       }).join('');
     });

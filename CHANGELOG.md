@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- **Filament profiles not isolated between printers in a multi-printer bridge**
+  (issue #74). The slot→profile mapping and `visible_vendors` were stored in a
+  single global `[filament_profiles]` section, so configuring one printer
+  overwrote the other and after a restart both loaded the same mapping. Each
+  printer now persists to its own `[filament_profiles_<id>]` section, with a
+  read-fallback to the legacy global section (single-printer setups unchanged).
+- **Printer dropdown showed the other printer's filament profiles** (issue #74).
+  The header dropdown and the printers-management "switch" link navigated within
+  the same port (`/printerN`), so viewing another printer pulled its profile
+  names cross-instance from the local origin. The links now point at each
+  printer's own `bridge_url`, so every printer is viewed same-origin on its own
+  port.
+
 ## [0.9.26] – 2026-06-21
 
 ### New
