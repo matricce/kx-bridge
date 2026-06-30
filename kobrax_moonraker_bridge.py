@@ -1603,13 +1603,13 @@ class KobraXBridge:
             loaded = self._select_loaded_slots_for_print(warn_on_empty_default=warn_on_empty_default)
         return [
             {
-                "paint_index": gidx,
+                "paint_index": pidx,
                 "ams_index": self._slot_to_print_ams_index(gidx),
                 "paint_color": [255, 255, 255, 255],
                 "ams_color": self._slot_color_rgba(s),
                 "material_type": s.get("type", "PLA"),
             }
-            for gidx, s in loaded
+            for pidx, (gidx, s) in enumerate(loaded)
         ]
 
     def _build_assigned_ams_box_mapping(self, assignments: list) -> tuple[list[dict], int, int]:
