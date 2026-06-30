@@ -1496,6 +1496,110 @@ function _fillSlotProfileDropdown(material, currentVendor, currentName){
     });
   });
 }
+// ── Pickr color picker ──────────────────────────────────────────────────────
+var _pickr=null;
+
+function _initPickr(hex){
+  // destroy previous instance if exists
+  if(_pickr){ try{ _pickr.destroyAndRemove(); }catch(e){} _pickr=null; }
+  var anchor=document.getElementById('slot-pickr-anchor');
+  if(!anchor||typeof Pickr==='undefined') return;
+  // fresh button element so Pickr can mount
+  anchor.innerHTML='<div id="slot-pickr-btn"></div>';
+  _pickr=Pickr.create({
+    el:'#slot-pickr-btn',
+    theme:'nano',
+    default: hex||'#808080',
+    inline: true,
+    showAlways: true,
+    components:{
+      preview:true, opacity:false, hue:true,
+      interaction:{ hex:true, rgba:false, input:true, save:false, clear:false }
+    }
+  });
+  _pickr.on('change',function(color){
+    var h=color.toHEXA().toString().slice(0,7);
+    document.getElementById('slot-edit-color').value=h;
+    document.getElementById('slot-edit-preview').style.background=h;
+  });
+  // Theme anpassen: Pickr benutzt eigene CSS-Variablen, wir überschreiben via style
+  requestAnimationFrame(function(){
+    var el=anchor.querySelector('.pickr');
+    if(el) el.style.cssText='width:100%';
+    var app=anchor.querySelector('.pcr-app');
+    if(app){
+      app.style.cssText='position:relative;width:100%;box-shadow:none;background:transparent';
+      var btn=app.querySelector('.pcr-result');
+      if(btn) btn.style.cssText='background:var(--raised);border:1px solid var(--border);color:var(--txt);border-radius:6px;font-size:12px';
+    }
+  });
+}
+
+// ── Color swatches (localStorage, max 16) ──────────────────────────────────
+var _SWATCH_KEY='kxb_color_swatches';
+var _SWATCH_MAX=16;
+
+function _loadSwatches(){
+  try{ return JSON.parse(localStorage.getItem(_SWATCH_KEY)||'[]'); }catch(e){ return []; }
+}
+function _saveSwatches(arr){ try{ localStorage.setItem(_SWATCH_KEY, JSON.stringify(arr)); }catch(e){} }
+
+function _addSwatch(hex){
+  var arr=_loadSwatches().filter(function(c){ return c.toLowerCase()!==hex.toLowerCase(); });
+  arr.unshift(hex);
+  if(arr.length>_SWATCH_MAX) arr=arr.slice(0,_SWATCH_MAX);
+  _saveSwatches(arr);
+}
+
+function _renderSwatches(){
+  var el=document.getElementById('slot-color-swatches');
+  if(!el) return;
+  var arr=_loadSwatches();
+  if(!arr.length){ el.style.display='none'; return; }
+  el.style.display='flex';
+  el.innerHTML=arr.map(function(c){
+    return '<div title="'+c+'" onclick="slotPickSwatch(\''+c+'\')" style="width:22px;height:22px;border-radius:4px;background:'+c+
+      ';border:2px solid rgba(255,255,255,.2);cursor:pointer;flex-shrink:0"></div>';
+  }).join('');
+}
+
+function slotPickSwatch(hex){
+  if(_pickr){ _pickr.setColor(hex); }
+  var ci=document.getElementById('slot-edit-color');
+  if(ci) ci.value=hex;
+  document.getElementById('slot-edit-preview').style.background=hex;
+}
+
+// ── Copy color from other slot ──────────────────────────────────────────────
+function _renderCopyFromSlot(currentGlobalIdx){
+  var slots=(window._amsSlots||[]).filter(function(s){
+    return s.global_index!==currentGlobalIdx && s.status==5 && Array.isArray(s.color);
+  });
+  var row=document.getElementById('slot-copy-row');
+  var sel=document.getElementById('slot-copy-select');
+  if(!row||!sel) return;
+  if(!slots.length){ row.style.display='none'; return; }
+  row.style.display='';
+  var ph=document.getElementById('lbl-slot-copy-from');
+  var phTxt=ph?ph.textContent:(T.slot_copy_from||'Copy color from slot…');
+  sel.innerHTML='<option value="">'+phTxt+'</option>'+slots.map(function(s){
+    var rgb=s.color;
+    var hex='#'+rgb.map(function(v){return('0'+Math.min(255,v).toString(16)).slice(-2)}).join('');
+    return '<option value="'+hex+'">Slot '+(s.global_index+1)+' — '+(s.type||'?')+' '+hex+'</option>';
+  }).join('');
+}
+
+function slotCopyColor(sel){
+  if(!sel.value) return;
+  var ci=document.getElementById('slot-edit-color');
+  if(!ci) return;
+  ci.value=sel.value;
+  document.getElementById('slot-edit-preview').style.background=sel.value;
+  sel.selectedIndex=0;
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+
 function openSlotEdit(i){
   var slot=(window._amsSlots||[])[i]||{};
   var globalIdx=slot.global_index!=null?slot.global_index:(slot.index!=null?slot.index:i);
@@ -1507,6 +1611,9 @@ function openSlotEdit(i){
   var ci=document.getElementById('slot-edit-color');
   ci.value=hex;
   document.getElementById('slot-edit-preview').style.background=hex;
+  _initPickr(hex);
+  _renderSwatches();
+  _renderCopyFromSlot(globalIdx);
   var mat=(slot.type||'PLA').toUpperCase();
   document.getElementById('slot-edit-mat').value=mat;
   var btns=document.getElementById('slot-mat-btns');
@@ -1631,6 +1738,7 @@ function hexToRgb(hex){
 }
 function saveSlotEdit(){
   var hex=document.getElementById('slot-edit-color').value;
+  _addSwatch(hex);
   var mat=document.getElementById('slot-edit-mat').value.trim().toUpperCase()||'PLA';
   var color=hexToRgb(hex);
   var slotIdx=_slotEditIndex;

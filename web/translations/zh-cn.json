@@ -123,7 +123,7 @@
   "lbl_light": "💡 灯光",
   "lbl_remaining": "剩余时间:",
   "lbl_slicer_time": "切片预估:",
-  "lbl_spoolman_sync_rate": "同步频率（秒，0=关闭）",
+  "lbl_spoolman_sync_rate": "同步频率（秒，0=打印结束）",
   "lbl_spoolman_url": "服务器地址",
   "lbl_unload": "退料",
   "lbl_zpos": "Z (mm)",
@@ -324,5 +324,6 @@
   "update_docker_copied": "已复制！执行：docker compose pull && docker compose up -d",
   "update_error": "错误",
   "update_none": "已是最新版本",
-  "update_restarting": "重启中..."
+  "update_restarting": "重启中...",
+  "slot_copy_from": "从插槽复制颜色…"
 }

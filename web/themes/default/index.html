@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>KX-Bridge</title>
 <link rel="stylesheet" href="/kx/ui/style.css">
+<link rel="stylesheet" href="/kx/ui/lib/pickr-nano.min.css">
+<script src="/kx/ui/lib/pickr.min.js"></script>
 <body>
 
 <div id="conn-error-banner" style="display:none;background:#c0392b;color:#fff;padding:10px 18px;font-size:14px;text-align:center;position:sticky;top:0;z-index:999;"></div>
@@ -46,14 +48,25 @@
       <span class="modal-title" id="slot-edit-title"></span>
       <button onclick="closeSlotEdit()" style="background:none;border:none;color:var(--txt2);font-size:20px;cursor:pointer;line-height:1">✕</button>
     </div>
-    <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
-      <div id="slot-edit-preview" style="width:56px;height:56px;border-radius:50%;border:3px solid rgba(255,255,255,.2);flex-shrink:0"></div>
-      <div style="flex:1">
-        <div style="font-size:11px;color:var(--txt2);margin-bottom:4px" id="lbl-slot-color"></div>
-        <input type="color" id="slot-edit-color"
-          oninput="document.getElementById('slot-edit-preview').style.background=this.value"
-          style="width:100%;height:36px;border:1px solid var(--border);border-radius:6px;background:var(--raised);cursor:pointer;padding:2px">
+    <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:12px">
+      <div id="slot-edit-preview" style="width:56px;height:56px;border-radius:50%;border:3px solid rgba(255,255,255,.2);flex-shrink:0;margin-top:4px"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;color:var(--txt2);margin-bottom:6px" id="lbl-slot-color"></div>
+        <!-- Pickr anchor — JS mounts the picker here -->
+        <div id="slot-pickr-anchor"></div>
+        <!-- hidden input keeps the hex value for saveSlotEdit() -->
+        <input type="hidden" id="slot-edit-color">
       </div>
+    </div>
+    <!-- Recent color swatches (max 16, localStorage) -->
+    <div id="slot-color-swatches" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px"></div>
+    <!-- Copy from slot -->
+    <div id="slot-copy-row" style="display:none;margin-bottom:16px">
+      <select id="slot-copy-select"
+        style="width:100%;padding:5px 8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);font-size:12px;box-sizing:border-box"
+        onchange="slotCopyColor(this)">
+        <option value="" id="lbl-slot-copy-from">Copy color from slot…</option>
+      </select>
     </div>
     <div style="margin-bottom:20px">
       <div style="font-size:11px;color:var(--txt2);margin-bottom:6px" id="lbl-slot-material"></div>
@@ -589,7 +602,7 @@
                 <input type="text" id="s-spoolman-url" placeholder="http://spoolman:7912" style="width:200px">
               </div>
               <div class="set-row">
-                <label id="lbl-spoolman-sync-rate">Sync-Rate (s, 0=aus)</label>
+                <label id="lbl-spoolman-sync-rate">Sync-Rate (s, 0=Druckende)</label>
                 <input type="number" id="s-spoolman-sync-rate" min="0" max="3600" value="30" style="width:80px">
               </div>
               <div id="spoolman-status-row" style="margin-top:6px;font-size:12px;color:var(--txt2)">

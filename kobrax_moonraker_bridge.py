@@ -142,6 +142,11 @@ _KX_UI_ASSETS: dict[str, str] = {
     "style.css": "text/css",
     "app.js":    "application/javascript",
 }
+# Dateien aus lib/ werden anhand der Extension ausgeliefert (kein Whitelist-Eintrag nötig)
+_KX_UI_LIB_TYPES: dict[str, str] = {
+    ".js":  "application/javascript",
+    ".css": "text/css",
+}
 _KX_UI_TRANSLATION_RE = re.compile(r"^translations/([a-z]{2}(?:-[a-z]{2})?)\.json$")
 
 # Ring-Buffer für Browser-Log-Stream (letzte 200 Einträge)
@@ -3575,6 +3580,12 @@ class KobraXBridge:
         cache_control = "public, max-age=86400"
 
         if ctype is not None:
+            path = os.path.join(_WEB_BASE, "web", "themes", self._ui_theme, name)
+        elif name.startswith("lib/"):
+            ext = os.path.splitext(name)[1].lower()
+            ctype = _KX_UI_LIB_TYPES.get(ext)
+            if not ctype:
+                raise web.HTTPNotFound()
             path = os.path.join(_WEB_BASE, "web", "themes", self._ui_theme, name)
         else:
             m = _KX_UI_TRANSLATION_RE.match(name)

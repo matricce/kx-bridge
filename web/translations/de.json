@@ -123,7 +123,7 @@
   "lbl_light": "💡 Licht",
   "lbl_remaining": "Restzeit:",
   "lbl_slicer_time": "Slicer-Schätzung:",
-  "lbl_spoolman_sync_rate": "Sync-Rate (s, 0=aus)",
+  "lbl_spoolman_sync_rate": "Sync-Rate (s, 0=Druckende)",
   "lbl_spoolman_url": "Server-URL",
   "lbl_unload": "Ausziehen",
   "lbl_zpos": "Z (mm)",
@@ -324,5 +324,6 @@
   "update_docker_copied": "Kopiert! Ausführen: docker compose pull && docker compose up -d",
   "update_error": "Fehler",
   "update_none": "Bereits aktuell",
-  "update_restarting": "Starte neu..."
+  "update_restarting": "Starte neu...",
+  "slot_copy_from": "Farbe von Slot kopieren…"
 }
