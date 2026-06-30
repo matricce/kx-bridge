@@ -997,7 +997,10 @@ function applyState(){
       }
       html+='</div></div>';
     });
-    document.getElementById('ams-slots').innerHTML=html;
+  // Nicht rendern wenn ein Spool-Dropdown gerade offen ist (verhindert Schließen beim Poll)
+  var activeEl=document.activeElement;
+  var spoolOpen=activeEl&&activeEl.tagName==='SELECT'&&activeEl.dataset.spoolSlot!=null;
+  if(!spoolOpen) document.getElementById('ams-slots').innerHTML=html;
   }
 
   // camera overlay
