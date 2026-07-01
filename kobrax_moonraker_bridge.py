@@ -1601,16 +1601,32 @@ class KobraXBridge:
         loaded = loaded_slots
         if loaded is None:
             loaded = self._select_loaded_slots_for_print(warn_on_empty_default=warn_on_empty_default)
-        return [
-            {
-                "paint_index": pidx,
-                "ams_index": self._slot_to_print_ams_index(gidx),
-                "paint_color": [255, 255, 255, 255],
-                "ams_color": self._slot_color_rgba(s),
-                "material_type": s.get("type", "PLA"),
-            }
-            for pidx, (gidx, s) in enumerate(loaded)
-        ]
+        if not loaded:
+            return []
+        loaded_map = {gidx: s for gidx, s in loaded}
+        max_idx = max(loaded_map.keys())
+        # Drucker interpretiert ams_box_mapping als geordnete Liste (Eintrag N = TN).
+        # Fehlende Slots müssen als Platzhalter rein, sonst verschiebt sich alles.
+        result = []
+        for i in range(max_idx + 1):
+            if i in loaded_map:
+                s = loaded_map[i]
+                result.append({
+                    "paint_index": i,
+                    "ams_index": self._slot_to_print_ams_index(i),
+                    "paint_color": [255, 255, 255, 255],
+                    "ams_color": self._slot_color_rgba(s),
+                    "material_type": s.get("type", "PLA"),
+                })
+            else:
+                result.append({
+                    "paint_index": i,
+                    "ams_index": self._slot_to_print_ams_index(i),
+                    "paint_color": [255, 255, 255, 255],
+                    "ams_color": [255, 255, 255, 255],
+                    "material_type": "PLA",
+                })
+        return result
 
     def _build_assigned_ams_box_mapping(self, assignments: list) -> tuple[list[dict], int, int]:
         """Build print mapping from UI filament assignments.
