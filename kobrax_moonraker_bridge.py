@@ -911,23 +911,16 @@ class KobraXBridge:
             SpoolmanClient(_sm_url, getattr(args, "spoolman_sync_rate", 0))
             if _sm_url else None
         )
-        # Persistierte Spool-Zuordnung aus config.ini laden
-        _slot_spools_init: dict[int, int] = {}
+        # Persistierte Spool-Zuordnung (AMS-Slot → Spoolman-Spool) je Drucker laden.
+        # Fix: hier wurde `config_loader` referenziert, aber der Modul-Alias ist
+        # `env_loader` (Zeile 32) → NameError, den das bare `except` verschluckte,
+        # sodass die Persistenz nie lud. Jetzt über den lokalen Import + per-Drucker.
         try:
-            import configparser as _cp2
-            _cfg_path2 = config_loader._find_config_file()
-            if _cfg_path2:
-                _cfg2 = _cp2.ConfigParser()
-                _cfg2.read(_cfg_path2, encoding="utf-8")
-                _raw = _cfg2.get("spoolman", "slot_spools", fallback="")
-                for _pair in _raw.split(","):
-                    if ":" in _pair:
-                        _k, _v = _pair.strip().split(":", 1)
-                        if _k.isdigit() and _v.isdigit():
-                            _slot_spools_init[int(_k)] = int(_v)
-        except Exception:
-            pass
-        self._spoolman_slot_spools: dict[int, int] = _slot_spools_init  # {ams_slot_idx: spoolman_spool_id}
+            import config_loader as _cl
+            self._spoolman_slot_spools: dict[int, int] = _cl.list_spool_map(self._printer_id)
+        except Exception as _e:
+            log.warning("Spoolman: Slot-Map laden fehlgeschlagen: %s", _e)
+            self._spoolman_slot_spools = {}  # {ams_slot_idx: spoolman_spool_id}
         self._spoolman_slot_usage: dict[int, float] = {}   # per-slot accumulated mm this print
         self._spoolman_slot_reported: dict[int, float] = {}  # per-slot mm already sent to Spoolman
         self._spoolman_last_usage: float = 0.0   # supplies_usage at last attribution tick
@@ -1079,21 +1072,14 @@ class KobraXBridge:
             int(k): int(v) for k, v in slot_map.items()
             if str(v).isdigit() and int(v) > 0
         }
-        # Persistieren in config.ini damit die Zuordnung Bridge-Neustart überlebt
+        # Persistieren je Drucker (eigene [spoolman_<id>]-Sektion), damit die
+        # Zuordnung Bridge-Neustart überlebt und zwei AMS sich nicht überschreiben.
+        # (Vorher: NameError auf `config_loader` → nichts wurde je gespeichert.)
         try:
-            import configparser as _cp
-            _cfg_path = config_loader._find_config_file()
-            if _cfg_path:
-                _cfg = _cp.ConfigParser()
-                _cfg.read(_cfg_path, encoding="utf-8")
-                if not _cfg.has_section("spoolman"):
-                    _cfg.add_section("spoolman")
-                _cfg.set("spoolman", "slot_spools", ",".join(
-                    f"{k}:{v}" for k, v in self._spoolman_slot_spools.items()))
-                with open(_cfg_path, "w", encoding="utf-8") as _f:
-                    _cfg.write(_f)
+            import config_loader as _cl
+            _cl.save_spool_map(self._spoolman_slot_spools, self._printer_id)
         except Exception as _e:
-            log.debug(f"Spoolman slot_spools persist error: {_e}")
+            log.warning("Spoolman: Slot-Map speichern fehlgeschlagen: %s", _e)
         self._spoolman_slot_usage = {}
         self._spoolman_slot_reported = {}
         self._spoolman_last_usage = 0.0
@@ -2096,6 +2082,7 @@ class KobraXBridge:
       num_gates = len(slots)
       gate_status, gate_material, gate_color, gate_temperature, gate_color_rgb = [], [], [], [], []
       gate_filament_name = []
+      gate_spool_id = []
       for _global_index, slot in slots:
         occupied = slot.get("status") == 5
         gate_status.append(1 if occupied else 0)
@@ -2118,6 +2105,9 @@ class KobraXBridge:
           gate_filament_name.append(fila_name)
         else:
           gate_filament_name.append("")
+        # Spoolman-Spool-ID je Gate aus der (druckerspezifischen) Slot-Map, damit
+        # Happy-Hare/OrcaSlicer den gebundenen Spool anzeigen kann (-1 = keiner).
+        gate_spool_id.append(self._spoolman_slot_spools.get(_global_index, -1) if occupied else -1)
 
       loaded_index_map = {global_index: idx for idx, (global_index, _) in enumerate(slots)}
       active_gate = loaded_index_map.get(int(self._ams_loaded_slot), -1)
@@ -2130,7 +2120,7 @@ class KobraXBridge:
         "gate_temperature":   gate_temperature,
         "gate_color_rgb":     gate_color_rgb,
         "gate_filament_name": gate_filament_name,
-        "gate_spool_id":      [-1] * num_gates,
+        "gate_spool_id":      gate_spool_id,
         "ttg_map":            list(range(num_gates)),
         "tool":               active_gate,
         "gate":               active_gate,

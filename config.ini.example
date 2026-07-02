@@ -41,6 +41,21 @@ web_upload_warning = 1
 # Poll-Intervall in Sekunden
 poll_interval    = 3
 
+# ─── Spoolman (optional) ───────────────────────────────────────────────────────
+# Verfolgt den Filamentverbrauch je AMS-Slot und bucht ihn automatisch vom
+# passenden Spool ab (mm-basiert, wie Moonraker; Spoolman rechnet mm→Gramm).
+# [spoolman]
+# # Server-URL der Spoolman-Instanz (aus Sicht des Bridge-Containers erreichbar):
+# server    = http://192.168.x.x:7912
+# # 0 = nur am Druckende abbuchen, >0 = alle N Sekunden während des Drucks:
+# sync_rate = 0
+#
+# Die AMS-Slot → Spool-Zuordnung wird in der Weboberfläche gesetzt und je Drucker
+# automatisch persistiert (nicht von Hand eintragen):
+#   Einzeldrucker : [spoolman]   slot_spools = 0:42,1:17
+#   Multi-Printer : [spoolman_1] slot_spools = 0:42,1:17
+#                   [spoolman_2] slot_spools = 0:5,1:6
+
 # ─── Multi-Printer (optional) ──────────────────────────────────────────────────
 # Mehrere Drucker können als [printer_1], [printer_2], … definiert werden.
 # Jede Bridge-Instanz verbindet sich mit einem Drucker (je eigener Port).
