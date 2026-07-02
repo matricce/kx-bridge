@@ -1855,22 +1855,54 @@ class KobraXBridge:
     # `compatible_printers: []` (= mit allen Druckern kompatibel).
     _TRAY_INFO_IDX = {
         # Anycubic-eigene Kobra-X-Profile
-        "PLA":      "GFPLA",
-        "PLA+":     "GFPLA+",
-        "PLA SILK": "GFPLA Silk",
-        "PETG":     "GFPETG",
-        "ABS":      "GFABS",
-        "ASA":      "GFASA",
-        "TPU":      "GFTPU 95A",
-        "PVA":      "GFPVA",
+        "PLA":        "GFPLA",
+        "PLA+":       "GFPLA+",
+        "PLA SILK":   "GFPLA Silk",
+        "PLA-SILK":   "GFPLA Silk",
+        "PLASILK":    "GFPLA Silk",
+        "SILK PLA":   "GFPLA Silk",
+        "PLA MATTE":  "GFPLA",
+        "PLA-MATTE":  "GFPLA",
+        "PLA MARBLE": "GFPLA",
+        "PLA WOOD":   "GFPLA",
+        "PETG":       "GFPETG",
+        "PETG+":      "GFPETG",
+        "ABS":        "GFABS",
+        "ASA":        "GFASA",
+        "TPU":        "GFTPU 95A",
+        "TPE":        "GFTPU 95A",
+        "PVA":        "GFPVA",
         # Kein Anycubic-Kobra-X-Profil → Library-Fallback
-        "PLA-CF":   "OGFL98",
-        "PETG-CF":  "OGFG98",
-        "PA":       "OGFN99",
-        "PA-CF":    "OGFN98",
-        "PC":       "OGFC99",
-        "HIPS":     "OGFS98",
+        "PLA-CF":     "OGFL98",
+        "PLA CF":     "OGFL98",
+        "PETG-CF":    "OGFG98",
+        "PETG CF":    "OGFG98",
+        "PA":         "OGFN99",
+        "PA-CF":      "OGFN98",
+        "PA CF":      "OGFN98",
+        "PC":         "OGFC99",
+        "HIPS":       "OGFS98",
     }
+
+    # Normalisiert Material-Typ-Strings auf den kanonischen Key für _TRAY_INFO_IDX
+    # und _default_filament_name. PLA-Varianten die nicht exakt matchen fallen
+    # auf ihre Basisfamilie zurück (PLA+ → PLA+, PLA Matte → PLA, etc.).
+    @staticmethod
+    def _normalize_material(mat: str) -> str:
+        m = mat.upper().strip().replace("-", " ").replace("_", " ")
+        # Bekannte Varianten normalisieren
+        _ALIASES = {
+            "PLAPLUS": "PLA+", "PLA PLUS": "PLA+",
+            "SILK PLA": "PLA SILK", "PLASILK": "PLA SILK",
+            "PLA MATTE": "PLA MATTE", "PLA MARBLE": "PLA MARBLE",
+            "PLA WOOD": "PLA WOOD",
+            "TPE": "TPU",
+            "PETG PLUS": "PETG+",
+            "PA6": "PA", "PA12": "PA", "PA66": "PA",
+        }
+        if m in _ALIASES:
+            return _ALIASES[m]
+        return m
 
     def _build_lane_data(self) -> dict:
       """Baut BBL-AMS-JSON für OrcaSlicer DevFilaSystemParser::ParseV1_0.
@@ -1910,7 +1942,7 @@ class KobraXBridge:
               color_hex = color_raw[:6].upper() + "FF"
             else:
               color_hex = "FFFFFFFF"
-            material = slot.get("type", "PLA").upper()
+            material = self._normalize_material(slot.get("type", "PLA"))
             # User-Override aus config.ini [filament_profiles].slot_N_id
             # bekommt Vorrang vor dem Default-Mapping nach material-Type.
             # Vendor wird mitgesendet (tray_sub_brands + filament_vendor),
@@ -2086,7 +2118,7 @@ class KobraXBridge:
       for _global_index, slot in slots:
         occupied = slot.get("status") == 5
         gate_status.append(1 if occupied else 0)
-        material = (slot.get("type") or "PLA").upper() if occupied else ""
+        material = self._normalize_material(slot.get("type") or "PLA") if occupied else ""
         gate_material.append(material)
         c = slot.get("color", [0, 0, 0]) if occupied else [0, 0, 0]
         # Happy Hare erwartet gate_color als RRGGBB OHNE '#' (Klipper-Limitation).
@@ -2136,8 +2168,22 @@ class KobraXBridge:
       kann pro Slot eine konkrete Marke setzen wenn er das will."""
       if not material:
         return ""
-      mat = material.upper().strip()
+      mat = self._normalize_material(material)
       profs = self._load_orca_filaments()
+      # Varianten-Mapping: Drucker meldet z.B. "PLA SILK", OrcaSlicer speichert
+      # alle Varianten unter type=PLA mit dem Variant-Namen im name-Feld.
+      _VARIANT_NAME = {
+          "PLA SILK":   "Generic PLA Silk",
+          "PLA MATTE":  "Generic PLA Matte",
+          "PLA+":       "Generic PLA",
+          "PLA-CF":     "Generic PLA-CF",
+          "PETG-CF":    "Generic PETG-CF",
+      }
+      if mat in _VARIANT_NAME:
+          target = _VARIANT_NAME[mat]
+          for p in profs:
+              if p.get("vendor") == "Generic" and p.get("name") == target:
+                  return p["name"]
       def _match_type(p: dict) -> bool:
         pt = (p.get("type") or "").upper()
         return pt == mat or pt.startswith(mat + "-") or pt.startswith(mat + " ")

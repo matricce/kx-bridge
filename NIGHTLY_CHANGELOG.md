@@ -1,4 +1,7 @@
 ## Changes in this build
 
-- Fix: wrong filament slot used in multicolor prints when T0 is unused — AMS box mapping now includes placeholder entries for all paint indices so the printer correctly matches T1/T2/T3 tool changes to the right slots (Issue #78)
-- Fix: Spoolman spool-slot assignment now persisted to config.ini and restored on bridge restart
+- Fix: Spoolman spool-slot assignment persistence was silently broken (NameError on config_loader swallowed by bare except) — now uses correct module reference and logs failures; per-printer isolation added so multi-printer setups no longer overwrite each other (Issue #80, PR #83 by @walterioo)
+- Fix: spool dropdown in print dialog showed "[object Object]" instead of vendor name (PR #83)
+- Fix: gate_spool_id in MMU object now populated from per-printer slot map instead of hardcoded -1 (PR #83)
+- Fix: PLA variants (PLA+, PLA Silk, PLA Matte) now recognized as their material family — correct tray_info_idx sent to printer, correct Generic profile synced to OrcaSlicer, and vendor profiles for the variant shown in slot editor dropdown (Issue #82)
+- UI: PLA+, PLA Silk and PLA Matte buttons added to slot material selector

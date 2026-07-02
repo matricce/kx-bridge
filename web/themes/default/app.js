@@ -1413,7 +1413,14 @@ function doProfileImportUpload(files){
 // ── AMS Slot Edit ──
 var _slotEditIndex=-1;
 var _slotEditLoaded=false;
-var _MAT_PRESETS=['PLA','PETG','ABS','ASA','TPU','PA','PC','HIPS'];
+var _MAT_PRESETS=['PLA','PLA+','PLA SILK','PLA MATTE','PETG','ABS','ASA','TPU','PA','PC','HIPS'];
+function _normalizeMat(m){
+  var s=m.toUpperCase().trim().replace(/-/g,' ').replace(/_/g,' ');
+  var aliases={'PLAPLUS':'PLA+','PLA PLUS':'PLA+','SILK PLA':'PLA SILK','PLASILK':'PLA SILK',
+    'PLA MATTE':'PLA','PLA MARBLE':'PLA','PLA WOOD':'PLA','TPE':'TPU',
+    'PETG PLUS':'PETG+','PA6':'PA','PA12':'PA','PA66':'PA'};
+  return aliases[s]||s;
+}
 var _BASE_MATERIAL_TYPES=['PLA','PETG','ABS','ASA','TPU','TPE','PA','PC','HIPS','PEI','PEEK'];
 function updateSlotEditFeedButton(){
   var btn=document.getElementById('btn-slot-edit-feed');
@@ -1454,10 +1461,21 @@ function _fillSlotProfileDropdown(material, currentVendor, currentName){
   _loadOrcaFilaments(function(profiles){
     // Type-Filter: nur Profile vom passenden material zeigen (z.B. PLA → alle PLA-Varianten)
     var matU=(material||'').toUpperCase().trim();
+    // PLA-Varianten: Drucker meldet "PLA SILK"/"PLA+"/"PLA MATTE", OrcaSlicer
+    // speichert alle unter type=PLA — Namens-Keyword als Zusatzfilter.
+    var _PLA_VARIANT_KW={'PLA SILK':'silk','PLA+':'pla+','PLA MATTE':'matte',
+      'PLA MARBLE':'marble','PLA WOOD':'wood'};
+    var variantKw=_PLA_VARIANT_KW[matU]||null;
+    var baseMat=variantKw?'PLA':matU;
     var matched=profiles.filter(function(p){
       var pt=(p.type||'').toUpperCase();
-      // PLA-CF, PLA-SILK etc. zählen auch zu PLA
-      return matU==='' || pt===matU || pt.startsWith(matU+'-') || pt.startsWith(matU+' ');
+      var nameL=(p.name||'').toLowerCase();
+      // Basis-Typ muss passen
+      var typeOk=baseMat===''||pt===baseMat||pt.startsWith(baseMat+'-')||pt.startsWith(baseMat+' ');
+      if(!typeOk) return false;
+      // Bei Variante: Name muss Keyword enthalten (z.B. "silk", "matte", "pla+")
+      if(variantKw) return nameL.indexOf(variantKw)!==-1;
+      return true;
     });
     sel.innerHTML='<option value="">'+tr('slot_edit_profile_default')+'</option>';
     // User-Profile (is_user) zuerst — eigene Optgroup '★ Eigene' an erster Stelle.
@@ -1619,11 +1637,14 @@ function openSlotEdit(i){
   _renderCopyFromSlot(globalIdx);
   var mat=(slot.type||'PLA').toUpperCase();
   document.getElementById('slot-edit-mat').value=mat;
+  // Normalisieren für Button-Highlighting: PLA-Varianten auf nächsten Preset mappen
+  var matNorm=_normalizeMat(mat);
   var btns=document.getElementById('slot-mat-btns');
   btns.innerHTML=_MAT_PRESETS.map(function(m){
+    var active=m===mat||m===matNorm;
     return '<button class="mat-preset-btn" data-mat="'+m+'" onclick="selectMatPreset(\''+m+'\')" '
       +'style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);cursor:pointer;font-size:12px;'
-      +(m===mat?'background:var(--accent);color:#fff':'background:var(--raised);color:var(--txt2)')+'">'+m+'</button>';
+      +(active?'background:var(--accent);color:#fff':'background:var(--raised);color:var(--txt2)')+'">'+m+'</button>';
   }).join('');
   // OrcaSlicer-Profil-Dropdown: aktuellen User-Override für diesen Slot
   // aus /kx/filament/slots holen (enthält vendor+name+id).
