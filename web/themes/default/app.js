@@ -100,7 +100,7 @@ function _buildSpoolmanSection(){
       var currentSpool=_slotSpoolMap[String(idx)]||'';
       var opts='<option value="">–</option>'+_spoolmanSpools.map(function(sp){
         var rem=sp.remaining_weight!=null?' ('+sp.remaining_weight.toFixed(0)+'g)':'';
-        var vendor=sp.filament&&sp.filament.vendor?sp.filament.vendor+' ':'';
+        var vendor=sp.filament&&sp.filament.vendor?sp.filament.vendor.name+' ':'';
         var name=sp.filament&&sp.filament.name?sp.filament.name:'Spool';
         return '<option value="'+sp.id+'"'+(sp.id==currentSpool?' selected':'')+'>'+
                escHtml('#'+sp.id+' '+vendor+name+rem)+'</option>';

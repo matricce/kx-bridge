@@ -349,6 +349,82 @@ def save_visible_vendors(vendors: list[str], printer_id: Optional[str] = None) -
     return True
 
 
+def _spoolman_map_section(printer_id: Optional[str] = None) -> str:
+    """Section name holding a printer's AMS-slot → Spoolman-spool map.
+
+    Multi-printer (one bridge, N printers): each printer keeps its map in its
+    own ``[spoolman_<id>]`` section so two AMS units cannot overwrite each
+    other's mapping. ``printer_id is None`` (single-printer / legacy callers)
+    uses the original ``[spoolman] slot_spools`` key — full backward
+    compatibility. The global ``[spoolman]`` section keeps ``server`` /
+    ``sync_rate`` regardless.
+    """
+    pid = str(printer_id).strip() if printer_id is not None else ""
+    if pid and pid != "0":
+        return f"{CONFIG_SECTION_SPOOLMAN}_{pid}"
+    return CONFIG_SECTION_SPOOLMAN
+
+
+def _parse_slot_spools(raw: str) -> dict[int, int]:
+    """Parse ``"0:42,1:17"`` → ``{0: 42, 1: 17}`` (positive spool ids only)."""
+    result: dict[int, int] = {}
+    for pair in (raw or "").split(","):
+        pair = pair.strip()
+        if ":" not in pair:
+            continue
+        k, _, v = pair.partition(":")
+        k, v = k.strip(), v.strip()
+        if k.isdigit() and v.lstrip("-").isdigit() and int(v) > 0:
+            result[int(k)] = int(v)
+    return result
+
+
+def list_spool_map(printer_id: Optional[str] = None) -> dict[int, int]:
+    """Read the AMS-slot → Spoolman-spool-id map from config.ini.
+
+    With ``printer_id`` set, reads the per-printer ``[spoolman_<id>]
+    slot_spools`` key and falls back to the legacy global ``[spoolman]
+    slot_spools`` while that printer has no own section yet. Returns
+    ``{slot_index: spool_id}`` (only positive ids).
+    """
+    path = _find_config_file()
+    if not path:
+        return {}
+    cfg = configparser.ConfigParser()
+    cfg.read(path, encoding="utf-8")
+    section = _spoolman_map_section(printer_id)
+    if cfg.has_option(section, "slot_spools"):
+        return _parse_slot_spools(cfg.get(section, "slot_spools", fallback=""))
+    if cfg.has_option(CONFIG_SECTION_SPOOLMAN, "slot_spools"):   # legacy global fallback
+        return _parse_slot_spools(cfg.get(CONFIG_SECTION_SPOOLMAN, "slot_spools", fallback=""))
+    return {}
+
+
+def save_spool_map(slot_spools: dict[int, int], printer_id: Optional[str] = None) -> bool:
+    """Persist the AMS-slot → Spoolman-spool-id map to config.ini.
+
+    With ``printer_id`` set, writes only the per-printer ``[spoolman_<id>]``
+    section so other printers and the global ``[spoolman]`` server config stay
+    untouched. An empty map clears the key.
+    """
+    path = _find_config_file()
+    if not path:
+        return False
+    cfg = configparser.ConfigParser()
+    cfg.read(path, encoding="utf-8")
+    section = _spoolman_map_section(printer_id)
+    clean = {int(k): int(v) for k, v in (slot_spools or {}).items() if int(v) > 0}
+    if clean:
+        if not cfg.has_section(section):
+            cfg.add_section(section)
+        cfg[section]["slot_spools"] = ",".join(f"{k}:{v}" for k, v in sorted(clean.items()))
+    elif cfg.has_option(section, "slot_spools"):
+        cfg.remove_option(section, "slot_spools")
+    with open(path, "w", encoding="utf-8") as f:
+        cfg.write(f)
+    return True
+
+
 def get(key: str, default: str = "") -> str:
     return os.environ.get(key, default)
 
