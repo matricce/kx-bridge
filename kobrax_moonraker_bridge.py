@@ -4644,12 +4644,15 @@ class KobraXBridge:
         log.info("Restarting bridge...")
         # config_loader caches config.ini values in os.environ ("only if not set").
         # On restart, environ must be cleaned, otherwise the new process reads
-        # the old values instead of the modified config.ini.
-        for _k in ("PRINTER_IP", "MQTT_PORT", "MQTT_USERNAME", "MQTT_PASSWORD",
-                   "MODE_ID", "DEVICE_ID", "DEFAULT_AMS_SLOT", "AUTO_LEVELING",
-                   "CAMERA_ON_PRINT", "WEB_UPLOAD_WARNING", "PRINT_START_DIALOG",
-                   "FILE_READY_DIALOG", "BRIDGE_PRINTER_NAME",
-                   "SPOOLMAN_SERVER", "SPOOLMAN_SYNC_RATE"):
+        # the old values instead of the modified config.ini. Keys are derived
+        # from config_loader.CONFIG_ENV_MAPPING (single source of truth) so a
+        # newly added setting can never be forgotten here again.
+        try:
+            import config_loader as _cl
+            _restart_env_keys = set(_cl.CONFIG_ENV_MAPPING.keys()) | {"FILE_READY_DIALOG"}
+        except Exception:
+            _restart_env_keys = ()
+        for _k in _restart_env_keys:
             os.environ.pop(_k, None)
 
         in_docker = os.path.exists("/.dockerenv") or os.environ.get("KX_IN_DOCKER")

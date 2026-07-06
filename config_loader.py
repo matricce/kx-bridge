@@ -47,32 +47,39 @@ def _load_env_file(path: pathlib.Path):
                 os.environ[key] = val
 
 
+# Single source of truth for env-var <-> config.ini mapping. _restart_bridge()
+# in kobrax_moonraker_bridge.py clears exactly these keys from os.environ
+# before restarting, so a value removed here or in the UI settings save can
+# never survive as a stale env var read by the new process. Add new settings
+# here ONLY - no second list to keep in sync.
+CONFIG_ENV_MAPPING = {
+    "PRINTER_IP":       (CONFIG_SECTION_CONNECTION, "printer_ip"),
+    "MQTT_PORT":        (CONFIG_SECTION_CONNECTION, "mqtt_port"),
+    "MQTT_USERNAME":    (CONFIG_SECTION_CONNECTION, "username"),
+    "MQTT_PASSWORD":    (CONFIG_SECTION_CONNECTION, "password"),
+    "MODE_ID":          (CONFIG_SECTION_CONNECTION, "mode_id"),
+    "DEVICE_ID":        (CONFIG_SECTION_CONNECTION, "device_id"),
+    "DEFAULT_AMS_SLOT":     (CONFIG_SECTION_PRINT,   "default_ams_slot"),
+    "AUTO_LEVELING":            (CONFIG_SECTION_PRINT,   "auto_leveling"),
+    "VIBRATION_COMPENSATION":   (CONFIG_SECTION_PRINT,   "vibration_compensation"),
+    "CAMERA_ON_PRINT":          (CONFIG_SECTION_PRINT,   "camera_on_print"),
+    "WEB_UPLOAD_WARNING":   (CONFIG_SECTION_PRINT,   "web_upload_warning"),
+    "PRINT_START_DIALOG":   (CONFIG_SECTION_PRINT,   "print_start_dialog"),
+    "BRIDGE_PRINTER_NAME":  (CONFIG_SECTION_BRIDGE,  "printer_name"),
+    "BRIDGE_HOST_IP":       (CONFIG_SECTION_BRIDGE,  "host_ip"),
+    "POLL_INTERVAL":        (CONFIG_SECTION_BRIDGE,  "poll_interval"),
+    "VERBOSE_HTTP_LOG":     (CONFIG_SECTION_BRIDGE,  "verbose_http_log"),
+    "SPOOLMAN_SERVER":      (CONFIG_SECTION_SPOOLMAN, "server"),
+    "SPOOLMAN_SYNC_RATE":   (CONFIG_SECTION_SPOOLMAN, "sync_rate"),
+}
+
+
 def _load_config_file(path: pathlib.Path):
     """Loads config.ini and sets keys in os.environ (only if not already set)."""
     cfg = configparser.ConfigParser()
     cfg.read(path, encoding="utf-8")
 
-    mapping = {
-        "PRINTER_IP":       (CONFIG_SECTION_CONNECTION, "printer_ip"),
-        "MQTT_PORT":        (CONFIG_SECTION_CONNECTION, "mqtt_port"),
-        "MQTT_USERNAME":    (CONFIG_SECTION_CONNECTION, "username"),
-        "MQTT_PASSWORD":    (CONFIG_SECTION_CONNECTION, "password"),
-        "MODE_ID":          (CONFIG_SECTION_CONNECTION, "mode_id"),
-        "DEVICE_ID":        (CONFIG_SECTION_CONNECTION, "device_id"),
-        "DEFAULT_AMS_SLOT":     (CONFIG_SECTION_PRINT,   "default_ams_slot"),
-        "AUTO_LEVELING":            (CONFIG_SECTION_PRINT,   "auto_leveling"),
-        "VIBRATION_COMPENSATION":   (CONFIG_SECTION_PRINT,   "vibration_compensation"),
-        "CAMERA_ON_PRINT":          (CONFIG_SECTION_PRINT,   "camera_on_print"),
-        "WEB_UPLOAD_WARNING":   (CONFIG_SECTION_PRINT,   "web_upload_warning"),
-        "PRINT_START_DIALOG":   (CONFIG_SECTION_PRINT,   "print_start_dialog"),
-        "BRIDGE_PRINTER_NAME":  (CONFIG_SECTION_BRIDGE,  "printer_name"),
-        "BRIDGE_HOST_IP":       (CONFIG_SECTION_BRIDGE,  "host_ip"),
-        "POLL_INTERVAL":        (CONFIG_SECTION_BRIDGE,  "poll_interval"),
-        "VERBOSE_HTTP_LOG":     (CONFIG_SECTION_BRIDGE,  "verbose_http_log"),
-        "SPOOLMAN_SERVER":      (CONFIG_SECTION_SPOOLMAN, "server"),
-        "SPOOLMAN_SYNC_RATE":   (CONFIG_SECTION_SPOOLMAN, "sync_rate"),
-    }
-    for env_key, (section, option) in mapping.items():
+    for env_key, (section, option) in CONFIG_ENV_MAPPING.items():
         if env_key not in os.environ:
             try:
                 val = cfg.get(section, option)
