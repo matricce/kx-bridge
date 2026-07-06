@@ -944,14 +944,18 @@ class KobraXBridge:
         client.callbacks["light/report"]          = self._on_light
         client.callbacks["skip/report"]           = self._on_skip
 
+        # Reachability is rechecked periodically (not just once at boot) so the
+        # UI status dot reflects the printer's/Spoolman's actual current state
+        # instead of freezing on the boot-time result.
+        self._spoolman_reachable: bool = False
+        self._spoolman_last_health_check: float = 0.0
         if self._spoolman:
-            threading.Thread(
-                target=lambda: log.info(
-                    f"Spoolman: {'OK' if self._spoolman.health_check() else 'unreachable'} "
-                    f"at {self._spoolman.server_url}"
-                ),
-                daemon=True, name="spoolman-health",
-            ).start()
+            def _check():
+                ok = self._spoolman.health_check()
+                self._spoolman_reachable = ok
+                self._spoolman_last_health_check = time.time()
+                log.info(f"Spoolman: {'OK' if ok else 'unreachable'} at {self._spoolman.server_url}")
+            threading.Thread(target=_check, daemon=True, name="spoolman-health").start()
 
     # ── Spoolman helpers ──────────────────────────────────────────────────────
 
@@ -1042,6 +1046,7 @@ class KobraXBridge:
         """GET /kx/spoolman/status"""
         return self._json_cors({
             "configured":   bool(self._spoolman),
+            "reachable":    self._spoolman_reachable if self._spoolman else False,
             "server":       self._spoolman.server_url if self._spoolman else "",
             "sync_rate":    self._spoolman.sync_rate if self._spoolman else 0,
             "slot_spools":  {str(k): v for k, v in self._spoolman_slot_spools.items()},
@@ -5266,6 +5271,11 @@ class KobraXBridge:
                     else:
                         # No multiColorBox data — still attribute (no transitions to skip)
                         self._spoolman_attribute_tick({})
+                # Recheck Spoolman reachability periodically so the UI status
+                # dot reflects the current state, not just the boot-time result.
+                if self._spoolman and time.time() - self._spoolman_last_health_check >= 30.0:
+                    self._spoolman_reachable = self._spoolman.health_check()
+                    self._spoolman_last_health_check = time.time()
             except Exception as e:
                 log.warning(f"Poll error: {e}")
                 # Check whether the printer is really gone

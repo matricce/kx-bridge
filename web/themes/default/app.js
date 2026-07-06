@@ -45,7 +45,7 @@ var ACE_DRY_PRESETS={
 };
 
 // Spoolman state
-var _spoolmanStatus={configured:false,server:'',sync_rate:0,slot_spools:{}};
+var _spoolmanStatus={configured:false,reachable:false,server:'',sync_rate:0,slot_spools:{}};
 var _spoolmanSpools=[];
 var _slotSpoolMap={};  // {String(global_index): spoolman_spool_id} — last committed assignment
 
@@ -67,10 +67,12 @@ function _updateSpoolmanStatusDot(){
   var dot=document.getElementById('spoolman-status-dot');
   var lbl=document.getElementById('spoolman-status-lbl');
   if(!dot||!lbl)return;
-  if(_spoolmanStatus.configured){
+  if(!_spoolmanStatus.configured){
+    dot.style.color='var(--txt2)';lbl.textContent='nicht konfiguriert';
+  } else if(_spoolmanStatus.reachable){
     dot.style.color='var(--ok)';lbl.textContent=_spoolmanStatus.server||'verbunden';
   } else {
-    dot.style.color='var(--txt2)';lbl.textContent='nicht konfiguriert';
+    dot.style.color='var(--err)';lbl.textContent=(_spoolmanStatus.server||'')+' (nicht erreichbar)';
   }
 }
 
@@ -1965,6 +1967,7 @@ var pollTimer;
     });
   }).catch(function(){});
   poll();pollTimer=setInterval(poll,ms);
+  setInterval(_loadSpoolmanStatus,30000);
 })();
 
 // ── Print actions ──
