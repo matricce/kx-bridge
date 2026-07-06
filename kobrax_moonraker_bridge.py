@@ -2947,7 +2947,6 @@ class KobraXBridge:
             # No dialog -> all occupied slots as with a normal upload print
             ams_box_mapping = self._build_auto_ams_box_mapping()
 
-        use_ams = len(ams_box_mapping) > 0
         auto_leveling = int(body.get("auto_leveling", getattr(self._args, "auto_leveling", 1)))
         filename = gcode_file["filename"]
         file_path = gcode_file["path"]
@@ -2955,39 +2954,13 @@ class KobraXBridge:
         # Serve the file via the internal serve endpoint
         url = f"http://localhost:{self._args.port}/serve/{os.path.basename(file_path)}"
 
-        payload = {
-            "taskid":       "-1",
-            "url":          url,
-            "filename":     filename,
-            "md5":          "",
-            "filepath":     None,
-            "filetype":     1,
-            "project_type": 1,
-            "filesize":     gcode_file.get("size_bytes", 0),
-            "ams_settings": {
-                "use_ams":         use_ams,
-                "ams_box_mapping": ams_box_mapping,
-            },
-            "task_settings": {
-                "auto_leveling":          auto_leveling,
-                "vibration_compensation": getattr(self._args, "vibration_compensation", 0),
-                "flow_calibration":       0,
-                "dry_mode":               0,
-                "ai_settings":   {"status": 0, "count": 0, "type": 1},
-                "timelapse":     {"status": 0, "count": 0, "type": 64},
-                "drying_settings": {"status": 0, "target_temp": 0, "duration": 0, "remain_time": 0},
-                "model_objects_skip_parts": excluded_objects,
-            },
-        }
-
-        # Mark the UI as "skipped" only after real printer confirmation.
-        self._skip_state = {"skipped": [], "ts": int(time.time())}
-        if excluded_objects:
-            self._pending_preprint_skip = [str(n) for n in excluded_objects if isinstance(n, str) and n]
-            self._pending_preprint_skip_deadline = time.time() + 12.0
-        else:
-            self._pending_preprint_skip = []
-            self._pending_preprint_skip_deadline = 0.0
+        payload = self._build_print_payload(
+            filename, url, "", gcode_file.get("size_bytes", 0),
+            ams_box_mapping=ams_box_mapping,
+            auto_leveling=auto_leveling,
+            excluded_objects=excluded_objects,
+        )
+        self._reset_skip_state(excluded_objects)
 
         log.info(f"KX store print start: {filename}  ams={len(ams_box_mapping)} slots  assignments={bool(assignments)}  excluded={len(excluded_objects)}")
         loop = asyncio.get_event_loop()
@@ -3454,6 +3427,48 @@ class KobraXBridge:
                     })
         return mismatches if mismatches else None
 
+    def _build_print_payload(self, filename: str, url: str, md5: str, filesize: int,
+                             ams_box_mapping: list, auto_leveling: int,
+                             excluded_objects: list | None = None,
+                             ai_type: int = 1, timelapse_type: int = 64) -> dict:
+        """Builds the complete print/start MQTT payload. Single source for all
+        three print start paths (upload, KX store, Moonraker API)."""
+        return {
+            "taskid":       "-1",
+            "url":          url,
+            "filename":     filename,
+            "md5":          md5,
+            "filepath":     None,
+            "filetype":     1,
+            "project_type": 1,
+            "filesize":     filesize,
+            "ams_settings": {
+                "use_ams":         len(ams_box_mapping) > 0,
+                "ams_box_mapping": ams_box_mapping,
+            },
+            "task_settings": {
+                "auto_leveling":          auto_leveling,
+                "vibration_compensation": getattr(self._args, "vibration_compensation", 0),
+                "flow_calibration":       0,
+                "dry_mode":               0,
+                "ai_settings":   {"status": 0, "count": 0, "type": ai_type},
+                "timelapse":     {"status": 0, "count": 0, "type": timelapse_type},
+                "drying_settings": {"status": 0, "target_temp": 0, "duration": 0, "remain_time": 0},
+                "model_objects_skip_parts": excluded_objects or [],
+            },
+        }
+
+    def _reset_skip_state(self, excluded_objects: list | None = None):
+        """Resets the skip state before a print start. The UI is marked as
+        "skipped" only after real printer confirmation."""
+        self._skip_state = {"skipped": [], "ts": int(time.time())}
+        if excluded_objects:
+            self._pending_preprint_skip = [str(n) for n in excluded_objects if isinstance(n, str) and n]
+            self._pending_preprint_skip_deadline = time.time() + 12.0
+        else:
+            self._pending_preprint_skip = []
+            self._pending_preprint_skip_deadline = 0.0
+
     def _start_print(self, filename: str, url: str = "", md5: str = "", filesize: int = 0,
                      gcode_filaments: list | None = None):
         self._state["file_ready"] = ""
@@ -3477,34 +3492,13 @@ class KobraXBridge:
             # used slots; used-but-unloaded -> a warning may follow later.
             loaded = [(gidx, s) for (gidx, s) in loaded if gidx in used_paint_indices]
 
-        use_ams = len(loaded) > 0
         ams_box_mapping = self._build_auto_ams_box_mapping(loaded_slots=loaded)
         log.debug(f"AMS slots: {len(loaded)} mapped (used paints: {used_paint_indices}) -> {[i for i, _ in loaded]}")
-        auto_leveling = getattr(self._args, "auto_leveling", 1)
-        payload = {
-            "taskid":       "-1",
-            "url":          url,
-            "filename":     filename,
-            "md5":          md5,
-            "filepath":     None,
-            "filetype":     1,
-            "project_type": 1,
-            "filesize":     filesize,
-            "ams_settings": {
-                "use_ams":        use_ams,
-                "ams_box_mapping": ams_box_mapping,
-            },
-            "task_settings": {
-                "auto_leveling":            auto_leveling,
-                "vibration_compensation":   0,
-                "flow_calibration":         0,
-                "dry_mode":                 0,
-                "ai_settings":   {"status": 0, "count": 0, "type": 1},
-                "timelapse":     {"status": 0, "count": 0, "type": 64},
-                "drying_settings": {"status": 0, "target_temp": 0, "duration": 0, "remain_time": 0},
-                "model_objects_skip_parts": [],
-            },
-        }
+        payload = self._build_print_payload(
+            filename, url, md5, filesize,
+            ams_box_mapping=ams_box_mapping,
+            auto_leveling=getattr(self._args, "auto_leveling", 1),
+        )
         log.info(f"print/start → {filename}  url={url}  ams={len(ams_box_mapping)} slots  mode={self._filament_mode}")
         result = self.client.publish("print", "start", payload, timeout=15.0)
         if result:
@@ -3582,13 +3576,7 @@ class KobraXBridge:
                 pass
 
             # Set the pre-print skip before _start_print is called
-            self._skip_state = {"skipped": [], "ts": int(time.time())}
-            if excluded_objects:
-                self._pending_preprint_skip = [str(n) for n in excluded_objects if isinstance(n, str) and n]
-                self._pending_preprint_skip_deadline = time.time() + 12.0
-            else:
-                self._pending_preprint_skip = []
-                self._pending_preprint_skip_deadline = 0.0
+            self._reset_skip_state(excluded_objects)
 
             log.info(f"print/start api=1 mode={self._filament_mode} assignments=False gcode_filaments={gcode_filaments is not None}")
             loop = asyncio.get_event_loop()
@@ -3598,40 +3586,14 @@ class KobraXBridge:
             ))
             return web.json_response({"result": "ok"})
 
-        use_ams = len(ams_box_mapping) > 0
-        payload = {
-            "taskid":       "-1",
-            "url":          url,
-            "filename":     filename,
-            "md5":          md5,
-            "filepath":     None,
-            "filetype":     1,
-            "project_type": 1,
-            "filesize":     filesize,
-            "ams_settings": {
-                "use_ams":         use_ams,
-                "ams_box_mapping": ams_box_mapping,
-            },
-            "task_settings": {
-                "auto_leveling":          auto_leveling,
-                "vibration_compensation": getattr(self._args, "vibration_compensation", 0),
-                "flow_calibration":       0,
-                "dry_mode":               0,
-                "ai_settings":   {"status": 0, "count": 0, "type": 0},
-                "timelapse":     {"status": 0, "count": 0, "type": 0},
-                "drying_settings": {"status": 0, "target_temp": 0, "duration": 0, "remain_time": 0},
-                "model_objects_skip_parts": excluded_objects,
-            },
-        }
-
-        # Mark the UI as "skipped" only after real printer confirmation.
-        self._skip_state = {"skipped": [], "ts": int(time.time())}
-        if excluded_objects:
-            self._pending_preprint_skip = [str(n) for n in excluded_objects if isinstance(n, str) and n]
-            self._pending_preprint_skip_deadline = time.time() + 12.0
-        else:
-            self._pending_preprint_skip = []
-            self._pending_preprint_skip_deadline = 0.0
+        payload = self._build_print_payload(
+            filename, url, md5, filesize,
+            ams_box_mapping=ams_box_mapping,
+            auto_leveling=auto_leveling,
+            excluded_objects=excluded_objects,
+            ai_type=0, timelapse_type=0,
+        )
+        self._reset_skip_state(excluded_objects)
 
         log.info(
           f"print/start api=1 mode={self._filament_mode} "
