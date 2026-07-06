@@ -420,7 +420,7 @@ class GCodeStore:
                 self._conn.commit()
             except Exception:
                 pass
-            # Migration: Spalten objects_skip_parts + svg_image (Part-Skip-Feature, v0.9.10)
+            # Migration: columns objects_skip_parts + svg_image (part-skip feature, v0.9.10)
             # Plus layer_height / first_layer_height (Obico Z height, v0.9.18)
             for col, typ in (
                 ("objects_skip_parts", "TEXT"),
@@ -2423,8 +2423,8 @@ class KobraXBridge:
                 if parsed_filaments:
                     f["gcode_filaments"] = json.dumps(parsed_filaments)
                     self._store.update_file_filaments(f["id"], parsed_filaments)
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"Filament metadata backfill failed for {f.get('filename')}: {e}")
         # Add last job status + duration per file
         jobs = self._store.list_jobs(limit=500)
         last_job: dict = {}
@@ -2973,7 +2973,7 @@ class KobraXBridge:
         if excluded_objects:
             loop.run_in_executor(None, lambda: self._apply_preprint_skip_after_start(excluded_objects))
 
-        # Job in History starten
+        # Start the job in the history
         self._current_job_id = self._store.start_job(
             gcode_file_id=gcode_file["id"],
             printer_id=getattr(self._args, "device_id", "unknown"),
@@ -3287,7 +3287,7 @@ class KobraXBridge:
         self._state["layer_height"] = layer_h
         self._state["first_layer_height"] = first_h
 
-        # Datei persistent im GCode-Store ablegen
+        # Persist the file in the GCode store
         self._store.save_file(
             file_id=file_md5,
             filename=remote_filename,
@@ -3300,12 +3300,12 @@ class KobraXBridge:
             first_layer_height=first_h,
         )
         serve_path = os.path.join(self._serve_dir_path, os.path.basename(remote_filename))
-        del file_data  # RAM freigeben
+        del file_data  # free RAM
 
         self._last_uploaded_file = remote_filename
         log.info(f"Upload: {remote_filename} ({file_size} bytes) md5={file_md5} -> store + printer")
 
-        # Datei per HTTP auf den Drucker hochladen (serve_path liegt bereits auf Disk)
+        # Upload the file to the printer via HTTP (serve_path is already on disk)
         upload_url = self._state.get("upload_url") or None
         loop = asyncio.get_event_loop()
         try:
@@ -3316,7 +3316,7 @@ class KobraXBridge:
             log.error(f"Upload failed: {e}")
             return web.json_response({"error": str(e)}, status=500)
 
-        log.info(f"Upload erfolgreich: {result}")
+        log.info(f"Upload successful: {result}")
 
         # Start the print with the full payload (incl. serve URL + md5 + size)
         serve_url = f"http://{request.host}/serve/{remote_filename}"
@@ -3337,29 +3337,13 @@ class KobraXBridge:
         if auto_print:
             mismatch = self._check_filament_mismatch(gcode_filaments)
             if mismatch:
-                log.info(f"Upload+Print blockiert — Filament-Mismatch: {mismatch}")
+                log.info(f"Upload+print blocked - filament mismatch: {mismatch}")
                 self._state["file_ready"] = remote_filename
                 self._state["filament_mismatch"] = mismatch
-                return web.json_response({
-                    "done": True,
-                    "filament_mismatch": True,
-                    "mismatch_details": mismatch,
-                    "files": {
-                        "local": {
-                            "name": remote_filename,
-                            "origin": "local",
-                            "path": remote_filename,
-                            "refs": {
-                                "download": f"http://{request.host}/api/files/local/{remote_filename}",
-                                "resource":  f"http://{request.host}/api/files/local/{remote_filename}",
-                            }
-                        }
-                    },
-                    "result": {
-                        "item": {"path": remote_filename, "root": "gcodes"},
-                        "action": "create_file",
-                    }
-                }, status=201)
+                return self._octoprint_upload_response(
+                    request, remote_filename,
+                    extra={"filament_mismatch": True, "mismatch_details": mismatch},
+                )
             log.info(f"Upload+Print (print=true): {remote_filename}")
             self._state["file_ready"] = ""
             loop = asyncio.get_event_loop()
@@ -3368,8 +3352,12 @@ class KobraXBridge:
             log.info(f"Upload only (print=false): {remote_filename}")
             self._state["file_ready"] = remote_filename
 
-        # OctoPrint-compatible response (OrcaSlicer evaluates refs)
-        return web.json_response({
+        return self._octoprint_upload_response(request, remote_filename)
+
+    @staticmethod
+    def _octoprint_upload_response(request, remote_filename: str, extra: dict | None = None):
+        """OctoPrint-compatible upload response (OrcaSlicer evaluates refs)."""
+        body = {
             "done": True,
             "files": {
                 "local": {
@@ -3386,7 +3374,10 @@ class KobraXBridge:
                 "item": {"path": remote_filename, "root": "gcodes"},
                 "action": "create_file",
             }
-        }, status=201)
+        }
+        if extra:
+            body.update(extra)
+        return web.json_response(body, status=201)
 
     def _check_filament_mismatch(self, gcode_filaments: list | None) -> list[dict] | None:
         """Compares GCode filaments (is_used=True) with currently occupied AMS slots.
@@ -3572,8 +3563,9 @@ class KobraXBridge:
                 db_file = self._db.get_file_by_name(filename)
                 if db_file and db_file.get("gcode_filaments"):
                     gcode_filaments = json.loads(db_file["gcode_filaments"])
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning(f"Could not load cached gcode_filaments for {filename}: {e} "
+                            "- slot mapping falls back to all occupied slots")
 
             # Set the pre-print skip before _start_print is called
             self._reset_skip_state(excluded_objects)
