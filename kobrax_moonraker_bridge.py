@@ -134,6 +134,10 @@ logging.basicConfig(level=logging.INFO,
                     format="[%(asctime)s] %(levelname)-5s %(name)s: %(message)s",
                     datefmt="%H:%M:%S")
 log = logging.getLogger("bridge")
+# aiohttp logs one INFO line per HTTP request (access log) — with 2s frontend
+# polling that drowns out the bridge's own logs. Raise its own threshold so
+# only WARNING+ (actual problems) surface at the default log level.
+logging.getLogger("aiohttp.access").setLevel(logging.WARNING)
 
 # Web UI: subdirectory under web/themes/<name>/index.html
 _UI_THEME_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
