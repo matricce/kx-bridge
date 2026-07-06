@@ -2970,7 +2970,7 @@ class KobraXBridge:
             },
             "task_settings": {
                 "auto_leveling":          auto_leveling,
-                "vibration_compensation": 0,
+                "vibration_compensation": getattr(self._args, "vibration_compensation", 0),
                 "flow_calibration":       0,
                 "dry_mode":               0,
                 "ai_settings":   {"status": 0, "count": 0, "type": 1},
@@ -3555,25 +3555,50 @@ class KobraXBridge:
         excluded_objects = body.get("excluded_objects") or []
         if not isinstance(excluded_objects, list):
             excluded_objects = []
-        if filament_assignments is not None:
-          ams_box_mapping, unused_count, invalid_count = self._build_assigned_ams_box_mapping(filament_assignments)
-          if unused_count:
-            log.debug(f"Skipped {unused_count} unused filament assignment(s) for mode={self._filament_mode}")
-          if invalid_count:
-            log.warning(f"Ignored {invalid_count} unusable filament assignment(s) for mode={self._filament_mode}")
-            if not ams_box_mapping:
-                return web.json_response({"error": "no usable filament assignments for current filament mode"}, status=400)
-        else:
-            # AMS-Mapping aus gecachtem State — leere Slots (status != 5) überspringen
-            ams_box_mapping = self._build_auto_ams_box_mapping()
 
-        use_ams = len(ams_box_mapping) > 0
-        # Dialog-Checkbox (body) hat Vorrang, sonst Setting-Default (wie handle_kx_print).
         auto_leveling = int(body.get("auto_leveling", getattr(self._args, "auto_leveling", 1)))
         url = self._state.get("last_upload_url", "")
         filesize = self._state.get("last_upload_size", 0)
         md5 = self._state.get("last_upload_md5", "")
 
+        if filament_assignments is not None:
+            # Explizite Slot-Zuweisung aus dem Filament-Dialog
+            ams_box_mapping, unused_count, invalid_count = self._build_assigned_ams_box_mapping(filament_assignments)
+            if unused_count:
+                log.debug(f"Skipped {unused_count} unused filament assignment(s) for mode={self._filament_mode}")
+            if invalid_count:
+                log.warning(f"Ignored {invalid_count} unusable filament assignment(s) for mode={self._filament_mode}")
+                if not ams_box_mapping:
+                    return web.json_response({"error": "no usable filament assignments for current filament mode"}, status=400)
+        else:
+            # Dashboard-Reprint: gcode_filaments aus DB laden damit used_paint_indices-
+            # Filter greift und leere/verschobene Slots nicht falsch gemappt werden.
+            gcode_filaments = None
+            try:
+                db_file = self._db.get_file_by_name(filename)
+                if db_file and db_file.get("gcode_filaments"):
+                    gcode_filaments = json.loads(db_file["gcode_filaments"])
+            except Exception:
+                pass
+
+            # Pre-Print Skip setzen bevor _start_print aufgerufen wird
+            self._skip_state = {"skipped": [], "ts": int(time.time())}
+            if excluded_objects:
+                self._pending_preprint_skip = [str(n) for n in excluded_objects if isinstance(n, str) and n]
+                self._pending_preprint_skip_deadline = time.time() + 12.0
+            else:
+                self._pending_preprint_skip = []
+                self._pending_preprint_skip_deadline = 0.0
+
+            log.info(f"print/start api=1 mode={self._filament_mode} assignments=False gcode_filaments={gcode_filaments is not None}")
+            loop = asyncio.get_event_loop()
+            loop.run_in_executor(None, lambda: self._start_print(
+                filename, url, md5, filesize,
+                gcode_filaments=gcode_filaments,
+            ))
+            return web.json_response({"result": "ok"})
+
+        use_ams = len(ams_box_mapping) > 0
         payload = {
             "taskid":       "-1",
             "url":          url,
@@ -3589,7 +3614,7 @@ class KobraXBridge:
             },
             "task_settings": {
                 "auto_leveling":          auto_leveling,
-                "vibration_compensation": 0,
+                "vibration_compensation": getattr(self._args, "vibration_compensation", 0),
                 "flow_calibration":       0,
                 "dry_mode":               0,
                 "ai_settings":   {"status": 0, "count": 0, "type": 0},
@@ -3610,7 +3635,7 @@ class KobraXBridge:
 
         log.info(
           f"print/start api=1 mode={self._filament_mode} "
-          f"ams={len(ams_box_mapping)} slots assignments={filament_assignments is not None}"
+          f"ams={len(ams_box_mapping)} slots assignments=True"
         )
 
         loop = asyncio.get_event_loop()
@@ -4274,10 +4299,11 @@ class KobraXBridge:
             "camera_url":       s["camera_url"],
             "fan_speed":        s["fan_speed"],
             "print_speed_mode": s["print_speed_mode"],
-            "auto_leveling":    getattr(self._args, "auto_leveling", 1),
-            "camera_on_print":  getattr(self._args, "camera_on_print", 0),
-            "web_upload_warning": getattr(self._args, "web_upload_warning", 1),
-            "light_on":         s["light_on"],
+            "auto_leveling":          getattr(self._args, "auto_leveling", 1),
+            "vibration_compensation": getattr(self._args, "vibration_compensation", 0),
+            "camera_on_print":        getattr(self._args, "camera_on_print", 0),
+            "web_upload_warning":     getattr(self._args, "web_upload_warning", 1),
+            "light_on":               s["light_on"],
             "light_brightness": s["light_brightness"],
             "ams_slots":        self._ams_slots,
             "ams_loaded_slot":  self._ams_loaded_slot,
@@ -4425,10 +4451,11 @@ class KobraXBridge:
             "mode_id":          self._args.mode_id,
             "device_id":        self._args.device_id,
             "default_ams_slot": getattr(self._args, "default_ams_slot", "auto"),
-            "auto_leveling":    getattr(self._args, "auto_leveling", 1),
-            "camera_on_print":  getattr(self._args, "camera_on_print", 0),
-            "web_upload_warning": getattr(self._args, "web_upload_warning", 1),
-            "print_start_dialog": getattr(self._args, "print_start_dialog", 1),
+            "auto_leveling":          getattr(self._args, "auto_leveling", 1),
+            "vibration_compensation": getattr(self._args, "vibration_compensation", 0),
+            "camera_on_print":        getattr(self._args, "camera_on_print", 0),
+            "web_upload_warning":     getattr(self._args, "web_upload_warning", 1),
+            "print_start_dialog":     getattr(self._args, "print_start_dialog", 1),
             "poll_interval":    getattr(self._args, "poll_interval", 3),
             "filament_profiles": {str(k): v for k, v in self._filament_profiles.items()},
             "visible_vendors":  self._visible_vendors,
@@ -4461,8 +4488,9 @@ class KobraXBridge:
         cfg.set("connection", "mode_id",    str(data.get("mode_id",    self._args.mode_id   or "")))
         cfg.set("connection", "device_id",  str(data.get("device_id",  self._args.device_id or "")))
         cfg.set("print",      "default_ams_slot", str(data.get("default_ams_slot", getattr(self._args, "default_ams_slot", "auto"))))
-        cfg.set("print",      "auto_leveling",    str(data.get("auto_leveling",    getattr(self._args, "auto_leveling",    1))))
-        cfg.set("print",      "camera_on_print",  str(int(bool(data.get("camera_on_print", getattr(self._args, "camera_on_print", 0))))))
+        cfg.set("print",      "auto_leveling",           str(data.get("auto_leveling",           getattr(self._args, "auto_leveling",           1))))
+        cfg.set("print",      "vibration_compensation",  str(int(bool(data.get("vibration_compensation", getattr(self._args, "vibration_compensation", 0))))))
+        cfg.set("print",      "camera_on_print",         str(int(bool(data.get("camera_on_print",        getattr(self._args, "camera_on_print",        0))))))
         cfg.set("print",      "web_upload_warning", str(int(bool(data.get("web_upload_warning", getattr(self._args, "web_upload_warning", 1))))))
         cfg.set("print",      "print_start_dialog", str(int(bool(data.get("print_start_dialog", getattr(self._args, "print_start_dialog", 1))))))
         if "poll_interval" in data:
@@ -5525,7 +5553,6 @@ async def run_bridge(args):
         site = web.TCPSite(runner, args.host, per_args.port)
         await site.start()
         runners.append((runner, client, pid))
-        log.info(f"[Printer {pid}] Bridge running on http://{args.host}:{per_args.port}")
 
     import socket as _socket
     try:
@@ -5537,8 +5564,8 @@ async def run_bridge(args):
     # An alle Bridge-Instanzen weitergeben — wird für absolute Webcam-URLs genutzt
     for _b in all_bridges.values():
         _b._local_ip = _local_ip
-    log.info(f"OrcaSlicer → Klipper → Host: {_local_ip}  Ports: " +
-             ", ".join(str(getattr(b._args, 'port', 0)) for b in all_bridges.values()))
+    ports = ", ".join(str(getattr(b._args, 'port', 0)) for b in all_bridges.values())
+    log.info(f"OrcaSlicer → Klipper → http://{_local_ip}:{ports}")
     log.info("Ctrl-C zum Beenden")
 
     try:
@@ -5582,8 +5609,9 @@ def main():
     parser.add_argument("--mode-id",     default=env_loader.MODE_ID)
     parser.add_argument("--device-id",       default=env_loader.DEVICE_ID)
     parser.add_argument("--default-ams-slot",default=env_loader.DEFAULT_AMS_SLOT)
-    parser.add_argument("--auto-leveling",   type=int, default=env_loader.AUTO_LEVELING)
-    parser.add_argument("--camera-on-print", type=int, default=env_loader.CAMERA_ON_PRINT)
+    parser.add_argument("--auto-leveling",           type=int, default=env_loader.AUTO_LEVELING)
+    parser.add_argument("--vibration-compensation",  type=int, default=env_loader.VIBRATION_COMPENSATION)
+    parser.add_argument("--camera-on-print",         type=int, default=env_loader.CAMERA_ON_PRINT)
     parser.add_argument("--web-upload-warning", type=int, default=env_loader.WEB_UPLOAD_WARNING)
     parser.add_argument("--print-start-dialog", dest="print_start_dialog", type=int, default=env_loader.PRINT_START_DIALOG)
     parser.add_argument("--file-ready-dialog",  dest="print_start_dialog", type=int)

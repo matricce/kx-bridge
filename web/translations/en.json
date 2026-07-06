@@ -212,6 +212,7 @@
   "progress_action_slots": "Map slots",
   "settings_auto_leveling": "Auto-Leveling Default",
   "settings_auto_leveling_label": "Auto-Leveling before print",
+  "settings_vibration_compensation": "Resonance Compensation",
   "settings_btn_tooltip": "Settings",
   "settings_camera_on_print": "Turn camera on at print start",
   "settings_cat_connection": "Connection",

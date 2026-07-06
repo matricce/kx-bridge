@@ -433,6 +433,7 @@ function applyLang(){
   setText('lbl-default-slot',T.settings_default_slot);
   setText('opt-slot-auto',T.settings_slot_auto);
   setText('lbl-auto-leveling',T.settings_auto_leveling);
+  setText('lbl-vibration-compensation',T.settings_vibration_compensation);
   setText('lbl-file-ready-mode',T.settings_file_ready_mode);
   setText('opt-file-ready-dialog',T.settings_file_ready_dialog);
   setText('opt-file-ready-banner',T.settings_file_ready_banner);
@@ -1086,6 +1087,7 @@ function openSettings(){
     document.getElementById('s-mode-id').value=d.mode_id||'';
     document.getElementById('s-default-slot').value=d.default_ams_slot||'auto';
     document.getElementById('s-auto-leveling').checked=(d.auto_leveling===undefined?true:!!d.auto_leveling);
+    var vc=document.getElementById('s-vibration-compensation');if(vc)vc.checked=!!d.vibration_compensation;
     var cop=document.getElementById('s-camera-on-print');if(cop)cop.checked=!!d.camera_on_print;
     var frm=document.getElementById('s-file-ready-mode');if(frm)frm.value=(d.print_start_dialog===undefined?'1':String(d.print_start_dialog?1:0));
     var wuw=document.getElementById('s-web-upload-warning');if(wuw)wuw.checked=(d.web_upload_warning===undefined?true:!!d.web_upload_warning);
@@ -1851,8 +1853,9 @@ function saveSettings(){
     device_id:        document.getElementById('s-device-id').value,
     mode_id:          document.getElementById('s-mode-id').value,
     default_ams_slot: document.getElementById('s-default-slot').value,
-    auto_leveling:    document.getElementById('s-auto-leveling').checked?1:0,
-    camera_on_print:  (document.getElementById('s-camera-on-print')||{}).checked?1:0,
+    auto_leveling:           document.getElementById('s-auto-leveling').checked?1:0,
+    vibration_compensation:  (document.getElementById('s-vibration-compensation')||{}).checked?1:0,
+    camera_on_print:         (document.getElementById('s-camera-on-print')||{}).checked?1:0,
     print_start_dialog: parseInt((document.getElementById('s-file-ready-mode')||{}).value||'1',10),
     web_upload_warning:webUploadWarning,
     poll_interval:    Math.min(60,Math.max(1,parseInt((document.getElementById('s-poll-interval')||{}).value,10)||3)),

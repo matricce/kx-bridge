@@ -60,8 +60,9 @@ def _load_config_file(path: pathlib.Path):
         "MODE_ID":          (CONFIG_SECTION_CONNECTION, "mode_id"),
         "DEVICE_ID":        (CONFIG_SECTION_CONNECTION, "device_id"),
         "DEFAULT_AMS_SLOT":     (CONFIG_SECTION_PRINT,   "default_ams_slot"),
-        "AUTO_LEVELING":        (CONFIG_SECTION_PRINT,   "auto_leveling"),
-        "CAMERA_ON_PRINT":      (CONFIG_SECTION_PRINT,   "camera_on_print"),
+        "AUTO_LEVELING":            (CONFIG_SECTION_PRINT,   "auto_leveling"),
+        "VIBRATION_COMPENSATION":   (CONFIG_SECTION_PRINT,   "vibration_compensation"),
+        "CAMERA_ON_PRINT":          (CONFIG_SECTION_PRINT,   "camera_on_print"),
         "WEB_UPLOAD_WARNING":   (CONFIG_SECTION_PRINT,   "web_upload_warning"),
         "PRINT_START_DIALOG":   (CONFIG_SECTION_PRINT,   "print_start_dialog"),
         "BRIDGE_PRINTER_NAME":  (CONFIG_SECTION_BRIDGE,  "printer_name"),
@@ -113,8 +114,9 @@ def migrate_env_to_config(env_path: pathlib.Path, config_path: pathlib.Path):
     }
     cfg[CONFIG_SECTION_PRINT] = {
         "default_ams_slot": env_vals.get("DEFAULT_AMS_SLOT", "auto"),
-        "auto_leveling":    env_vals.get("AUTO_LEVELING",    "1"),
-        "camera_on_print":  env_vals.get("CAMERA_ON_PRINT",  "0"),
+        "auto_leveling":          env_vals.get("AUTO_LEVELING",           "1"),
+        "vibration_compensation": env_vals.get("VIBRATION_COMPENSATION",  "0"),
+        "camera_on_print":        env_vals.get("CAMERA_ON_PRINT",         "0"),
         "web_upload_warning": env_vals.get("WEB_UPLOAD_WARNING", "1"),
     }
     cfg[CONFIG_SECTION_BRIDGE] = {
@@ -437,8 +439,9 @@ PASSWORD         = get("MQTT_PASSWORD",    "")
 MODE_ID          = get("MODE_ID",          "")
 DEVICE_ID        = get("DEVICE_ID",        "")
 DEFAULT_AMS_SLOT = get("DEFAULT_AMS_SLOT", "auto")
-AUTO_LEVELING    = int(get("AUTO_LEVELING","1"))
-CAMERA_ON_PRINT  = int(get("CAMERA_ON_PRINT","0"))
+AUTO_LEVELING           = int(get("AUTO_LEVELING",          "1"))
+VIBRATION_COMPENSATION  = int(get("VIBRATION_COMPENSATION", "0"))
+CAMERA_ON_PRINT         = int(get("CAMERA_ON_PRINT",        "0"))
 WEB_UPLOAD_WARNING = int(get("WEB_UPLOAD_WARNING", "1"))
 PRINT_START_DIALOG = int(get("PRINT_START_DIALOG", get("FILE_READY_DIALOG", "1")))
 SPOOLMAN_SERVER    = get("SPOOLMAN_SERVER",    "")

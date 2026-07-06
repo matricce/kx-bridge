@@ -212,6 +212,7 @@
   "progress_action_slots": "Slots zuordnen",
   "settings_auto_leveling": "Auto-Leveling vor Druck",
   "settings_auto_leveling_label": "Auto-Leveling vor dem Druck",
+  "settings_vibration_compensation": "Resonanzkompensation",
   "settings_btn_tooltip": "Einstellungen",
   "settings_camera_on_print": "Kamera bei Druckstart einschalten",
   "settings_cat_connection": "Verbindung",

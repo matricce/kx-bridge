@@ -212,6 +212,7 @@
   "progress_action_slots": "分配槽位",
   "settings_auto_leveling": "打印前自动调平",
   "settings_auto_leveling_label": "打印前自动调平",
+  "settings_vibration_compensation": "打印前共振补偿",
   "settings_btn_tooltip": "设置",
   "settings_camera_on_print": "打印开始时开启相机",
   "settings_cat_connection": "连接",

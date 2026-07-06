@@ -212,6 +212,7 @@
   "progress_action_slots": "Asignar ranuras",
   "settings_auto_leveling": "Autonivelado antes de imprimir",
   "settings_auto_leveling_label": "Autonivelado antes de imprimir",
+  "settings_vibration_compensation": "Compensación de resonancia",
   "settings_btn_tooltip": "Ajustes",
   "settings_camera_on_print": "Encender cámara al iniciar impresión",
   "settings_cat_connection": "Conexión",
