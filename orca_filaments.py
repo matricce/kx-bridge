@@ -1,10 +1,10 @@
 """OrcaSlicer Filament-Profil Parser.
 
-Geteilt zwischen dem Generator (tools/gen_orca_filament_list.py) und dem
+Shared between the generator (tools/gen_orca_filament_list.py) and the
 Custom-Profile-Import-Endpoint (bridge/kobrax_moonraker_bridge.py).
 
-Liest Orca-Filament-JSON-Dateien (System- oder User-Profile) und gibt
-sie als normalisierte Liste mit (id, name, vendor, type, color) zurück.
+Reads Orca filament JSON files (system or user profiles) and returns
+them as a normalized list with (id, name, vendor, type, color).
 """
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ import re
 
 
 def first_str(value, default: str = "") -> str:
-    """Orca-Profile speichern manche Felder als ['wert']. Liefert erstes
-    Element als String."""
+    """Orca profiles store some fields as ['value']. Returns the first
+    element as a string."""
     if isinstance(value, list):
         return str(value[0]) if value else default
     if isinstance(value, str):
@@ -37,34 +37,34 @@ def parse_profile(data: dict, by_name: dict | None = None,
                   path_vendor: str | None = None,
                   source_path: str = "",
                   system_index: list | None = None) -> dict | None:
-    """Parsed ein einzelnes Orca-Filament-Profil zum Bridge-Schema.
+    """Parses a single Orca filament profile into the bridge schema.
 
-    `by_name` ist optional ein {name: [profile, …]}-Index für Inherits-Resolve
-    aus dem rohen Source-Tree (Generator). Bei Single-File-Import (User-Datei
-    aus OrcaSlicer-User-Dir) reichen wir stattdessen `system_index` rein —
-    die fertige System-Profile-Liste aus orca_filaments.json. Damit können
-    wir filament_id/vendor/type/color über die `inherits`-Kette aus dem
-    System-Parent ableiten, auch wenn das User-Profil diese Felder nicht
-    selbst setzt (typisch: User-Override-Profile haben nur Tweaks).
+    `by_name` is optionally a {name: [profile, ...]} index for inherits resolution
+    from the raw source tree (generator). For single-file imports (user file
+    from the OrcaSlicer user dir) we pass `system_index` instead -
+    the finished system profile list from orca_filaments.json. This lets
+    us derive filament_id/vendor/type/color via the `inherits` chain from
+    the system parent even when the user profile does not set these
+    fields itself (typically: user override profiles only contain tweaks).
 
-    Liefert {id, name, vendor, type, color} oder None wenn das Profil
-    keine filament_id hat (z.B. abstrakte @base-Templates).
+    Returns {id, name, vendor, type, color} or None when the profile
+    has no filament_id (e.g. abstract @base templates).
     """
     if not isinstance(data, dict):
         return None
-    # User-Profile aus dem OrcaSlicer-User-Dir setzen oft KEIN "type"-Feld —
-    # das kommt vom System-Parent. Wir akzeptieren das wenn entweder "type"
-    # explizit "filament" ist ODER ein "inherits" auf ein anderes Profil zeigt.
+    # User profiles from the OrcaSlicer user dir often set NO "type" field -
+    # it comes from the system parent. We accept that when either "type"
+    # is explicitly "filament" OR an "inherits" points to another profile.
     if data.get("type") not in (None, "filament") and not data.get("inherits"):
         return None
     if data.get("type") == "filament" and data.get("inherits") is None and not data.get("filament_id"):
-        # type=filament aber kein parent + keine ID → wertloses Stub
+        # type=filament but no parent + no ID -> worthless stub
         return None
     inst = data.get("instantiation", "true")
     if isinstance(inst, str) and inst.lower() == "false":
         return None
 
-    # Build system-name-Index für den fallback-Lookup wenn system_index gesetzt.
+    # Build the system name index for the fallback lookup when system_index is set.
     sys_by_name: dict[str, dict] = {}
     if system_index:
         for p in system_index:
@@ -92,7 +92,7 @@ def parse_profile(data: dict, by_name: dict | None = None,
         return None
 
     def _resolve_via_system_index(key: str):
-        """Inherits-Kette über system_index (clean_name-Match)."""
+        """Inherits chain via system_index (clean_name match)."""
         parent_raw = data.get("inherits")
         if not parent_raw or not sys_by_name:
             return None
@@ -100,7 +100,7 @@ def parse_profile(data: dict, by_name: dict | None = None,
         sys_p = sys_by_name.get(parent_clean)
         if not sys_p:
             return None
-        # System-JSON benutzt schon das normalisierte Schema
+        # The system JSON already uses the normalized schema
         mapping = {
             "filament_id":              "id",
             "filament_vendor":          "vendor",
@@ -136,10 +136,10 @@ def parse_profile(data: dict, by_name: dict | None = None,
 
 def parse_profile_bytes(blob: bytes, source_name: str = "",
                         system_index: list | None = None) -> dict | None:
-    """Liest ein einzelnes Profil aus JSON-Bytes. Für File-Upload-Pfad.
-    `system_index` ist optional die fertige Liste aus orca_filaments.json —
-    wird für die Inherits-Resolve von User-Profilen genutzt die das volle
-    Schema vom System-Parent erben."""
+    """Reads a single profile from JSON bytes. For the file upload path.
+    `system_index` is optionally the finished list from orca_filaments.json -
+    used for the inherits resolution of user profiles that do not carry the full
+    schema from the system parent."""
     try:
         data = json.loads(blob.decode("utf-8", errors="replace"))
     except Exception:

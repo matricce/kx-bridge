@@ -1,7 +1,7 @@
 """
-kobrax_moonraker_bridge.py – Moonraker-kompatibler HTTP/WebSocket-Bridge für Anycubic Kobra X
+kobrax_moonraker_bridge.py - Moonraker-compatible HTTP/WebSocket bridge for the Anycubic Kobra X
 
-Emuliert die Moonraker/Klipper-API damit OrcaSlicer den Kobra X direkt ansteuern kann.
+Emulates the Moonraker/Klipper API so OrcaSlicer can control the Kobra X directly.
 
 Verwendung:
   python kobrax_moonraker_bridge.py --printer-ip 192.168.178.94
@@ -48,10 +48,10 @@ import threading
 import html
 from urllib.parse import quote
 
-# Bei PyInstaller-Binary liegt alles neben sys.executable, sonst neben __file__
+# For PyInstaller binaries everything sits next to sys.executable, otherwise next to __file__
 _BASE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _BASE)
-# Read-Only Web-Assets (Themes) werden im Onefile-Binary via --add-data unter
+# Read-only web assets (themes) are embedded in the onefile binary via --add-data under
 # sys._MEIPASS entpackt; im Script-/Docker-Modus liegen sie neben dieser Datei.
 _WEB_BASE = getattr(sys, "_MEIPASS", _BASE)
 from kobrax_client import KobraXClient
@@ -73,7 +73,7 @@ try:
     from aiohttp import web
     import aiohttp
 except ImportError:
-    print("Fehler: aiohttp nicht installiert. Bitte: pip install aiohttp")
+    print("Error: aiohttp is not installed. Run: pip install aiohttp")
     sys.exit(1)
 
 try:
@@ -97,13 +97,13 @@ def _kx_decrypt_info(encrypted_b64: str, key: str, iv: str) -> dict:
 
 
 async def _kx_fetch_credentials(ip: str, port: int = 18910) -> dict:
-    """Holt + entschlüsselt Drucker-Credentials via HTTP /info + /ctrl.
+    """Fetches + decrypts printer credentials via HTTP /info + /ctrl.
 
-    Wirft eine Exception bei Netzwerk-/Decrypt-Fehlern. Algorithmus aus
+    Raises an exception on network/decrypt errors. Algorithm from
     tools/fetch_credentials.py (AES-256-CBC, Key=token[16:32], IV=ctrl-token).
     """
     if not _HAS_CRYPTO:
-        raise RuntimeError("pycryptodome nicht installiert")
+        raise RuntimeError("pycryptodome is not installed")
     import random, string
     nonce = "".join(random.choice(string.ascii_letters + string.digits) for _ in range(6))
     timeout = aiohttp.ClientTimeout(total=10)
@@ -135,33 +135,33 @@ logging.basicConfig(level=logging.INFO,
                     datefmt="%H:%M:%S")
 log = logging.getLogger("bridge")
 
-# Web-UI: Unterverzeichnis unter web/themes/<name>/index.html
+# Web UI: subdirectory under web/themes/<name>/index.html
 _UI_THEME_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
-# Erlaubte statische Theme-Dateien unter /kx/ui/<name>
+# Allowed static theme files under /kx/ui/<name>
 _KX_UI_ASSETS: dict[str, str] = {
     "style.css": "text/css",
     "app.js":    "application/javascript",
 }
-# Dateien aus lib/ werden anhand der Extension ausgeliefert (kein Whitelist-Eintrag nötig)
+# Files from lib/ are served based on their extension (no whitelist entry needed)
 _KX_UI_LIB_TYPES: dict[str, str] = {
     ".js":  "application/javascript",
     ".css": "text/css",
 }
 _KX_UI_TRANSLATION_RE = re.compile(r"^translations/([a-z]{2}(?:-[a-z]{2})?)\.json$")
 
-# Ring-Buffer für Browser-Log-Stream (letzte 200 Einträge)
+# Ring buffer for the browser log stream (last 200 entries)
 import collections as _collections
 _log_buffer: "_collections.deque[dict]" = _collections.deque(maxlen=500)
 _log_sse_queues: "list[asyncio.Queue]" = []
 
 class _BrowserLogHandler(logging.Handler):
-    """Sendet Log-Records in den Ring-Buffer und alle offenen SSE-Queues."""
+    """Sends log records to the ring buffer and all open SSE queues."""
     _fmt = logging.Formatter(datefmt="%H:%M:%S")
 
     def emit(self, record: logging.LogRecord):
         msg = record.getMessage()
-        # Exceptions mit Traceback in den Browser durchreichen (sonst sieht der
-        # Nutzer nur "Fehler: X" ohne Kontext).
+        # Pass exceptions with traceback through to the browser (otherwise the
+        # user only sees "Error: X" without context).
         if record.exc_info:
             try:
                 msg += "\n" + self._fmt.formatException(record.exc_info)
@@ -208,12 +208,12 @@ KLIPPER_VERSION   = "v0.12.0-1"
 
 
 def _parse_gcode_estimated_time(data: bytes) -> int:
-    """Liest geschätzte Druckzeit aus GCode (OrcaSlicer + PrusaSlicer).
-    Gibt Sekunden zurück, 0 wenn nicht gefunden.
-    PrusaSlicer schreibt die Zeit ins Header (erste 16KB),
-    OrcaSlicer schreibt sie ans Ende der Datei (letzte 16KB)."""
+    """Reads the estimated print time from GCode (OrcaSlicer + PrusaSlicer).
+    Returns seconds, 0 when not found.
+    PrusaSlicer writes the time into the header (first 16KB),
+    OrcaSlicer writes it at the end of the file (last 16KB)."""
     import re
-    # Anfang + Ende der Datei durchsuchen (OrcaSlicer schreibt Zeit am Ende)
+    # Search the beginning + end of the file (OrcaSlicer writes the time at the end)
     search_text = (data[:16384] + data[-65536:]).decode("utf-8", errors="ignore")
     # OrcaSlicer:  ; total estimated time: 9m 20s
     # PrusaSlicer: ; estimated printing time (normal mode) = 1h 9m 20s
@@ -233,14 +233,14 @@ def _parse_gcode_estimated_time(data: bytes) -> int:
 
 
 def _parse_gcode_layer_heights(data: bytes) -> tuple[float, float]:
-    """Liest (layer_height, initial_layer_height) aus dem OrcaSlicer-/PrusaSlicer-
-    GCode-Header. Beide sind als Konfigblock am Ende des GCode hinterlegt.
+    """Reads (layer_height, initial_layer_height) from the OrcaSlicer/PrusaSlicer
+    GCode header. Both are stored as a config block at the end of the GCode.
 
     Beispiel-Zeilen:
       ; layer_height = 0.2
       ; initial_layer_print_height = 0.2
 
-    Liefert (0.0, 0.0) wenn nicht gefunden — Aufrufer entscheidet was er macht
+    Returns (0.0, 0.0) when not found - the caller decides what to do
     (typisch: keinen Z-Wert anzeigen)."""
     import re
     head = data[:16384].decode("utf-8", errors="ignore")
@@ -262,7 +262,7 @@ def _parse_gcode_layer_heights(data: bytes) -> tuple[float, float]:
 
 
 def _extract_thumbnail(data: bytes) -> str:
-    """Extrahiert Base64-PNG-Thumbnail aus GCode (OrcaSlicer-Format)."""
+    """Extracts the base64 PNG thumbnail from GCode (OrcaSlicer format)."""
     try:
         marker = b"; thumbnail begin"
         end_marker = b"; thumbnail end"
@@ -284,12 +284,12 @@ def _extract_thumbnail(data: bytes) -> str:
 
 
 def _extract_filament_info(data: bytes) -> list[dict]:
-  """Liest Filament-Farben/Materialien inkl. Tool-Reihenfolge aus Orca/Prusa-GCode.
+  """Reads filament colors/materials incl. tool order from Orca/Prusa GCode.
 
   Gibt Liste von {slot_index, color_hex, material} in Tool-/Paint-Reihenfolge
-  (T0, T1, ...) zurück.
-  Sucht sowohl am Anfang als auch am Ende der Datei, da Orca große
-  Thumbnail-Blöcke einfügen kann und Metadaten dann im Tail stehen.
+  (T0, T1, ...).
+  Searches both the start and the end of the file since Orca can insert
+  large thumbnail blocks, pushing the metadata into the tail.
   """
   try:
     head = data[:131072]
@@ -414,14 +414,14 @@ class GCodeStore:
                     abort_reason TEXT
                 );
             """)
-            # Migration: Spalte gcode_filaments nachrüsten falls DB älter
+            # Migration: add gcode_filaments column for older databases
             try:
                 self._conn.execute("ALTER TABLE gcode_files ADD COLUMN gcode_filaments TEXT")
                 self._conn.commit()
             except Exception:
                 pass
             # Migration: Spalten objects_skip_parts + svg_image (Part-Skip-Feature, v0.9.10)
-            # Plus layer_height / first_layer_height (Obico Z-Höhe, v0.9.18)
+            # Plus layer_height / first_layer_height (Obico Z height, v0.9.18)
             for col, typ in (
                 ("objects_skip_parts", "TEXT"),
                 ("svg_image", "TEXT"),
@@ -433,7 +433,7 @@ class GCodeStore:
                     self._conn.commit()
                 except Exception:
                     pass
-            # Migration: Flag für Web-Uploads (Warnhinweis vor Druck)
+            # Migration: flag for web uploads (warning before print)
             try:
                 self._conn.execute("ALTER TABLE gcode_files ADD COLUMN web_unverified INTEGER NOT NULL DEFAULT 0")
                 self._conn.commit()
@@ -446,7 +446,7 @@ class GCodeStore:
                   web_unverified: bool = False,
                   layer_height: float = 0.0,
                   first_layer_height: float = 0.0) -> str:
-        """Speichert GCode-Datei auf Disk und in DB. Gibt Pfad zurück."""
+        """Saves a GCode file to disk and DB. Returns the path."""
         safe_name = os.path.basename(filename)
         path = os.path.join(self._gcode_dir, safe_name)
         with open(path, "wb") as f:
@@ -486,7 +486,7 @@ class GCodeStore:
         return dict(row) if row else None
 
     def update_file_objects(self, filename: str, objects: list, svg: str = "") -> None:
-        """Speichert Objekt-Liste + optionales SVG zu einer Datei (matcht via filename)."""
+        """Saves the object list + optional SVG for a file (matched via filename)."""
         if not filename:
             return
         with self._lock:
@@ -498,7 +498,7 @@ class GCodeStore:
             self._conn.commit()
 
     def update_file_filaments(self, file_id: str, gcode_filaments: list | None) -> None:
-      """Aktualisiert geparste GCode-Filamente für einen bestehenden DB-Eintrag."""
+      """Updates parsed GCode filaments for an existing DB entry."""
       with self._lock:
         self._conn.execute(
           "UPDATE gcode_files SET gcode_filaments=? WHERE id=?",
@@ -580,17 +580,17 @@ class GCodeStore:
 class CameraCache:
     """Zentraler Kamera-Demuxer.
 
-    Hält EINEN ffmpeg-Prozess offen, der den FLV-Stream vom Drucker liest
-    und parallel zwei Outputs erzeugt:
-      - MJPEG @ 2fps → letzter Frame im RAM für /api/camera/snapshot
-      - MPEG-TS (-c:v copy) → Fanout an alle /api/camera/h264-Subscriber
+    Keeps ONE ffmpeg process open that reads the FLV stream from the printer
+    and produces two outputs in parallel:
+      - MJPEG @ 2fps -> last frame in RAM for /api/camera/snapshot
+      - MPEG-TS (-c:v copy) -> fanout to all /api/camera/h264 subscribers
 
     Damit:
-      * Nur EINE FLV-Verbindung zum Drucker (löst Single-Client-Limit / 429)
-      * Snapshot ist instant (Speicher-Read, kein ffmpeg-Spawn pro Request)
-      * Mehrere parallele H.264-Konsumenten möglich (Plugin + Web-UI + …)
+      * Only ONE FLV connection to the printer (solves the single-client limit / 429)
+      * Snapshots are instant (memory read, no ffmpeg spawn per request)
+      * Multiple parallel H.264 consumers possible (plugin + web UI + ...)
 
-    Lazy-Start beim ersten Konsumenten, Auto-Restart bei ffmpeg-Crash.
+    Lazy start on the first consumer, auto-restart on ffmpeg crash.
     """
 
     JPEG_SOI = b"\xff\xd8"
@@ -614,7 +614,7 @@ class CameraCache:
         self._url = url
 
     def reset(self):
-        """Backoff-Zähler zurücksetzen und laufende ffmpeg-Prozesse killen."""
+        """Reset backoff counters and kill running ffmpeg processes."""
         self._fail_count_jpeg = 0
         self._fail_count_h264 = 0
         for proc in (self._proc_jpeg, self._proc_h264):
@@ -639,7 +639,7 @@ class CameraCache:
         return args
 
     async def _run_jpeg_loop(self):
-        """Hält einen ffmpeg-Prozess am Leben der MJPEG@2fps in den Cache schreibt."""
+        """Keeps an ffmpeg process alive that writes MJPEG@2fps into the cache."""
         while True:
             url = self._url
             if not url:
@@ -656,7 +656,7 @@ class CameraCache:
                     stderr=asyncio.subprocess.PIPE,
                 )
             except Exception as e:
-                log.warning(f"CameraCache: ffmpeg-jpeg start fehlgeschlagen: {e}")
+                log.warning(f"CameraCache: ffmpeg-jpeg start failed: {e}")
                 await asyncio.sleep(3.0)
                 continue
 
@@ -684,8 +684,8 @@ class CameraCache:
             except Exception as e:
                 log.debug(f"CameraCache: jpeg-loop unterbrochen: {e}")
             finally:
-                # Kill + Wait — sonst bleibt der Child-Prozess als Zombie und
-                # asyncio meldet "Unknown child pid …" beim nächsten reaper-Tick.
+                # Kill + wait - otherwise the child process lingers as a zombie and
+                # asyncio reports "Unknown child pid ..." on the next reaper tick.
                 if self._proc_jpeg is not None:
                     try:
                         self._proc_jpeg.kill()
@@ -714,7 +714,7 @@ class CameraCache:
                 await asyncio.sleep(2.0)
 
     async def _run_h264_loop(self):
-        """Hält einen ffmpeg-Prozess am Leben der MPEG-TS an alle Subscriber fanoutet."""
+        """Keeps an ffmpeg process alive that fans out MPEG-TS to all subscribers."""
         while True:
             url = self._url
             if not url:
@@ -730,7 +730,7 @@ class CameraCache:
                     stderr=asyncio.subprocess.PIPE,
                 )
             except Exception as e:
-                log.warning(f"CameraCache: ffmpeg-h264 start fehlgeschlagen: {e}")
+                log.warning(f"CameraCache: ffmpeg-h264 start failed: {e}")
                 await asyncio.sleep(3.0)
                 continue
 
@@ -740,8 +740,8 @@ class CameraCache:
                     chunk = await self._proc_h264.stdout.read(self.TS_CHUNK)
                     if not chunk:
                         break
-                    # Fanout: nicht-blockierend pro Subscriber, langsame Clients
-                    # bekommen ihren ältesten Chunk verworfen (Queue voll → drop).
+                    # Fanout: non-blocking per subscriber; slow clients
+                    # get their oldest chunk dropped (queue full -> drop).
                     for q in list(self.h264_subscribers):
                         if q.full():
                             try:
@@ -824,20 +824,20 @@ class KobraXBridge:
         self._printer_id = printer_id
         self._all_bridges = all_bridges if all_bridges is not None else {}
         self.ws_clients: set[web.WebSocketResponse] = set()
-        # In-Memory KV-Store für Moonraker /server/database/item (moonraker-obico,
-        # mainsail-presets etc.). Nicht persistent — überlebt keinen Restart.
+        # In-memory KV store for Moonraker /server/database/item (moonraker-obico,
+        # mainsail presets etc.). Not persistent - does not survive a restart.
         self._moonraker_kv_store: dict[str, dict] = {}
-        # Slot→Orca-Filament-Profile-Mapping (aus config.ini [filament_profiles]).
+        # Slot -> Orca filament profile mapping (from config.ini [filament_profiles]).
         # Format: {slot_idx: {"id": "OGFL01", "vendor": "Polymaker"}}.
-        # Wird in _build_lane_data verwendet, damit OrcaSlicer die konkrete
-        # Marke ("PolyTerra PLA — Polymaker") statt nur "Generic PLA" anzeigt.
+        # Used in _build_lane_data so OrcaSlicer shows the concrete
+        # brand ("PolyTerra PLA - Polymaker") instead of just "Generic PLA".
         try:
             import config_loader as _cl
             self._filament_profiles: dict[int, dict] = _cl.list_filament_profiles(self._printer_id)
         except Exception:
             self._filament_profiles = {}
-        # Vendor-Sichtbarkeitsfilter fürs Slot-Profil-Dropdown (Issue #41 Option A).
-        # Leere Liste = alle Vendoren sichtbar (rückwärtskompatibel).
+        # Vendor visibility filter for the slot profile dropdown (Issue #41 option A).
+        # Empty list = all vendors visible (backwards compatible).
         try:
             import config_loader as _cl
             self._visible_vendors: list[str] = _cl.list_visible_vendors(self._printer_id)
@@ -858,10 +858,10 @@ class KobraXBridge:
           "remain_time":        0,
           "curr_layer":         0,
           "total_layers":       0,
-          # Layer-Heights pro aktuell laufender Datei (aus dem GCode-Header
-          # geparst). Wird im Upload-Pfad + beim _fetch_from_store gesetzt.
-          # Obico nutzt currentZ aus gcode_position[2] — die Bridge rechnet
-          # currentZ aus curr_layer + diesen Werten in build_print_payload.
+          # Layer heights for the currently running file (parsed from the
+          # GCode header). Set in the upload path + in _fetch_from_store.
+          # Obico uses currentZ from gcode_position[2] - the bridge computes
+          # currentZ from curr_layer + these values in build_print_payload.
           "layer_height":       0.0,
           "first_layer_height": 0.0,
           "printer_name":       env_loader.get("BRIDGE_PRINTER_NAME", "Anycubic Kobra X"),
@@ -893,13 +893,13 @@ class KobraXBridge:
         self._serve_dir_path: str = self._store._gcode_dir
         self._current_job_id: str = ""
         self._camera_autostarted: bool = False
-        self._camera_user_stopped: bool = False  # User hat Kamera während Druck manuell gestoppt
+        self._camera_user_stopped: bool = False  # user manually stopped the camera during a print
         self.camera_cache: CameraCache = CameraCache()
 
         self._thumbnail_b64: str = ""
         self._ace_dry_presets: dict[str, dict] = self._load_ace_dry_presets_config()
 
-        # Part-Skip: zuletzt vom Drucker gemeldete Skip-Liste (v0.9.10)
+        # Part skip: most recent skip list reported by the printer (v0.9.10)
         self._skip_state: dict = {"objects": [], "skipped": [], "ts": 0}
         # Pre-Print-Skip: pending until printer enters printing state
         self._pending_preprint_skip: list[str] = []
@@ -912,21 +912,21 @@ class KobraXBridge:
             if _sm_url else None
         )
         # Persistierte Spool-Zuordnung (AMS-Slot → Spoolman-Spool) je Drucker laden.
-        # Fix: hier wurde `config_loader` referenziert, aber der Modul-Alias ist
-        # `env_loader` (Zeile 32) → NameError, den das bare `except` verschluckte,
-        # sodass die Persistenz nie lud. Jetzt über den lokalen Import + per-Drucker.
+        # Fix: this used to reference `config_loader`, but the module alias is
+        # `env_loader` (line 32) -> NameError swallowed by the bare `except`,
+        # so persistence never loaded. Now via the local import + per printer.
         try:
             import config_loader as _cl
             self._spoolman_slot_spools: dict[int, int] = _cl.list_spool_map(self._printer_id)
         except Exception as _e:
-            log.warning("Spoolman: Slot-Map laden fehlgeschlagen: %s", _e)
+            log.warning("Spoolman: failed to load slot map: %s", _e)
             self._spoolman_slot_spools = {}  # {ams_slot_idx: spoolman_spool_id}
         self._spoolman_slot_usage: dict[int, float] = {}   # per-slot accumulated mm this print
         self._spoolman_slot_reported: dict[int, float] = {}  # per-slot mm already sent to Spoolman
         self._spoolman_last_usage: float = 0.0   # supplies_usage at last attribution tick
         self._spoolman_last_sync: float = 0.0
 
-        # Theme-Name prüfen (keine Sonderzeichen oder Umlaute)
+        # Validate theme name (no special characters or umlauts)
         raw_theme = (getattr(args, "ui_theme", None) or "default").strip()
         if not _UI_THEME_NAME_RE.match(raw_theme):
             log.warning("Invalid UI theme name %r – using default", raw_theme)
@@ -1072,14 +1072,14 @@ class KobraXBridge:
             int(k): int(v) for k, v in slot_map.items()
             if str(v).isdigit() and int(v) > 0
         }
-        # Persistieren je Drucker (eigene [spoolman_<id>]-Sektion), damit die
-        # Zuordnung Bridge-Neustart überlebt und zwei AMS sich nicht überschreiben.
-        # (Vorher: NameError auf `config_loader` → nichts wurde je gespeichert.)
+        # Persist per printer (own [spoolman_<id>] section) so the
+        # assignment survives bridge restarts and two AMS units don't overwrite each other.
+        # (Previously: NameError on `config_loader` -> nothing was ever saved.)
         try:
             import config_loader as _cl
             _cl.save_spool_map(self._spoolman_slot_spools, self._printer_id)
         except Exception as _e:
-            log.warning("Spoolman: Slot-Map speichern fehlgeschlagen: %s", _e)
+            log.warning("Spoolman: failed to save slot map: %s", _e)
         self._spoolman_slot_usage = {}
         self._spoolman_slot_reported = {}
         self._spoolman_last_usage = 0.0
@@ -1171,8 +1171,8 @@ class KobraXBridge:
         if kobra_state:
             self._state["kobra_state"] = kobra_state
 
-        # Kamera bei Druckstart automatisch einschalten (Settings-Option).
-        # Zentral hier, damit es alle Druck-Startwege abdeckt (OrcaSlicer + UI).
+        # Automatically switch on the camera at print start (settings option).
+        # Centralized here so it covers all print start paths (OrcaSlicer + UI).
         # _camera_autostarted verhindert Mehrfach-Trigger pro Druck.
         if kobra_state == "printing":
             if (getattr(self._args, "camera_on_print", 0)
@@ -1181,12 +1181,12 @@ class KobraXBridge:
                 self._camera_autostarted = True
                 try:
                     self.client.start_camera()
-                    log.info("Kamera bei Druckstart automatisch eingeschaltet")
+                    log.info("Camera switched on automatically at print start")
                 except Exception as e:
-                    log.warning(f"Kamera-Autostart fehlgeschlagen: {e}")
+                    log.warning(f"Camera auto-start failed: {e}")
         elif kobra_state in ("free", "finished", "stoped", "canceled"):
             self._camera_autostarted = False
-            self._camera_user_stopped = False  # für nächsten Druck freigeben
+            self._camera_user_stopped = False  # release for the next print
 
         # Job-History: Druckstart erkennen
         if kobra_state == "printing" and not self._current_job_id:
@@ -1216,9 +1216,9 @@ class KobraXBridge:
             self._spoolman_notify_end()
             self._current_job_id = ""
 
-        # Nach Druckende das Upload-Banner verschwinden lassen (Issue #29): der
-        # Drucker meldet "finished" nach erfolgreichem Druck — file_ready wurde
-        # bisher nur bei stoped/canceled geleert, dadurch kam das Banner zurück.
+        # Hide the upload banner after the print finishes (Issue #29): the
+        # printer reports "finished" after a successful print - file_ready used to be
+        # cleared only on stoped/canceled, which brought the banner back.
         if kobra_state == "finished":
             self._state["file_ready"] = ""
         if kobra_state in ("stoped", "canceled"):
@@ -1254,25 +1254,25 @@ class KobraXBridge:
 
     def _on_info(self, payload: dict):
         d = payload.get("data") or {}
-        # MQTT-Name nur übernehmen wenn kein eigener Name gesetzt (env oder per-Drucker config)
+        # Only adopt the MQTT name if no custom name is set (env or per-printer config)
         if not env_loader.get("BRIDGE_PRINTER_NAME") and not getattr(self, "_name_locked", False):
             self._state["printer_name"] = d.get("printerName", self._state["printer_name"])
         self._state["firmware_version"] = d.get("version", self._state["firmware_version"])
-        # Der echte Druck-State steckt bei info/report im verschachtelten
-        # project.state ("printing"/"paused"/…). Das oberste data.state ist nur
-        # der Geräte-State ("busy"/"free") und würde "paused" verschlucken.
+        # The real print state lives in info/report inside the nested
+        # project.state ("printing"/"paused"/...). The top-level data.state is only
+        # the device state ("busy"/"free") and would swallow "paused".
         project = d.get("project") or {}
         proj_state = project.get("state", "")
         kobra_state = proj_state or d.get("state", "")
         if kobra_state:
             self._state["print_state"] = KOBRA_TO_KLIPPER_STATE.get(kobra_state, "standby")
             self._state["kobra_state"] = kobra_state
-            # Upload-Banner nach Druckende ausblenden (Issue #29) – der State kommt
-            # je nach Drucker auch über info/report (project.state), nicht nur print/report.
+            # Hide the upload banner after the print ends (Issue #29) - the state also
+            # arrives via info/report (project.state) depending on the printer, not only print/report.
             if kobra_state in ("finished", "stoped", "canceled"):
                 self._state["file_ready"] = ""
-            # Kamera-Autostart auch hier (OrcaSlicer meldet Start oft via info/report).
-            # _camera_autostarted-Guard verhindert Doppel-Start mit _on_print.
+            # Camera auto-start here as well (OrcaSlicer often reports the start via info/report).
+            # The _camera_autostarted guard prevents a double start with _on_print.
             if kobra_state == "printing":
                 if (getattr(self._args, "camera_on_print", 0)
                         and not self._camera_autostarted
@@ -1280,12 +1280,12 @@ class KobraXBridge:
                     self._camera_autostarted = True
                     try:
                         self.client.start_camera()
-                        log.info("Kamera bei Druckstart automatisch eingeschaltet")
+                        log.info("Camera switched on automatically at print start")
                     except Exception as e:
-                        log.warning(f"Kamera-Autostart fehlgeschlagen: {e}")
+                        log.warning(f"Camera auto-start failed: {e}")
             elif kobra_state in ("free", "finished", "stoped", "canceled"):
                 self._camera_autostarted = False
-                self._camera_user_stopped = False  # für nächsten Druck freigeben
+                self._camera_user_stopped = False  # release for the next print
         if project:
             if "filename" in project:
                 self._state["filename"] = project["filename"]
@@ -1322,22 +1322,22 @@ class KobraXBridge:
     def _on_skip(self, payload: dict):
         """skip/report-Callback (Part-Skip-Feature, v0.9.10).
 
-        Drucker meldet hier IMMER die Liste der bereits geskippten Objekte
-        zurück (objects_skip_parts), egal ob auf query_obj oder nach skip/start.
-        Die Gesamt-Objektliste kommt aus file/report.
+        The printer ALWAYS reports the list of already-skipped objects here
+        (objects_skip_parts), whether on query_obj or after skip/start.
+        The full object list comes from file/report.
         """
         d = payload.get("data") or {}
         skipped = d.get("objects_skip_parts") or d.get("skipped") or d.get("skipped_parts") or []
-        # Während ein Pre-Print-Skip noch pending ist, leere Früh-Reports ignorieren
-        # damit die UI nicht sofort zurückspringt bevor der Drucker den Skip bestätigt.
+        # While a pre-print skip is still pending, ignore empty early reports
+        # so the UI doesn't snap back before the printer confirms the skip.
         now = time.time()
         if (not skipped and self._pending_preprint_skip
                 and now <= self._pending_preprint_skip_deadline):
             return
 
-        # Während eines aktiven Drucks sind Skip-Zustände effektiv monoton.
-        # Manche Firmware-Reports kommen zwischenzeitlich leer/teilweise zurück;
-        # diese dürfen bereits bestätigte Skip-Objekte nicht aus der UI löschen.
+        # During an active print, skip states are effectively monotonic.
+        # Some firmware reports come back empty/partial in between;
+        # those must not remove already-confirmed skip objects from the UI.
         existing_skipped = [str(n) for n in (self._skip_state.get("skipped") or []) if n]
         existing_set = set(existing_skipped)
         incoming_skipped = [str(n) for n in (skipped or []) if n]
@@ -1353,7 +1353,7 @@ class KobraXBridge:
                         merged.append(n)
                 skipped = merged
 
-        # Pending-Lock aufheben sobald Drucker die gewünschten Objekte bestätigt
+        # Release the pending lock once the printer confirms the requested objects
         if self._pending_preprint_skip and set(skipped) >= set(self._pending_preprint_skip):
             self._pending_preprint_skip = []
             self._pending_preprint_skip_deadline = 0.0
@@ -1362,7 +1362,7 @@ class KobraXBridge:
             "ts":       int(time.time()),
         }
         if payload.get("state") == "done" or payload.get("code") == 200:
-            log.info(f"Skip-Antwort: state={payload.get('state')} code={payload.get('code')} skipped={skipped}")
+            log.info(f"Skip response: state={payload.get('state')} code={payload.get('code')} skipped={skipped}")
 
     def _on_file(self, payload: dict):
         d = payload.get("data") or {}
@@ -1371,11 +1371,11 @@ class KobraXBridge:
         file_name = d.get("filename") or details.get("filename") or self._last_uploaded_file
         active_print = self._state.get("print_state") in ("printing", "paused")
         current_print_file = self._state.get("filename") or ""
-        # Uploads während eines laufenden Drucks dürfen die aktive
-        # Fortschritts-Vorschau nicht überschreiben.
+        # Uploads during a running print must not overwrite the active
+        # progress preview.
         if thumb and (not active_print or (file_name and file_name == current_print_file)):
             self._thumbnail_b64 = thumb
-            log.info(f"Vorschaubild empfangen: {len(thumb)} Zeichen base64")
+            log.info(f"Thumbnail received: {len(thumb)} base64 chars")
         # Part-Skip: Objekt-Liste + optionales SVG (v0.9.10)
         objs = details.get("objects_skip_parts") or []
         svg  = details.get("svg_image") or ""
@@ -1386,13 +1386,13 @@ class KobraXBridge:
                     self._store.update_file_objects(filename, objs, svg)
                     log.info(f"Skip objects for {filename}: {len(objs)} ({'with SVG' if svg else 'no SVG'})")
                 except Exception as e:
-                    log.warning(f"update_file_objects fehlgeschlagen: {e}")
+                    log.warning(f"update_file_objects failed: {e}")
         self._push_status_update()
 
     def _apply_preprint_skip_after_start(self, names: list[str], retries: int = 20, delay_s: float = 0.75):
-        """Sendet Skip-Befehl erst nachdem Drucker in printing-State gewechselt hat.
+        """Sends the skip command only after the printer switched to the printing state.
 
-        Vorher sendet der Drucker den Befehl ins Leere (kein aktiver Druck).
+        Before that, the command goes nowhere (no active print).
         """
         wanted = [str(n) for n in (names or []) if isinstance(n, str) and n]
         if not wanted:
@@ -1568,7 +1568,7 @@ class KobraXBridge:
             return selected
 
         if warn_on_empty_default:
-            log.warning(f"Standard-Slot {slot_idx} ist leer – fallback auf Auto")
+            log.warning(f"Default slot {slot_idx} is empty - falling back to auto")
         return all_loaded
 
     @staticmethod
@@ -1591,8 +1591,8 @@ class KobraXBridge:
             return []
         loaded_map = {gidx: s for gidx, s in loaded}
         max_idx = max(loaded_map.keys())
-        # Drucker interpretiert ams_box_mapping als geordnete Liste (Eintrag N = TN).
-        # Fehlende Slots müssen als Platzhalter rein, sonst verschiebt sich alles.
+        # The printer interprets ams_box_mapping as an ordered list (entry N = TN).
+        # Missing slots must be inserted as placeholders, otherwise everything shifts.
         result = []
         for i in range(max_idx + 1):
             if i in loaded_map:
@@ -1725,8 +1725,8 @@ class KobraXBridge:
         for s in global_slots:
             s["activity"] = activity_map.get(s.get("global_index"), "")
 
-        # Tip-Forming: nach Einziehen (status=10) oder Ausziehen (status=11)
-        # schickt der originale Slicer automatisch type=3 (Extruder-Rückzug).
+        # Tip forming: after feed-in (status=10) or feed-out (status=11)
+        # the original slicer automatically sends type=3 (extruder retract).
         # Check ALL boxes so ACE-triggered events are handled correctly.
         for box in boxes:
             fs = box.get("feed_status") or {}
@@ -1741,12 +1741,12 @@ class KobraXBridge:
                         {"multi_color_box": [{"id": bi, "feed_status": {"slot_index": si, "type": 3}}]},
                         timeout=0
                     )
-                    log.info(f"Tip-Forming (type=3) nach status={cs} box={bi} slot={si}")
+                    log.info(f"Tip forming (type=3) after status={cs} box={bi} slot={si}")
                 threading.Thread(target=_tip_form, daemon=True).start()
 
         if global_slots:
             self._ams_slots = global_slots
-            log.info(f"AMS-Slots empfangen: {len(global_slots)}, loaded_slot={self._ams_loaded_slot}")
+            log.info(f"AMS slots received: {len(global_slots)}, loaded_slot={self._ams_loaded_slot}")
             self._push_status_update()
 
     def _update_ace_drying_state(self, data: dict, boxes: list):
@@ -1846,13 +1846,13 @@ class KobraXBridge:
         self._push_status_update()
 
     # OrcaSlicer filament preset IDs (MoonrakerPrinterAgent.cpp mapping)
-    # Default-Mapping pro Material-Typ wenn der User keinen Slot-Profil-
-    # Override gesetzt hat. Für den Kobra X bevorzugen wir Anycubic-eigene
-    # Filament-IDs aus den `@Anycubic Kobra X 0.4 nozzle`-Profilen — die
-    # sind druckerspezifisch is_compatible und werden von OrcaSlicer direkt
-    # gematched. Library-Fallbacks (OGF*) nur für Material-Typen ohne
-    # Kobra-X-spezifisches Anycubic-Profil — deren @System-Profile haben
-    # `compatible_printers: []` (= mit allen Druckern kompatibel).
+    # Default mapping per material type when the user has not set a slot
+    # profile override. For the Kobra X we prefer Anycubic's own
+    # filament IDs from the `@Anycubic Kobra X 0.4 nozzle` profiles - those
+    # are printer-specific is_compatible and are picked up by OrcaSlicer directly
+    # matched. Library fallbacks (OGF*) only for material types without
+    # Kobra X-specific Anycubic profile - their @system profiles have
+    # `compatible_printers: []` (= compatible with all printers).
     _TRAY_INFO_IDX = {
         # Anycubic-eigene Kobra-X-Profile
         "PLA":        "GFPLA",
@@ -1884,9 +1884,9 @@ class KobraXBridge:
         "HIPS":       "OGFS98",
     }
 
-    # Normalisiert Material-Typ-Strings auf den kanonischen Key für _TRAY_INFO_IDX
-    # und _default_filament_name. PLA-Varianten die nicht exakt matchen fallen
-    # auf ihre Basisfamilie zurück (PLA+ → PLA+, PLA Matte → PLA, etc.).
+    # Normalizes material type strings to the canonical key for _TRAY_INFO_IDX
+    # and _default_filament_name. PLA variants without an exact match fall
+    # back to their base family (PLA+ -> PLA+, PLA Matte -> PLA, etc.).
     @staticmethod
     def _normalize_material(mat: str) -> str:
         m = mat.upper().strip().replace("-", " ").replace("_", " ")
@@ -1905,12 +1905,12 @@ class KobraXBridge:
         return m
 
     def _build_lane_data(self) -> dict:
-      """Baut BBL-AMS-JSON für OrcaSlicer DevFilaSystemParser::ParseV1_0.
+      """Builds BBL AMS JSON for OrcaSlicer DevFilaSystemParser::ParseV1_0.
 
-      POSITIONSTREU: jeder physische Slot behält seine Position (tray id =
-      Slot-Position). Leere Slots werden als Platzhalter-Tray gemeldet, NICHT
-      weggefiltert/komprimiert — sonst rutschen die Farben auf falsche Positionen
-      (z.B. Slot 1=gelb, 2=leer, 3=rot → rot dürfte nicht auf Position 2 landen).
+      POSITION-FAITHFUL: every physical slot keeps its position (tray id =
+      slot position). Empty slots are reported as placeholder trays, NOT
+      filtered out/compacted - otherwise colors shift to wrong positions
+      (e.g. slot 1=yellow, 2=empty, 3=red -> red must not land on position 2).
       """
       slots = self._ams_slots
       total = len(slots)
@@ -1943,15 +1943,15 @@ class KobraXBridge:
             else:
               color_hex = "FFFFFFFF"
             material = self._normalize_material(slot.get("type", "PLA"))
-            # User-Override aus config.ini [filament_profiles].slot_N_id
-            # bekommt Vorrang vor dem Default-Mapping nach material-Type.
-            # Vendor wird mitgesendet (tray_sub_brands + filament_vendor),
-            # damit ein gepatchter OrcaSlicer den Match nach Marke + Type +
-            # Farbe machen kann (analog SnapmakerPrinterAgent).
-            # Zwei-Schicht-Resolution für den Filament-Hint an OrcaSlicer:
+            # User override from config.ini [filament_profiles].slot_N_id
+            # takes precedence over the default mapping by material type.
+            # The vendor is sent along (tray_sub_brands + filament_vendor),
+            # so a patched OrcaSlicer can match by brand + type +
+            # color (analogous to SnapmakerPrinterAgent).
+            # Two-layer resolution for the filament hint sent to OrcaSlicer:
             #   1. User-Wahl (config.ini [filament_profiles]) — exakte Kontrolle
-            #   2. Generic-Fallback (_TRAY_INFO_IDX) pro Material-Typ — kein
-            #      Vendor-Hint, OrcaSlicer trifft dann sein eigenes Generic-Preset
+            #   2. Generic fallback (_TRAY_INFO_IDX) per material type - no
+            #      vendor hint; OrcaSlicer then picks its own generic preset
             user_profile = self._filament_profiles.get(slot_index) or {}
             if user_profile.get("name"):
                 vendor    = user_profile.get("vendor", "")
@@ -1959,9 +1959,9 @@ class KobraXBridge:
                 tray_info_idx = user_profile.get("id") or self._TRAY_INFO_IDX.get(material, "OGFL99")
             else:
                 # Default: Library-Generic-Profil (siehe _default_filament_name) —
-                # ist mit allen Druckern kompatibel und garantiert sichtbar.
-                # Der User wählt pro Slot bewusst eine konkrete Marke wenn er
-                # eine will; Default bleibt neutral.
+                # is compatible with all printers and guaranteed to be visible.
+                # The user deliberately picks a concrete brand per slot if they
+                # want one; the default stays neutral.
                 fila_name = self._default_filament_name(material)
                 vendor    = "Generic" if fila_name.startswith("Generic ") else ""
                 tray_info_idx = self._lookup_filament_id(vendor, fila_name) or self._TRAY_INFO_IDX.get(material, "OGFL99")
@@ -1974,14 +1974,14 @@ class KobraXBridge:
               "tray_sub_brands": vendor,
               # OrcaSlicer-Empfangs-Patch PR #13719 erwartet `name` +
               # `vendor_name` pro Lane (Stufen-Matching: Vendor+Name → Name →
-              # filament_id_by_type). Wir senden beide Schreibweisen mit
-              # damit ältere Patch-Varianten + zukünftige Upstream-PRs beide
-              # bedient sind.
+              # filament_id_by_type). We send both spellings so that
+              # older patch variants + future upstream PRs are both
+              # covered.
               "name":         fila_name,
               "vendor_name":  vendor,
-              # Aliase für ältere Patch-Varianten (Variante 2,
+              # Aliases for older patch variants (variant 2,
               # MoonrakerPrinterAgent.cpp): filament_id direkt (exakt),
-              # sonst preset-Name per find_preset() auflösen.
+              # otherwise resolve the preset name via find_preset().
               "filament_id":     tray_info_idx,
               "filament_vendor": vendor,
               "filament_name":   fila_name,
@@ -2010,9 +2010,9 @@ class KobraXBridge:
         """OrcaSlicer-Default-Filename-Pattern: `<plate>_<material>_<layer>_<dur>.gcode`
         z.B. `adapter_e27_plate(01)_PLA_0.2_41m1s.gcode` → 0.2.
 
-        Fallback wenn der GCode-Header nicht geparst wurde (z.B. Datei direkt am
-        Slicer gestartet, oder vor v0.9.18 hochgeladen). Liefert 0.0 wenn das
-        Pattern nicht greift."""
+        Fallback when the GCode header was not parsed (e.g. file started directly
+        on the slicer, or uploaded before v0.9.18). Returns 0.0 when the
+        pattern does not match."""
         import re
         if not fname:
             return 0.0
@@ -2025,18 +2025,18 @@ class KobraXBridge:
             return 0.0
 
     def _estimate_current_z(self) -> float:
-        """Schätzt die aktuelle Z-Höhe aus curr_layer + Layer-Heights.
+        """Estimates the current Z height from curr_layer + layer heights.
 
-        Der Drucker liefert keine echte Z-Position via MQTT, aber Obico
-        (moonraker-obico/printer.py:267) liest currentZ aus `gcode_position[2]`.
-        Wir rechnen das mit der layer_height aus dem GCode-Header zurück:
+        The printer provides no real Z position via MQTT, but Obico
+        (moonraker-obico/printer.py:267) reads currentZ from `gcode_position[2]`.
+        We back-compute it with the layer_height from the GCode header:
           z = first_layer_height + (curr_layer - 1) * layer_height
 
-        Werte werden im Upload-Pfad gesetzt und nur bei Druckabbruch/-ende
-        zurückgesetzt (Slot-/Farbänderungen ändern nichts daran). Falls die
-        Werte fehlen (z.B. weil der Druck direkt am Slicer gestartet wurde
-        ohne Upload über die Bridge), wird einmalig aus dem GCode-Store
-        nachgeladen. Liefert 0.0 wenn nichts bekannt — Obico zeigt dann
+        Values are set in the upload path and only reset on print cancel/end
+        (slot/color changes do not affect them). If the values are
+        missing (e.g. because the print was started directly on the slicer
+        without an upload through the bridge), they are reloaded once from
+        the GCode store. Returns 0.0 when nothing is known - Obico then shows
         keinen Z-Wert."""
         s = self._state
         layer_h = float(s.get("layer_height") or 0.0)
@@ -2051,12 +2051,12 @@ class KobraXBridge:
             except Exception:
                 pass
         if not layer_h and fname:
-            # Letzter Fallback: OrcaSlicer-Default-Filename enthält die Layer-Height
+            # Last fallback: the OrcaSlicer default filename contains the layer height
             layer_h = self._layer_height_from_filename(fname)
             if layer_h and not first_h:
                 first_h = layer_h
         if layer_h:
-            # cache in state damit nicht jeder Build wieder den Store fragt
+            # cache in state so not every build queries the store again
             s["layer_height"] = layer_h
             s["first_layer_height"] = first_h
         if not layer_h:
@@ -2071,11 +2071,11 @@ class KobraXBridge:
     # WebSocket push
     # -------------------------------------------------------------------------
 
-    # Statische Objekte, die sich zur Laufzeit nie ändern. Sie werden einmalig
-    # per objects.query/subscribe ausgeliefert, aber NICHT in jedem
-    # notify_status_update mitgeschickt — sonst läuft Mobilerakers
-    # ConfigFile.parse (teuer + strikt) bei jedem Status-Tick erneut und die App
-    # hängt/crasht beim Refresh (Issue #48).
+    # Static objects that never change at runtime. They are delivered once
+    # via objects.query/subscribe, but NOT included in every
+    # notify_status_update - otherwise Mobileraker's
+    # ConfigFile.parse (expensive + strict) runs on every status tick and the app
+    # hangs/crashes on refresh (Issue #48).
     _STATIC_STATUS_OBJECTS = ("configfile", "webhooks", "heaters", "history")
 
     def _push_status_update(self):
@@ -2099,9 +2099,9 @@ class KobraXBridge:
 
     def _build_mmu_object(self) -> dict:
       # POSITIONSTREU: ein Gate je physischem Slot, in Reihenfolge. Leere Slots
-      # bekommen gate_status=0 (statt weggelassen zu werden) – sonst rutschen die
+      # get gate_status=0 (instead of being omitted) - otherwise the
       # Farben in OrcaSlicer auf falsche Gates (Slot 1=gelb, 2=leer, 3=rot →
-      # rot darf nicht auf Gate 1 landen). gate_status 0=leer, 1=verfügbar.
+      # red must not land on gate 1). gate_status 0=empty, 1=available.
       slots = sorted(
         ((int(s.get("global_index", i)), s) for i, s in enumerate(self._ams_slots)),
         key=lambda item: item[0],
@@ -2121,24 +2121,24 @@ class KobraXBridge:
         material = self._normalize_material(slot.get("type") or "PLA") if occupied else ""
         gate_material.append(material)
         c = slot.get("color", [0, 0, 0]) if occupied else [0, 0, 0]
-        # Happy Hare erwartet gate_color als RRGGBB OHNE '#' (Klipper-Limitation).
+        # Happy Hare expects gate_color as RRGGBB WITHOUT '#' (Klipper limitation).
         # Leerer Gate: leerer String + RGB [0,0,0].
         gate_color.append("{:02X}{:02X}{:02X}".format(*c[:3]) if occupied else "")
         gate_color_rgb.append([round(c[0]/255, 3), round(c[1]/255, 3), round(c[2]/255, 3)] if occupied else [0.0, 0.0, 0.0])
         gate_temperature.append(_TEMP.get(material, 210) if occupied else 0)
-        # gate_filament_name aus User-Override oder Material-Default für den
+        # gate_filament_name from user override or material default for the
         # HH-Pfad in OrcaSlicer (fetch_hh_filament_info). Wenn Orca den
-        # HH-Pfad wählt (MMU-Erkennung), wertet PR #13719 dieses Feld als
-        # Preset-Namen aus → 'Anycubic PLA' matched das druckerspezifische
-        # Preset, leerer String führte vorher auf Generic PLA.
+        # HH path (MMU detection), PR #13719 evaluates this field as a
+        # preset name -> 'Anycubic PLA' matches the printer-specific
+        # preset; an empty string previously led to Generic PLA.
         if occupied:
           user_profile = self._filament_profiles.get(_global_index) or {}
           fila_name = user_profile.get("name") or self._default_filament_name(material)
           gate_filament_name.append(fila_name)
         else:
           gate_filament_name.append("")
-        # Spoolman-Spool-ID je Gate aus der (druckerspezifischen) Slot-Map, damit
-        # Happy-Hare/OrcaSlicer den gebundenen Spool anzeigen kann (-1 = keiner).
+        # Spoolman spool ID per gate from the (printer-specific) slot map so
+        # Happy Hare/OrcaSlicer can show the bound spool (-1 = none).
         gate_spool_id.append(self._spoolman_slot_spools.get(_global_index, -1) if occupied else -1)
 
       loaded_index_map = {global_index: idx for idx, (global_index, _) in enumerate(slots)}
@@ -2159,19 +2159,19 @@ class KobraXBridge:
       }
 
     def _default_filament_name(self, material: str) -> str:
-      """Default-Name für `gate_filament_name`/`name` in lane_data wenn kein
-      User-Override gesetzt ist. Bewusste Designentscheidung: **immer
-      Generic <Typ>** als Default — das Library-Profil ist `compatible_printers:[]`
-      (= mit jedem Drucker kompatibel) und damit garantiert sichtbar.
+      """Default name for `gate_filament_name`/`name` in lane_data when no
+      user override is set. Deliberate design decision: **always
+      Generic <type>** as the default - the library profile is `compatible_printers:[]`
+      (= compatible with every printer) and therefore guaranteed to be visible.
 
-      OrcaSlicer matcht dann das neutrale Generic-Preset und der User
-      kann pro Slot eine konkrete Marke setzen wenn er das will."""
+      OrcaSlicer then matches the neutral generic preset and the user
+      can set a concrete brand per slot if they want to."""
       if not material:
         return ""
       mat = self._normalize_material(material)
       profs = self._load_orca_filaments()
       # Varianten-Mapping: Drucker meldet z.B. "PLA SILK", OrcaSlicer speichert
-      # alle Varianten unter type=PLA mit dem Variant-Namen im name-Feld.
+      # all variants under type=PLA with the variant name in the name field.
       _VARIANT_NAME = {
           "PLA SILK":   "Generic PLA Silk",
           "PLA MATTE":  "Generic PLA Matte",
@@ -2191,8 +2191,8 @@ class KobraXBridge:
       for p in profs:
         if p.get("vendor") == "Generic" and p.get("name", "").startswith("Generic ") and _match_type(p):
           return p.get("name", "")
-      # Falls die Library-Generic für diesen exotischen Material-Typ fehlt,
-      # liefern wir nichts — OrcaSlicer fällt auf filament_id_by_type zurück.
+      # If the library generic for this exotic material type is missing,
+      # we return nothing - OrcaSlicer falls back to filament_id_by_type.
       return ""
 
     def _build_printer_objects(self) -> dict:
@@ -2228,7 +2228,7 @@ class KobraXBridge:
                 "is_active": s["print_state"] == "printing",
                 "file_path": s["filename"],
                 # file_position approximiert: fraction × est_total_size.
-                # Genauer Wert kommt aus dem Drucker nicht, Obico nutzt es nur als Anzeige.
+                # The printer does not provide an exact value; Obico only uses it for display.
                 "file_position": int(s["progress"] * 1_000_000) if s["progress"] else 0,
             },
             "toolhead": {
@@ -2238,7 +2238,7 @@ class KobraXBridge:
                 "estimated_print_time": s["print_duration"],
             },
             "mmu": self._build_mmu_object(),
-            # ── Moonraker-Kompatibilität für moonraker-obico ──
+            # -- Moonraker compatibility for moonraker-obico --
             "heaters": {
                 "available_heaters": ["extruder", "heater_bed"],
                 "available_sensors": [],
@@ -2249,9 +2249,9 @@ class KobraXBridge:
                 "state_message": "Printer is ready",
             },
             # speed_factor: 1=silent(0.5) / 2=standard(1.0) / 3=high(1.3) / 4=ultra(1.5)
-            # Aktuelle Z-Höhe für Obico aus curr_layer + Layer-Heights schätzen
-            # (Drucker liefert keine echte Z-Position per MQTT). gcode_position[2]
-            # ist der Wert den moonraker-obico in printer.py als currentZ liest.
+            # Estimate the current Z height for Obico from curr_layer + layer heights
+            # (the printer provides no real Z position via MQTT). gcode_position[2]
+            # is the value moonraker-obico reads as currentZ in printer.py.
             "gcode_move": {
                 "speed_factor":   {1: 0.5, 2: 1.0, 3: 1.3, 4: 1.5}.get(int(s.get("print_speed_mode") or 2), 1.0),
                 "extrude_factor": 1.0,
@@ -2262,12 +2262,12 @@ class KobraXBridge:
                 "homing_origin":  [0, 0, 0, 0],
                 "position":       [0, 0, self._estimate_current_z(), 0],
             },
-            # motion_report: Mobileraker liest die Live-Geschwindigkeit hier
-            # (live_velocity). Der Kobra-X-MQTT liefert KEINE echte mm/s, nur
-            # einen print_speed_mode (1-4). live_velocity bleibt daher 0 — das
-            # Objekt muss aber existieren, sonst zeigt Mobileraker nichts an
-            # (motion_report war zuvor null). live_position spiegelt die
-            # geschätzte Z-Höhe (wie gcode_move).
+            # motion_report: Mobileraker reads the live velocity here
+            # (live_velocity). The Kobra X MQTT provides NO real mm/s, only
+            # a print_speed_mode (1-4). live_velocity therefore stays 0 - but the
+            # object must exist, otherwise Mobileraker displays nothing
+            # (motion_report used to be null). live_position mirrors the
+            # estimated Z height (like gcode_move).
             "motion_report": {
                 "live_position":          [0, 0, self._estimate_current_z(), 0],
                 "live_velocity":          0.0,
@@ -2277,8 +2277,8 @@ class KobraXBridge:
                 "speed": (int(s.get("fan_speed") or 0)) / 100.0,
                 "rpm":   None,
             },
-            # history (object): Obico abonniert es als Objekt; das eigentliche
-            # /server/history/list-Endpoint liefert die echte Liste separat.
+            # history (object): Obico subscribes to it as an object; the actual
+            # /server/history/list endpoint delivers the real list separately.
             "history": {
                 "job_totals": {
                     "total_jobs":  0,
@@ -2290,14 +2290,14 @@ class KobraXBridge:
                 },
                 "current_job": None,
             },
-            # Pseudo-Klipper-Macros für moonraker-obico:
-            # - _OBICO_LAYER_CHANGE meldet die aktuelle Layer-Nr. Obico nutzt das
-            #   für "first layer scan"-Trigger und layer-aligned Time-Lapse-Frames.
-            #   Wir bedienen das aus dem MQTT-Stream (s["curr_layer"]).
-            # - TIMELAPSE_TAKE_FRAME signalisiert, dass die aktuelle Pause vom
-            #   Time-Lapse stammt (sonst würde Obico die Pause als User-Pause
-            #   interpretieren). Wir setzen is_paused=False, weil unsere Pausen
-            #   nie Time-Lapse-Pausen sind.
+            # Pseudo Klipper macros for moonraker-obico:
+            # - _OBICO_LAYER_CHANGE reports the current layer number. Obico uses this
+            #   for "first layer scan" triggers and layer-aligned time-lapse frames.
+            #   We feed this from the MQTT stream (s["curr_layer"]).
+            # - TIMELAPSE_TAKE_FRAME signals that the current pause comes from the
+            #   time-lapse (otherwise Obico would interpret the pause as a user
+            #   pause). We set is_paused=False because our pauses are
+            #   never time-lapse pauses.
             "gcode_macro _OBICO_LAYER_CHANGE": {
                 "current_layer":         int(s.get("curr_layer") or 0),
                 "first_layer_scanning":  False,
@@ -2306,23 +2306,23 @@ class KobraXBridge:
             "gcode_macro TIMELAPSE_TAKE_FRAME": {
                 "is_paused": False,
             },
-            # configfile stub — Mobileraker und andere Clients crashen ohne
-            # dieses Objekt (Missing field: configFile). Werte aus der
-            # entschlüsselten avata_main.conf (ACCFG1.0 — Kobra X Firmware).
-            # Mobileraker (Issue #48) parst BEIDE Zweige config + settings durch
+            # configfile stub - Mobileraker and other clients crash without
+            # this object (Missing field: configFile). Values from the
+            # decrypted avata_main.conf (ACCFG1.0 - Kobra X firmware).
+            # Mobileraker (Issue #48) parses BOTH branches config + settings via
             # denselben ConfigFile.parse → ConfigExtruder.fromJson; ein leeres
-            # config:{} ließ den nicht-nullbaren Dart-Parser crashen. Daher wird
+            # config:{} crashed the non-nullable Dart parser. Therefore
             # config identisch zu settings gespiegelt.
             "configfile": self._klipper_configfile_stub(),
         }
 
     def _klipper_configfile_stub(self) -> dict:
-        """Minimaler Klipper-configfile-Stub für Mobileraker/OctoApp (Issue #48).
+        """Minimal Klipper configfile stub for Mobileraker/OctoApp (Issue #48).
 
-        Mobileraker parst BEIDE Zweige `config` und `settings` durch denselben
+        Mobileraker parses BOTH branches `config` and `settings` through the same
         ConfigFile.parse → ConfigExtruder.fromJson. Ein leeres `config: {}`
-        ließ den nicht-nullbaren Dart-Parser crashen, daher wird `config`
-        identisch zu `settings` gespiegelt. Werte aus der entschlüsselten
+        crashed the non-nullable Dart parser, therefore `config` is
+        mirrored identically to `settings`. Values from the decrypted
         avata_main.conf (ACCFG1.0 — Kobra X Firmware).
         """
         settings = {
@@ -2342,8 +2342,8 @@ class KobraXBridge:
                 "max_temp":           320,
                 "min_extrude_temp":   10,
                 # Mobileraker ConfigExtruder erwartet diese Felder non-nullable
-                # (max_extrude_only_distance, max_power) bzw. als Key präsent
-                # (max_extrude_only_velocity/accel dürfen null sein). Fehlen =
+                # (max_extrude_only_distance, max_power) or present as a key
+                # (max_extrude_only_velocity/accel may be null). Missing =
                 # Crash in ConfigExtruder.fromJson (Issue #48).
                 "max_extrude_only_distance": 100.0,
                 "max_power":                 1.0,
@@ -2352,16 +2352,16 @@ class KobraXBridge:
             },
             "heater_bed": {
                 # Mobileraker ConfigHeaterBed: heater_pin, sensor_type, control
-                # sind non-nullable. Werte sind Platzhalter (Bridge kennt die
-                # echten Pins nicht — Anycubic-Firmware, kein Klipper-printer.cfg).
+                # are non-nullable. Values are placeholders (the bridge does not know
+                # the real pins - Anycubic firmware, no Klipper printer.cfg).
                 "heater_pin":  "PA0",
                 "sensor_type": "ATC Semitec 104GT-2",
                 "control":     "pid",
                 "min_temp":    0,
                 "max_temp":    120,
             },
-            # stepper_* mit non-nullable Pflichtfeldern (step_pin, dir_pin,
-            # rotation_distance) füllen, sonst crasht ConfigStepper.fromJson.
+            # Fill stepper_* with non-nullable required fields (step_pin, dir_pin,
+            # rotation_distance), otherwise ConfigStepper.fromJson crashes.
             "stepper_x": {"step_pin": "PA1", "dir_pin": "PA2", "rotation_distance": 40,
                           "position_min": -18.5, "position_max": 280},
             "stepper_y": {"step_pin": "PA3", "dir_pin": "PA4", "rotation_distance": 40,
@@ -2372,8 +2372,8 @@ class KobraXBridge:
             "pause_resume":   {},
             "display_status": {},
         }
-        # config + settings müssen dieselben Felder enthalten — Mobileraker
-        # parst beide. deepcopy, damit kein Client durch geteilte Referenz
+        # config + settings must contain the same fields - Mobileraker
+        # parses both. deepcopy so no client is affected by a shared reference
         # versehentlich beide Zweige mutiert.
         return {
             "config":   copy.deepcopy(settings),
@@ -2401,8 +2401,8 @@ class KobraXBridge:
 
     async def handle_kx_files(self, request):
         files = self._store.list_files()
-        # Legacy-Einträge ohne gespeicherte Filament-Metadaten nachziehen,
-        # damit Dialog links die GCode-Farben statt AMS-Slots zeigt.
+        # Backfill legacy entries without stored filament metadata
+        # so the dialog's left side shows GCode colors instead of AMS slots.
         for f in files:
             needs_refresh = not f.get("gcode_filaments")
             if not needs_refresh:
@@ -2425,7 +2425,7 @@ class KobraXBridge:
                     self._store.update_file_filaments(f["id"], parsed_filaments)
             except Exception:
                 pass
-        # Letzten Job-Status + Dauer pro Datei ergänzen
+        # Add last job status + duration per file
         jobs = self._store.list_jobs(limit=500)
         last_job: dict = {}
         for j in reversed(jobs):
@@ -2453,8 +2453,8 @@ class KobraXBridge:
         if not path or not os.path.isfile(path):
             return self._json_cors({"error": "not found"}, status=404)
         filename = os.path.basename(f.get("filename") or path)
-        # RFC 5987: filename* mit URL-encoding für Sonderzeichen/UTF-8,
-        # plus ASCII-fallback (alle " und \ aus filename strippen für den
+        # RFC 5987: filename* with URL encoding for special chars/UTF-8,
+        # plus ASCII fallback (strip all " and \ from filename for the
         # quoted-string-Part).
         ascii_fallback = filename.encode("ascii", "replace").decode("ascii").replace('"', "").replace("\\", "")
         encoded = quote(filename, safe="")
@@ -2478,8 +2478,8 @@ class KobraXBridge:
                 "color_hex":   "#{:02X}{:02X}{:02X}".format(*s.get("color", [0,0,0])[:3]),
                 "status":      "loaded" if s.get("status") == 5 else "empty",
                 "nozzle_temp": 0,
-                # Aktueller User-Override aus config.ini [filament_profiles]
-                # — (vendor,name) ist eindeutig, id ist nur Hint.
+                # Current user override from config.ini [filament_profiles]
+                # - (vendor,name) is unique, id is only a hint.
                 "filament_id":     profile.get("id", ""),
                 "filament_vendor": profile.get("vendor", ""),
                 "filament_name":   profile.get("name", ""),
@@ -2487,12 +2487,12 @@ class KobraXBridge:
         return self._json_cors({"result": slots})
 
     async def handle_kx_filament_profiles(self, request):
-        """Liefert die statische Liste der OrcaSlicer-Filament-Profile
-        (aus bridge/data/orca_filaments.json — vom Generator-Script
+        """Returns the static list of OrcaSlicer filament profiles
+        (from bridge/data/orca_filaments.json - produced by the generator script
         tools/gen_orca_filament_list.py erzeugt).
 
         Optional Filter via ?type=PLA / ?vendor=Polymaker.
-        Frontend nutzt das für die Slot-Profile-Dropdown.
+        The frontend uses this for the slot profile dropdown.
         """
         type_filter = request.rel_url.query.get("type", "").upper().strip()
         vendor_filter = request.rel_url.query.get("vendor", "").strip()
@@ -2504,8 +2504,8 @@ class KobraXBridge:
         return self._json_cors({"result": profiles})
 
     async def handle_kx_filament_profiles_user_list(self, request):
-        """GET /kx/filament/profiles/user — nur die User-importierten Profile,
-        für den Settings-Tab (Verwaltung mit Lösch-Buttons)."""
+        """GET /kx/filament/profiles/user - only the user-imported profiles,
+        for the settings tab (management with delete buttons)."""
         path = self._orca_filaments_user_path()
         if not os.path.isfile(path):
             return self._json_cors({"result": []})
@@ -2517,21 +2517,21 @@ class KobraXBridge:
         return self._json_cors({"result": user_profiles})
 
     async def handle_kx_filament_profiles_import(self, request):
-        """POST /kx/filament/profiles/user — multipart-Upload mit einer
-        ZIP-Datei oder mehreren `.json`-Files aus
+        """POST /kx/filament/profiles/user - multipart upload with one
+        ZIP file or multiple `.json` files from
         ~/.config/OrcaSlicer/user/<id>/filament/.
 
-        Bestehende User-Profile mit gleichem (vendor, name)-Key werden
-        überschrieben. Geparste Profile haben dasselbe Schema wie
+        Existing user profiles with the same (vendor, name) key are
+        overwritten. Parsed profiles use the same schema as
         orca_filaments.json (id, name, vendor, type, color)."""
         import io, zipfile
         from orca_filaments import parse_profile_bytes
         added: list[dict] = []
         skipped: int = 0
-        # System-Index für Inherits-Resolve: User-Profile referenzieren
+        # System index for inherits resolution: user profiles reference
         # System-Parents via "inherits" (z.B. "Generic PLA @System"). Damit
-        # können wir filament_id/vendor/type/color aus dem System-Parent
-        # ziehen wenn das User-Profil sie selbst nicht setzt.
+        # we can pull filament_id/vendor/type/color from the system parent
+        # when the user profile does not set them itself.
         sys_idx = [p for p in self._load_orca_filaments() if not p.get("is_user")]
         try:
             reader = await request.multipart()
@@ -2570,7 +2570,7 @@ class KobraXBridge:
         if not added:
             return self._json_cors({"result": "ok", "added": 0, "skipped": skipped})
 
-        # Merge mit existierender User-JSON (gleicher (vendor,name) → ersetzen)
+        # Merge with existing user JSON (same (vendor,name) -> replace)
         path = self._orca_filaments_user_path()
         existing: list[dict] = []
         if os.path.isfile(path):
@@ -2596,8 +2596,8 @@ class KobraXBridge:
                                 "total_user": len(merged)})
 
     async def handle_kx_filament_profiles_user_delete(self, request):
-        """DELETE /kx/filament/profiles/user — löscht entweder einen einzelnen
-        Eintrag (?vendor=…&name=…) oder alle wenn keine Query angegeben."""
+        """DELETE /kx/filament/profiles/user - deletes either a single
+        entry (?vendor=...&name=...) or all when no query is given."""
         vendor = request.rel_url.query.get("vendor", "").strip()
         name   = request.rel_url.query.get("name", "").strip()
         path = self._orca_filaments_user_path()
@@ -2626,17 +2626,17 @@ class KobraXBridge:
                                 "total_user": len(existing)})
 
     def _find_orca_filaments_json(self) -> str | None:
-        """Findet die statische JSON-Datei. Liegt analog zu web/ unter _WEB_BASE/data/
+        """Finds the static JSON file. Sits next to web/ under _WEB_BASE/data/
         — in allen 3 Deployment-Modi:
           • Dev:     bridge/data/orca_filaments.json
-          • Docker:  /app/data/orca_filaments.json (statisch im Image, NICHT das
-                     Volume-data/ das Runtime-State enthält — siehe Dockerfile)
+          * Docker:  /app/data/orca_filaments.json (static in the image, NOT the
+                     volume data/ holding runtime state - see Dockerfile)
           • Onefile: sys._MEIPASS/data/orca_filaments.json
-        Wenn das Volume-mounted /app/data/ den static-data überdeckt, liegt eine
-        Kopie auch unter _WEB_BASE/data/ (= /app/ im Docker = derselbe Pfad).
-        Bei Konflikt: zweite Suche unter ../bridge/data/ als Fallback für Dev-Setups."""
+        When the volume-mounted /app/data/ shadows the static data, a copy
+        also sits under _WEB_BASE/data/ (= /app/ in Docker = the same path).
+        On conflict: second lookup under ../bridge/data/ as a fallback for dev setups."""
         candidates = [
-            # Docker: COPY bridge/data → /app/static/ (data/ ist Volume → überdeckt)
+            # Docker: COPY bridge/data -> /app/static/ (data/ is a volume -> shadowed)
             os.path.join(_WEB_BASE, "static", "orca_filaments.json"),
             os.path.join(_WEB_BASE, "data", "orca_filaments.json"),
         ]
@@ -2649,18 +2649,18 @@ class KobraXBridge:
         return None
 
     async def handle_kx_filament_slot_profile(self, request):
-        """POST /kx/filament/slots/<idx>/profile — speichert oder löscht
-        ein User-Override-Mapping für einen einzelnen AMS-Slot.
+        """POST /kx/filament/slots/<idx>/profile - saves or deletes
+        a user override mapping for a single AMS slot.
 
-        Primärer Selector ist (vendor, name) — die ID ist im Orca-Datenmodell
-        nicht eindeutig (136 Profile teilen sich z.B. 'OGFL99'). Die ID wird
-        aus orca_filaments.json beim Speichern nachgeschlagen und als Hint
-        mitgeführt für OrcaSlicer's `tray_info_idx`.
+        The primary selector is (vendor, name) - the ID is not unique in the Orca
+        data model (136 profiles share e.g. 'OGFL99'). The ID is looked up
+        from orca_filaments.json on save and carried along as a hint
+        for OrcaSlicer's `tray_info_idx`.
 
         Body: {"vendor": "Polymaker", "name": "PolyTerra PLA"}
               {"vendor": "", "name": ""} → Mapping entfernen
-              (Backwards-Kompat: {"id":..., "vendor":...} wird akzeptiert,
-              aber `name` ist seit v0.9.18 der primäre Selector.)
+              (Backwards compat: {"id":..., "vendor":...} is accepted,
+              but `name` has been the primary selector since v0.9.18.)
         """
         try:
             slot_idx = int(request.match_info.get("idx", "-1"))
@@ -2676,8 +2676,8 @@ class KobraXBridge:
         new_name   = (data.get("name")   or "").strip()
         new_id     = (data.get("id")     or "").strip()  # Backwards-Kompat-Hint
         if new_vendor and new_name:
-            # ID aus JSON lookup'en (nicht aus dem Request-Body, der könnte
-            # veraltet sein oder ein Generic-Fallback).
+            # Look up the ID from JSON (not from the request body, which could
+            # be stale or a generic fallback).
             looked_up_id = self._lookup_filament_id(new_vendor, new_name)
             self._filament_profiles[slot_idx] = {
                 "vendor": new_vendor,
@@ -2702,12 +2702,12 @@ class KobraXBridge:
 
     async def handle_kx_visible_vendors(self, request):
         """GET/POST /kx/filament/visible_vendors — Vendor-Sichtbarkeitsfilter
-        fürs Slot-Profil-Dropdown (Issue #41 Option A).
+        for the slot profile dropdown (Issue #41 option A).
 
         GET  → {"result": ["Polymaker", "eSUN", ...]}
         POST {"vendors": [...]} → speichert in config.ini [filament_profiles]
-             visible_vendors. Leere Liste = alle sichtbar. KEIN Bridge-Neustart
-             nötig (nur Anzeigefilter)."""
+             visible_vendors. Empty list = all visible. NO bridge restart
+             needed (display filter only)."""
         if request.method == "POST":
             try:
                 data = await request.json()
@@ -2726,11 +2726,11 @@ class KobraXBridge:
         return self._json_cors({"result": self._visible_vendors})
 
     def _load_orca_filaments(self) -> list[dict]:
-        """Lädt System- + User-Profile aus dem Cache. System-Profile kommen
-        aus bridge/data/orca_filaments.json (Image-embedded), User-Profile
-        aus <KX_DATA_DIR>/orca_filaments.user.json (Volume-persistent —
-        überlebt Image-Updates). User-Profile bekommen ein `is_user: True`-
-        Flag damit das Frontend sie markieren kann."""
+        """Loads system + user profiles from the cache. System profiles come
+        from bridge/data/orca_filaments.json (image-embedded), user profiles
+        from <KX_DATA_DIR>/orca_filaments.user.json (volume-persistent -
+        survives image updates). User profiles get an `is_user: True`
+        flag so the frontend can mark them."""
         if getattr(self, "_orca_filaments_cache", None) is not None:
             return self._orca_filaments_cache
         merged: list[dict] = []
@@ -2756,8 +2756,8 @@ class KobraXBridge:
         return self._orca_filaments_cache
 
     def _orca_filaments_user_path(self) -> str:
-        """Pfad zur User-Profile-JSON. Liegt im Volume-Mount (KX_DATA_DIR),
-        damit Image-Updates die Daten nicht zerstören."""
+        """Path to the user profiles JSON. Lives in the volume mount (KX_DATA_DIR)
+        so image updates do not destroy the data."""
         data_dir = os.environ.get("KX_DATA_DIR") or os.path.join(_WEB_BASE, "data")
         os.makedirs(data_dir, exist_ok=True)
         return os.path.join(data_dir, "orca_filaments.user.json")
@@ -2766,8 +2766,8 @@ class KobraXBridge:
         self._orca_filaments_cache = None
 
     def _lookup_filament_id(self, vendor: str, name: str) -> str:
-        """Sucht in orca_filaments.json die filament_id zu einem (vendor,name)-
-        Tupel. Liefert '' wenn nicht gefunden."""
+        """Looks up the filament_id for a (vendor,name) tuple in
+        orca_filaments.json. Returns '' when not found."""
         for p in self._load_orca_filaments():
             if p.get("vendor") == vendor and p.get("name") == name:
                 return p.get("id", "")
@@ -2780,12 +2780,12 @@ class KobraXBridge:
         return self._json_cors({"result": jobs})
 
     async def handle_kx_file_objects(self, request):
-        """Liefert die Objekt-Liste + optionales SVG für eine Datei.
+        """Returns the object list + optional SVG for a file.
 
         GET /kx/files/{id}/objects → {"names": [...], "svg_b64": "..."}
-        Wenn Datei noch keine Objekte hat (alter Eintrag): file/fileDetails
-        beim Drucker abfragen und Antwort abwarten ist Aufgabe des Frontends
-        (Reload nach Upload). Hier nur Datenbankstand zurückgeben.
+        If the file has no objects yet (old entry): querying file/fileDetails
+        from the printer and awaiting the response is the frontend's job
+        (reload after upload). Only return the database state here.
         """
         fid = request.match_info.get("id", "")
         f = self._store.get_file(fid)
@@ -2795,10 +2795,10 @@ class KobraXBridge:
             names = json.loads(f.get("objects_skip_parts") or "[]")
         except Exception:
             names = []
-        # Noch keine Objekte im Store (frischer Orca-/Web-Upload): einmal aktiv
-        # file/fileDetails beim Drucker anfragen. _on_file() füllt den Store nach,
-        # das Frontend pollt diesen Endpoint und bekommt die Liste beim nächsten
-        # Versuch (Issue #57 — Skip-Parität auch außerhalb des File-Browsers).
+        # No objects in the store yet (fresh Orca/web upload): actively request
+        # file/fileDetails from the printer once. _on_file() backfills the store,
+        # the frontend polls this endpoint and receives the list on the next
+        # attempt (Issue #57 - skip parity outside the file browser too).
         if not names:
             fn = f.get("filename") or ""
             if fn:
@@ -2806,7 +2806,7 @@ class KobraXBridge:
                     self.client.publish("file", "fileDetails",
                                         {"root": "local", "filename": fn}, timeout=0)
                 except Exception as e:
-                    log.debug(f"fileDetails-Nachfrage fehlgeschlagen: {e}")
+                    log.debug(f"fileDetails request failed: {e}")
         return self._json_cors({
             "result": {
                 "names":   names,
@@ -2815,7 +2815,7 @@ class KobraXBridge:
         })
 
     async def handle_kx_skip(self, request):
-        """Mid-Print Skip auslösen.
+        """Trigger a mid-print skip.
 
         POST /kx/skip  body={"names": ["..", ".."]}
         """
@@ -2834,7 +2834,7 @@ class KobraXBridge:
         return self._json_cors({"result": "ok", "names": names})
 
     def _build_skip_state_result(self) -> dict:
-        """Baut den kombinierten Skip-State für UI-Endpunkte."""
+        """Builds the combined skip state for UI endpoints."""
         filename = self._state.get("filename", "")
         all_objects: list[str] = []
         svg = ""
@@ -2855,10 +2855,10 @@ class KobraXBridge:
         }
 
     async def handle_kx_skip_query(self, request):
-        """Druck-Objektliste vom Drucker neu abfragen.
+        """Re-request the print object list from the printer.
 
         POST /kx/skip/query  → triggert skip/query_obj, wartet kurz auf den
-        async skip/report und gibt den zusammengeführten Skip-State zurück.
+        async skip/report and returns the merged skip state.
         """
         prev_ts = int(self._skip_state.get("ts", 0) or 0)
         try:
@@ -2879,28 +2879,28 @@ class KobraXBridge:
         """Aktueller Skip-State.
 
         Kombiniert:
-        - Gesamt-Objektliste: aus dem GCode-Store, gematcht über den aktuell
-          laufenden filename (file/report beim Druckstart hat die Liste gefüllt).
-          skip/query_obj liefert nämlich NUR die bereits geskippten zurück,
-          nicht die Gesamtliste.
-        - Geskippt: aus self._skip_state (von skip/report aktualisiert).
+        - Full object list: from the GCode store, matched via the currently
+          running filename (file/report at print start populated the list).
+          skip/query_obj only returns the already-skipped ones,
+          not the full list.
+        - Skipped: from self._skip_state (updated by skip/report).
         """
         return self._json_cors({"result": self._build_skip_state_result()})
 
     async def handle_kx_printers(self, request):
-        # Aktive Drucker (mit IP) sammeln
+        # Collect active printers (with IP)
         active = [(pid, br) for pid, br in self._all_bridges.items()
                   if (br._args.printer_ip or "").strip()]
-        # Host für bridge_url: Browser-Sicht beibehalten, aber niemals "localhost" exportieren –
-        # sonst scheitern Fetches aus dem Browser, wenn die UI über die LAN-IP geöffnet ist.
+        # Host for bridge_url: keep the browser view, but never export "localhost" -
+        # otherwise browser fetches fail when the UI is opened via the LAN IP.
         host = request.host.split(":")[0]
         if host in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
             host = ""
         out = []
         for pid, br in active:
             port = getattr(br._args, "port", 7125)
-            # Nur bei Multi-Printer eine konkrete bridge_url setzen (Cross-Instance-Fetch).
-            # Single-Printer: leere bridge_url → JS nutzt relative Pfade (gleiche Origin wie UI).
+            # Only set a concrete bridge_url for multi-printer setups (cross-instance fetch).
+            # Single printer: empty bridge_url -> JS uses relative paths (same origin as the UI).
             bridge_url = ""
             if len(active) > 1 and host:
                 bridge_url = f"http://{host}:{port}"
@@ -2914,7 +2914,7 @@ class KobraXBridge:
         return self._json_cors({"result": out})
 
     async def handle_kx_print(self, request):
-        """Druckstart aus dem GCode-Store mit optionalen Filament-Assignments."""
+        """Print start from the GCode store with optional filament assignments."""
         try:
             body = await request.json()
         except Exception:
@@ -2944,7 +2944,7 @@ class KobraXBridge:
             if not ams_box_mapping:
                 return self._json_cors({"error": "no usable filament assignments for current filament mode"}, status=400)
         else:
-            # Kein Dialog → alle belegten Slots wie bei normalem Upload-Druck
+            # No dialog -> all occupied slots as with a normal upload print
             ams_box_mapping = self._build_auto_ams_box_mapping()
 
         use_ams = len(ams_box_mapping) > 0
@@ -2952,7 +2952,7 @@ class KobraXBridge:
         filename = gcode_file["filename"]
         file_path = gcode_file["path"]
 
-        # Datei über internes Serve-Endpoint bereitstellen
+        # Serve the file via the internal serve endpoint
         url = f"http://localhost:{self._args.port}/serve/{os.path.basename(file_path)}"
 
         payload = {
@@ -2980,7 +2980,7 @@ class KobraXBridge:
             },
         }
 
-        # UI erst nach echter Drucker-Bestätigung als "geskippt" markieren.
+        # Mark the UI as "skipped" only after real printer confirmation.
         self._skip_state = {"skipped": [], "ts": int(time.time())}
         if excluded_objects:
             self._pending_preprint_skip = [str(n) for n in excluded_objects if isinstance(n, str) and n]
@@ -2989,13 +2989,13 @@ class KobraXBridge:
             self._pending_preprint_skip = []
             self._pending_preprint_skip_deadline = 0.0
 
-        log.info(f"KX-Store Druckstart: {filename}  ams={len(ams_box_mapping)} slots  assignments={bool(assignments)}  excluded={len(excluded_objects)}")
+        log.info(f"KX store print start: {filename}  ams={len(ams_box_mapping)} slots  assignments={bool(assignments)}  excluded={len(excluded_objects)}")
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             None, lambda: self.client.publish("print", "start", payload, timeout=15.0)
         )
         if result is None:
-            return self._json_cors({"error": "Keine Antwort vom Drucker"}, status=504)
+            return self._json_cors({"error": "no response from printer"}, status=504)
 
         if excluded_objects:
             loop.run_in_executor(None, lambda: self._apply_preprint_skip_after_start(excluded_objects))
@@ -3105,14 +3105,14 @@ class KobraXBridge:
         return web.json_response({"result": files})
 
     def _build_file_metadata(self, filename: str) -> dict:
-        """Baut die Moonraker-file-metadata für eine Datei. Gemeinsame Quelle
-        für HTTP /server/files/metadata UND den WS-RPC server.files.metadata
-        (vorher hatte der WS-Pfad eigene, kaputte Logik mit einer nicht
+        """Builds the Moonraker file metadata for a file. Shared source
+        for HTTP /server/files/metadata AND the WS RPC server.files.metadata
+        (previously the WS path had its own broken logic with a non-existent
         existierenden Store-Methode → leere Antwort → Mobileraker fragte in
-        Endlosschleife, App hing beim Refresh, Issue #48).
+        endless loop, app hung on refresh, Issue #48).
 
         Liefert Mobileraker-kompatible Pflichtfelder: `filename`, `size`,
-        `modified` sind in GCodeFile non-nullable; `print_start_time` und die
+        `modified` are non-nullable in GCodeFile; `print_start_time` and the
         Slicer-Felder optional."""
         s = self._state
         layer_h = float(s.get("layer_height") or 0.0)
@@ -3139,7 +3139,7 @@ class KobraXBridge:
         object_height = round(first_h + max(0, total_layers - 1) * layer_h, 3) if (layer_h and total_layers) else 0.0
         return {
             "filename":           filename,
-            # GCodeFile (Mobileraker) verlangt size als non-nullable int.
+            # GCodeFile (Mobileraker) requires size as a non-nullable int.
             "size":               size_bytes or 1,
             "modified":           time.time(),
             "estimated_time":     est_time or None,
@@ -3153,20 +3153,20 @@ class KobraXBridge:
     async def handle_files_metadata(self, request):
         """Moonraker /server/files/metadata — moonraker-obico + Mobileraker
         holen Datei-Metadaten (Slicer-Zeit, Layer, object_height).
-        Logik in _build_file_metadata (gemeinsam mit WS-RPC)."""
+        Logic in _build_file_metadata (shared with WS RPC)."""
         filename = request.rel_url.query.get("filename", "") or self._state.get("filename", "")
         if not filename:
             return web.json_response({"result": {}})
         return web.json_response({"result": self._build_file_metadata(filename)})
 
-    # ── Moonraker-Stubs für moonraker-obico ──────────────────────────────────
+    # -- Moonraker stubs for moonraker-obico ----------------------------------
     async def handle_access_api_key(self, request):
-        """Moonraker /access/api_key — wir haben keine Auth, geben einen Dummy zurück.
-        moonraker-obico stellt sonst eine WARNING ins Log."""
+        """Moonraker /access/api_key - we have no auth, return a dummy.
+        moonraker-obico logs a WARNING otherwise."""
         return web.json_response({"result": "kx-bridge-no-auth-required"})
 
     async def handle_machine_update_status(self, request):
-        """Moonraker /machine/update/status — Obico zeigt installierte Plugins damit."""
+        """Moonraker /machine/update/status - Obico uses this to show installed plugins."""
         return web.json_response({
             "result": {
                 "busy":         False,
@@ -3178,9 +3178,9 @@ class KobraXBridge:
         })
 
     async def handle_history_list(self, request):
-        """Moonraker /server/history/list — Job-Historie aus dem GCodeStore.
+        """Moonraker /server/history/list - job history from the GCodeStore.
 
-        moonraker-obico nutzt nur das letzte Element (limit=1, order=desc)."""
+        moonraker-obico only uses the last element (limit=1, order=desc)."""
         try:
             limit = int(request.rel_url.query.get("limit", "50"))
         except ValueError:
@@ -3189,15 +3189,15 @@ class KobraXBridge:
             jobs = self._store.list_jobs(limit=limit) or []
         except Exception:
             jobs = []
-        # Mapping auf Moonraker-Schema. Moonraker liefert start_time als Unix-
-        # Timestamp (float), nicht ISO-String — moonraker-obico parsed das mit
-        # int(start_time) und crasht sonst.
+        # Mapping to the Moonraker schema. Moonraker returns start_time as a Unix
+        # timestamp (float), not an ISO string - moonraker-obico parses it with
+        # int(start_time) and crashes otherwise.
         def _to_unix_ts(iso: str | None) -> float:
             if not iso:
                 return 0.0
             try:
                 from datetime import datetime
-                # Format aus GCodeStore: "2026-05-27T21:22:25Z"
+                # Format from GCodeStore: "2026-05-27T21:22:25Z"
                 dt = datetime.strptime(iso, "%Y-%m-%dT%H:%M:%SZ")
                 return dt.replace(tzinfo=__import__("datetime").timezone.utc).timestamp()
             except Exception:
@@ -3221,11 +3221,11 @@ class KobraXBridge:
         return web.json_response({"result": {"count": len(result_jobs), "jobs": result_jobs}})
 
     async def handle_webcams_list(self, request):
-        """Moonraker /server/webcams/list — Obico holt die Webcam-URLs hier.
+        """Moonraker /server/webcams/list - Obico fetches the webcam URLs here.
 
-        Wenn der Client von einem anderen Host kommt (z.B. moonraker-obico auf
-        separatem Server), braucht er absolute URLs damit er den Stream erreicht.
-        Host-Header mit localhost/127.0.0.1 wird durch die echte LAN-IP ersetzt."""
+        When the client comes from another host (e.g. moonraker-obico on a
+        separate server), it needs absolute URLs to reach the stream.
+        A Host header with localhost/127.0.0.1 is replaced by the real LAN IP."""
         host_hdr = request.headers.get("Host", "") if request else ""
         host_name = (host_hdr or "").split(":")[0]
         port_part = f":{host_hdr.split(':')[1]}" if ":" in (host_hdr or "") else f":{self._args.port}"
@@ -3290,13 +3290,13 @@ class KobraXBridge:
         if not file_data:
             return web.json_response({"error": "no file received"}, status=400)
 
-        # Nur druckbare Dateien zulassen (Issue #59) — der Kobra X akzeptiert
-        # ausschließlich .gcode und .bgcode; .3mf-Uploads werden vom Drucker
-        # nicht verarbeitet und daher abgelehnt (Issue #59, @gangoke).
+        # Only allow printable files (Issue #59) - the Kobra X accepts
+        # only .gcode and .bgcode; .3mf uploads are not processed by the
+        # printer and are therefore rejected (Issue #59, @gangoke).
         _allowed_ext = (".gcode", ".bgcode")
         _fn_lower = (remote_filename or "").lower()
         if not _fn_lower.endswith(_allowed_ext):
-            log.warning(f"Upload abgelehnt (kein GCode): {remote_filename}")
+            log.warning(f"Upload rejected (not GCode): {remote_filename}")
             return web.json_response(
                 {"error": f"only GCode files allowed ({', '.join(_allowed_ext)})"},
                 status=400,
@@ -3305,7 +3305,7 @@ class KobraXBridge:
         file_md5   = hashlib.md5(file_data).hexdigest()
         file_size  = len(file_data)
 
-        # Slicer-Zeitschätzung + Thumbnail aus GCode auslesen
+        # Read slicer time estimate + thumbnail from GCode
         est_time = _parse_gcode_estimated_time(file_data)
         self._state["slicer_time"] = est_time
         thumbnail_b64 = _extract_thumbnail(file_data)
@@ -3330,7 +3330,7 @@ class KobraXBridge:
         del file_data  # RAM freigeben
 
         self._last_uploaded_file = remote_filename
-        log.info(f"Upload: {remote_filename} ({file_size} bytes) md5={file_md5} → Store + Drucker")
+        log.info(f"Upload: {remote_filename} ({file_size} bytes) md5={file_md5} -> store + printer")
 
         # Datei per HTTP auf den Drucker hochladen (serve_path liegt bereits auf Disk)
         upload_url = self._state.get("upload_url") or None
@@ -3340,20 +3340,20 @@ class KobraXBridge:
                 None, self.client.upload_gcode, serve_path, remote_filename, upload_url
             )
         except Exception as e:
-            log.error(f"Upload fehlgeschlagen: {e}")
+            log.error(f"Upload failed: {e}")
             return web.json_response({"error": str(e)}, status=500)
 
         log.info(f"Upload erfolgreich: {result}")
 
-        # Druck starten mit vollständigem Payload (inkl. serve-URL + md5 + size)
+        # Start the print with the full payload (incl. serve URL + md5 + size)
         serve_url = f"http://{request.host}/serve/{remote_filename}"
 
-        # print=true im Multipart-Formular (Moonraker) oder Query-String → Druck starten
-        # print=false oder fehlt → nur hochladen
+        # print=true in the multipart form (Moonraker) or query string -> start print
+        # print=false or missing -> upload only
         if not auto_print:
             auto_print = request.rel_url.query.get("print", "false").lower() == "true"
 
-        # Thumbnail immer anfordern (Drucker antwortet async mit file/report)
+        # Always request the thumbnail (printer responds async with file/report)
         self._thumbnail_b64 = ""
         self.client.publish("file", "fileDetails", {"root": "local", "filename": remote_filename}, timeout=0)
 
@@ -3392,10 +3392,10 @@ class KobraXBridge:
             loop = asyncio.get_event_loop()
             loop.run_in_executor(None, lambda: self._start_print(remote_filename, serve_url, file_md5, file_size, gcode_filaments=gcode_filaments))
         else:
-            log.info(f"Nur hochgeladen (print=false): {remote_filename}")
+            log.info(f"Upload only (print=false): {remote_filename}")
             self._state["file_ready"] = remote_filename
 
-        # OctoPrint-kompatibler Response (OrcaSlicer wertet refs aus)
+        # OctoPrint-compatible response (OrcaSlicer evaluates refs)
         return web.json_response({
             "done": True,
             "files": {
@@ -3416,11 +3416,11 @@ class KobraXBridge:
         }, status=201)
 
     def _check_filament_mismatch(self, gcode_filaments: list | None) -> list[dict] | None:
-        """Vergleicht GCode-Filamente (is_used=True) mit aktuell belegten AMS-Slots.
+        """Compares GCode filaments (is_used=True) with currently occupied AMS slots.
 
-        Gibt Liste von Mismatch-Einträgen zurück wenn mindestens ein genutzter
-        GCode-Slot kein passendes Material im AMS hat — sonst None.
-        Wird nur ausgelöst wenn AMS-Daten vorhanden sind (mindestens 1 belegter Slot)."""
+        Returns a list of mismatch entries when at least one used
+        GCode slot has no matching material in the AMS - otherwise None.
+        Only triggered when AMS data is present (at least 1 occupied slot)."""
         if not gcode_filaments:
             return None
         slots = self._ams_slots or []
@@ -3459,11 +3459,11 @@ class KobraXBridge:
         self._state["file_ready"] = ""
         loaded = self._select_loaded_slots_for_print(warn_on_empty_default=True)
 
-        # Nur die im GCode TATSÄCHLICH genutzten Paints auf Slots mappen. OrcaSlicer
-        # schreibt im Header alle konfigurierten Filamente (filament_colour=…;…;…;…),
-        # nutzt aber oft nur eines (z.B. einfarbig → nur T3). Würden wir alle
-        # belegten Slots mappen, erwartet der Drucker alle Farben und blockiert,
-        # wenn ein anderer (ungenutzter) Slot leer ist. Die genutzten Paint-Indizes
+        # Only map the paints ACTUALLY used in the GCode to slots. OrcaSlicer
+        # writes all configured filaments into the header (filament_colour=...;...;...),
+        # but often uses only one (e.g. single color -> only T3). If we mapped all
+        # occupied slots, the printer would expect all colors and block
+        # when another (unused) slot is empty. The used paint indices
         # liefert _extract_filament_info via is_used (echte T<n>-Tool-Changes).
         used_paint_indices = None
         if gcode_filaments:
@@ -3474,12 +3474,12 @@ class KobraXBridge:
 
         if used_paint_indices is not None:
             # GCode-Paint-Index N entspricht AMS-Slot N (global_index). Nur belegte
-            # genutzte Slots mappen; nicht-belegte genutzte → später Warnung möglich.
+            # used slots; used-but-unloaded -> a warning may follow later.
             loaded = [(gidx, s) for (gidx, s) in loaded if gidx in used_paint_indices]
 
         use_ams = len(loaded) > 0
         ams_box_mapping = self._build_auto_ams_box_mapping(loaded_slots=loaded)
-        log.debug(f"AMS-Slots: {len(loaded)} gemappt (genutzte Paints: {used_paint_indices}) → {[i for i, _ in loaded]}")
+        log.debug(f"AMS slots: {len(loaded)} mapped (used paints: {used_paint_indices}) -> {[i for i, _ in loaded]}")
         auto_leveling = getattr(self._args, "auto_leveling", 1)
         payload = {
             "taskid":       "-1",
@@ -3510,7 +3510,7 @@ class KobraXBridge:
         if result:
             log.info(f"Print start confirmed: state={result.get('state')}")
         else:
-            log.warning("Druckstart: keine Antwort vom Drucker")
+            log.warning("Print start: no response from printer")
 
     def _theme_index_path(self) -> str:
         return os.path.join(_WEB_BASE, "web", "themes", self._ui_theme, "index.html")
@@ -3547,9 +3547,9 @@ class KobraXBridge:
         if not filename:
             return web.json_response({"error": "no filename"}, status=400)
 
-        log.info(f"Druck starten: {filename}")
+        log.info(f"Starting print: {filename}")
 
-        # Optionale Slot-Auswahl aus dem Filament-Dialog
+        # Optional slot selection from the filament dialog
         filament_assignments = body.get("filament_assignments")
         # Pre-Print Skip (v0.9.10)
         excluded_objects = body.get("excluded_objects") or []
@@ -3562,7 +3562,7 @@ class KobraXBridge:
         md5 = self._state.get("last_upload_md5", "")
 
         if filament_assignments is not None:
-            # Explizite Slot-Zuweisung aus dem Filament-Dialog
+            # Explicit slot assignment from the filament dialog
             ams_box_mapping, unused_count, invalid_count = self._build_assigned_ams_box_mapping(filament_assignments)
             if unused_count:
                 log.debug(f"Skipped {unused_count} unused filament assignment(s) for mode={self._filament_mode}")
@@ -3571,8 +3571,8 @@ class KobraXBridge:
                 if not ams_box_mapping:
                     return web.json_response({"error": "no usable filament assignments for current filament mode"}, status=400)
         else:
-            # Dashboard-Reprint: gcode_filaments aus DB laden damit used_paint_indices-
-            # Filter greift und leere/verschobene Slots nicht falsch gemappt werden.
+            # Dashboard reprint: load gcode_filaments from DB so the used_paint_indices
+            # filter applies and empty/shifted slots are not mapped incorrectly.
             gcode_filaments = None
             try:
                 db_file = self._db.get_file_by_name(filename)
@@ -3581,7 +3581,7 @@ class KobraXBridge:
             except Exception:
                 pass
 
-            # Pre-Print Skip setzen bevor _start_print aufgerufen wird
+            # Set the pre-print skip before _start_print is called
             self._skip_state = {"skipped": [], "ts": int(time.time())}
             if excluded_objects:
                 self._pending_preprint_skip = [str(n) for n in excluded_objects if isinstance(n, str) and n]
@@ -3624,7 +3624,7 @@ class KobraXBridge:
             },
         }
 
-        # UI erst nach echter Drucker-Bestätigung als "geskippt" markieren.
+        # Mark the UI as "skipped" only after real printer confirmation.
         self._skip_state = {"skipped": [], "ts": int(time.time())}
         if excluded_objects:
             self._pending_preprint_skip = [str(n) for n in excluded_objects if isinstance(n, str) and n]
@@ -3643,7 +3643,7 @@ class KobraXBridge:
             None, lambda: self.client.publish("print", "start", payload, timeout=15.0)
         )
         if result is None:
-            return web.json_response({"error": "Keine Antwort vom Drucker"}, status=504)
+            return web.json_response({"error": "no response from printer"}, status=504)
 
         if excluded_objects:
             loop.run_in_executor(None, lambda: self._apply_preprint_skip_after_start(excluded_objects))
@@ -3721,9 +3721,9 @@ class KobraXBridge:
             tpl = self._load_index_template_cached()
         except OSError:
             p = self._theme_index_path()
-            log.error("Web-UI Theme-Datei fehlt oder nicht lesbar: %s (Theme: %s)", p, self._ui_theme)
+            log.error("Web UI theme file missing or unreadable: %s (theme: %s)", p, self._ui_theme)
             return web.Response(
-                text="<pre>KX-Bridge: index.html nicht gefunden.\nErwartet:\n"
+                text="<pre>KX-Bridge: index.html not found.\nExpected:\n"
                 + html.escape(p, quote=True)
                 + "</pre>",
                 status=500,
@@ -3731,10 +3731,10 @@ class KobraXBridge:
             )
         page = tpl.replace("__UI_ASSETS_VER__", self._ui_asset_cache_buster())
 
-        # CSS + JS INLINE einbetten statt nur zu verlinken. OrcaSlicers
-        # eingebetteter Device-Tab-Webview lädt externe <link>/<script src>
-        # NICHT (nur das nackte HTML) → ohne Inlining funktioniert dort kein
-        # einziger Button (Issue #29). Im normalen Browser ist es ebenso korrekt.
+        # Embed CSS + JS INLINE instead of just linking. OrcaSlicer's
+        # embedded device tab webview does NOT load external <link>/<script src>
+        # (only the bare HTML) -> without inlining neither
+        # a single button works there (Issue #29). It is equally correct in a normal browser.
         base = os.path.join(_WEB_BASE, "web", "themes", self._ui_theme)
         try:
             css = pathlib.Path(os.path.join(base, "style.css")).read_text(encoding="utf-8")
@@ -3791,7 +3791,7 @@ class KobraXBridge:
             await loop.run_in_executor(None, self.client.connect)
             self._state["print_state"] = "standby"
             self._state["kobra_state"] = "free"
-            log.info("Manuell verbunden")
+            log.info("Connected manually")
             return web.json_response({"result": "connected"})
         except Exception as e:
             return web.json_response({"error": str(e)}, status=500)
@@ -3840,10 +3840,10 @@ class KobraXBridge:
             return web.json_response({"error": "color must be [r,g,b]"}, status=400)
         box_id, local_slot = self._global_to_box_slot(index)
         loop = asyncio.get_event_loop()
-        # setInfo geht über web/printer-Topic (wie tempature/set). Per
+        # setInfo goes via the web/printer topic (like tempature/set). Verified via
         # Workbench-Vue mqtt_setInfo verifiziert — via slicer/printer/ wurden
-        # die Slot-Änderungen vom Drucker ignoriert und beim nächsten
-        # multiColorBox/report mit dem alten Material überschrieben.
+        # slot changes are ignored by the printer and overwritten with the old
+        # material on the next multiColorBox/report.
         def _send():
             self.client.publish_web(
                 "multiColorBox", "setInfo",
@@ -3853,7 +3853,7 @@ class KobraXBridge:
         await loop.run_in_executor(None, _send)
         # Optimistisches Update: cached slot sofort anpassen (Drucker echoed
         # gleich via multiColorBox/report — falls er den Befehl ignoriert,
-        # überschreibt der Report das wieder).
+        # the report overwrites it again).
         for s in self._ams_slots:
             if s.get("global_index") == index:
                 s["type"]  = mat
@@ -3870,7 +3870,7 @@ class KobraXBridge:
         feed_type  = int(body.get("type", 1))
         if feed_type == 1:
           self._pending_load_slot = slot_index
-        # Ausziehen (type=2): wenn kein Slot explizit gewählt, den zuletzt geladenen nehmen
+        # Feed-out (type=2): if no slot was explicitly chosen, use the last loaded one
         if feed_type == 2 and self._ams_loaded_slot >= 0:
             slot_index = self._ams_loaded_slot
         box_id, local_slot = self._global_to_box_slot(slot_index)
@@ -4050,11 +4050,11 @@ class KobraXBridge:
                     {"taskid": taskid, "settings": {"target_hotbed_temp": b}},
                 ))
         else:
-            # Idle: tempature/set über `web/printer`-Topic mit `type`-Feld.
-            # Live-Sniff 2026-05-29 vom Anycubic Slicer Next bestätigt:
+            # Idle: tempature/set via the `web/printer` topic with a `type` field.
+            # Confirmed by live sniffing the Anycubic Slicer Next on 2026-05-29:
             #   topic = web/printer/.../tempature
             #   data  = {"type": 0|1|2, "target_hotbed_temp": B, "target_nozzle_temp": N}
-            # type-Werte (aus Workbench-Vue): 0=Nozzle, 1=Bed, 2=beide.
+            # type values (from Workbench Vue): 0=nozzle, 1=bed, 2=both.
             # Ohne `type` ODER auf `slicer/printer`-Topic → Systemfehler am Drucker.
             if nozzle is not None and bed is not None:
                 t, n, b = 2, int(float(nozzle)), int(float(bed))
@@ -4080,7 +4080,7 @@ class KobraXBridge:
             "video", "startCapture", None, timeout=8.0
         ))
         state = (result or {}).get("state", "")
-        log.info(f"Kamera startCapture: state={state}")
+        log.info(f"Camera startCapture: state={state}")
         return web.json_response({"result": "ok", "state": state})
 
     async def handle_api_camera_stop(self, request):
@@ -4088,14 +4088,14 @@ class KobraXBridge:
         await loop.run_in_executor(None, lambda: self.client.publish(
             "video", "stopCapture", None, timeout=0
         ))
-        # Verhindert dass der Autostart-Guard die Kamera während des
+        # Prevents the auto-start guard from restarting the camera during the
         # laufenden Drucks wieder einschaltet (State-Flicker-Problem).
         self._camera_user_stopped = True
         return web.json_response({"result": "ok"})
 
     async def handle_api_camera_reset(self, request):
-        """Backoff-Zähler zurücksetzen und ffmpeg sofort neu starten.
-        Nützlich nach 429-Sperre (Retry-After abgelaufen) oder nach Drucker-Neustart."""
+        """Reset the backoff counter and restart ffmpeg immediately.
+        Useful after a 429 lock (Retry-After expired) or after a printer restart."""
         self.camera_cache.reset()
         url = self._state.get("camera_url", "")
         if url:
@@ -4104,9 +4104,9 @@ class KobraXBridge:
         return web.json_response({"result": "ok"})
 
     async def handle_api_camera_snapshot(self, request):
-        """Letzter JPEG-Frame aus dem CameraCache — instant aus dem RAM,
-        keine eigene ffmpeg-Instanz mehr (verhindert Single-Client-429 am
-        Drucker und ist ~1 s schneller)."""
+        """Last JPEG frame from the CameraCache - instant from RAM,
+        no separate ffmpeg instance anymore (prevents the single-client 429 at the
+        printer and is ~1 s faster)."""
         url = self._state.get("camera_url", "")
         if not url:
             return web.Response(status=503, text="Keine Kamera-URL bekannt")
@@ -4118,9 +4118,9 @@ class KobraXBridge:
             await asyncio.sleep(0.1)
         jpeg = self.camera_cache.latest_jpeg
         if not jpeg:
-            return web.Response(status=503, text="Noch kein Frame im Cache")
-        # Wenn der letzte Frame älter als 10 s ist → der Cache-ffmpeg läuft
-        # vermutlich nicht mehr stabil, trotzdem ausliefern aber Stale-Header.
+            return web.Response(status=503, text="No frame in cache yet")
+        # If the last frame is older than 10 s -> the cache ffmpeg is probably
+        # no longer running stably; deliver anyway but with a stale header.
         age = time.time() - self.camera_cache.latest_jpeg_ts
         headers = {"Cache-Control": "no-cache"}
         if age > 10:
@@ -4143,8 +4143,8 @@ class KobraXBridge:
         else:
             ffmpeg_input_args += ["-probesize", "1000000", "-analyzeduration", "1000000"]
 
-        # ffmpeg erst starten BEVOR der StreamResponse geöffnet wird
-        # (damit wir bei Fehler noch eine normale HTTP-Response senden können)
+        # Start ffmpeg BEFORE the StreamResponse is opened
+        # (so we can still send a normal HTTP response on error)
         try:
             proc = await asyncio.create_subprocess_exec(
                 _find_ffmpeg(), "-loglevel", "quiet",
@@ -4163,7 +4163,7 @@ class KobraXBridge:
             log.warning("Camera: ffmpeg not found – camera stream unavailable")
             return web.Response(status=503, text="ffmpeg not found")
         except Exception as e:
-            log.warning(f"Kamera: ffmpeg konnte nicht gestartet werden: {e}")
+            log.warning(f"Camera: could not start ffmpeg: {e}")
             return web.Response(status=503, text=str(e))
 
         boundary = "kobraxframe"
@@ -4203,7 +4203,7 @@ class KobraXBridge:
                     except Exception:
                         return resp
         except Exception as e:
-            log.warning(f"Kamera-Stream unterbrochen: {e}")
+            log.warning(f"Camera stream interrupted: {e}")
         finally:
             try:
                 proc.kill()
@@ -4217,9 +4217,9 @@ class KobraXBridge:
         return resp
 
     async def handle_camera_h264(self, request):
-        """H.264-Passthrough als MPEG-TS, gespeist aus dem zentralen
-        CameraCache-Fanout. Erlaubt mehrere parallele Konsumenten ohne
-        zusätzliche FLV-Verbindung zum Drucker (Single-Client-Limit)."""
+        """H.264 passthrough as MPEG-TS, fed from the central
+        CameraCache fanout. Allows multiple parallel consumers without an
+        additional FLV connection to the printer (single-client limit)."""
         url = self._state.get("camera_url", "")
         if not url:
             return web.Response(status=503, text="Keine Kamera-URL bekannt")
@@ -4249,7 +4249,7 @@ class KobraXBridge:
         return resp
 
     async def handle_serve_file(self, request):
-        """Liefert hochgeladene G-Code-Dateien vom Temp-Verzeichnis (für Drucker-Download)."""
+        """Serves uploaded G-code files from the temp directory (for printer download)."""
         filename = os.path.basename(request.match_info.get("filename", ""))
         serve_path = os.path.join(self._serve_dir_path, filename)
         if not os.path.isfile(serve_path):
@@ -4262,9 +4262,9 @@ class KobraXBridge:
 
     async def handle_api_state(self, request):
         s = self._state
-        # Slicer-Zeit + Thumbnail sind nur flüchtig im State (werden beim Upload
-        # gesetzt). Nach Browser-Reload oder bei OrcaSlicer-Direktdruck (Datei kam
-        # nicht über den UI-Upload) fehlen sie → aus dem GCode-Store anhand des
+        # Slicer time + thumbnail are only transient in state (set during upload).
+        # After a browser reload or an OrcaSlicer direct print (file did not come
+        # through the UI upload) they are missing -> restore from the GCode store via the
         # laufenden Dateinamens nachladen.
         slicer_time = s["slicer_time"]
         thumbnail = self._thumbnail_b64
@@ -4341,9 +4341,9 @@ class KobraXBridge:
                 "result": {"namespace": namespace, "key": key, "value": None}
             })
 
-        # mainsail/presets: Obico fragt nach Temperatur-Presets. Schema wird in
-        # find_all_thermal_presets als data['value']['presets'].values() ausgewertet,
-        # also brauchen wir mindestens {presets: {}} damit kein Crash.
+        # mainsail/presets: Obico asks for temperature presets. The schema is evaluated in
+        # find_all_thermal_presets as data['value']['presets'].values(),
+        # so we need at least {presets: {}} to avoid a crash.
         if namespace == "mainsail":
             if key == "presets":
                 return web.json_response({
@@ -4354,7 +4354,7 @@ class KobraXBridge:
                 "result": {"namespace": "mainsail", "key": key, "value": {}}
             })
 
-        # obico-namespace: in-memory KV-Store für Plugin-Settings (key=printer_id etc.)
+        # obico namespace: in-memory KV store for plugin settings (key=printer_id etc.)
         if namespace == "obico":
             store = self._moonraker_kv_store.setdefault("obico", {})
             if key and key in store:
@@ -4372,7 +4372,7 @@ class KobraXBridge:
 
     async def handle_moonraker_database_post(self, request):
         """POST /server/database/item — KV-Store-Write (von moonraker-obico verwendet).
-        moonraker-obico sendet namespace/key/value als form-urlencoded POST-params."""
+        moonraker-obico sends namespace/key/value as form-urlencoded POST params."""
         # Versuche JSON, fallback auf form-data, fallback auf Query-Params
         namespace = ""
         key       = ""
@@ -4404,7 +4404,7 @@ class KobraXBridge:
         return web.json_response({"error": {"code": 400, "message": "namespace + key required"}}, status=400)
 
     async def handle_database_list(self, request):
-        """OrcaSlicer prüft welche Namespaces vorhanden sind um MMU-Typ zu erkennen."""
+        """OrcaSlicer checks which namespaces exist to detect the MMU type."""
         return web.json_response({"result": {"namespaces": ["lane_data", "mainsail", "obico"]}})
 
     def _get_ams_slots_fresh(self):
@@ -4430,10 +4430,10 @@ class KobraXBridge:
     # ─── Settings ────────────────────────────────────────────────────────────
 
     def _find_config_path(self) -> pathlib.Path:
-        """Gibt den Pfad zur config.ini zurück."""
+        """Returns the path to config.ini."""
         if hasattr(env_loader, "find_config_path"):
             return env_loader.find_config_path()
-        # Fallback für alten env_loader
+        # Fallback for the old env_loader
         script_dir = pathlib.Path(_BASE)
         for base in (script_dir, script_dir.parent):
             p = base / "config" / "config.ini"
@@ -4470,7 +4470,7 @@ class KobraXBridge:
         config_path = self._find_config_path()
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Bestehende config.ini lesen (Kommentare gehen verloren, aber Werte bleiben)
+        # Read the existing config.ini (comments are lost, but values are kept)
         cfg = configparser.ConfigParser()
         if config_path.is_file():
             cfg.read(config_path, encoding="utf-8")
@@ -4530,13 +4530,13 @@ class KobraXBridge:
             f.write("# KX-Bridge Konfigurationsdatei\n\n")
             cfg.write(f)
         log.info(f"Settings gespeichert in {config_path}")
-        # Response senden, dann Neustart
+        # Send the response, then restart
         response = web.json_response({"status": "restarting"})
         asyncio.get_event_loop().call_later(0.3, self._restart_bridge)
         return response
 
     async def handle_kx_printer_add(self, request):
-        """Fügt einen Drucker hinzu: holt Credentials via IP, schreibt [printer_N], Neustart."""
+        """Adds a printer: fetches credentials via IP, writes [printer_N], restarts."""
         try:
             body = await request.json()
         except Exception:
@@ -4548,7 +4548,7 @@ class KobraXBridge:
         try:
             creds = await _kx_fetch_credentials(ip)
         except Exception as e:
-            return self._json_cors({"error": f"Drucker nicht erreichbar oder Fehler: {e}"}, status=502)
+            return self._json_cors({"error": f"printer unreachable or error: {e}"}, status=502)
 
         import configparser
         config_path = self._find_config_path()
@@ -4568,8 +4568,8 @@ class KobraXBridge:
                     pass
             n += 1
 
-        # Kein [printer_N], aber ein befüllter [connection]? → als printer_1 migrieren
-        # (leerer [connection] = kein bestehender Drucker → nicht migrieren, neuer wird printer_1)
+        # No [printer_N], but a populated [connection]? -> migrate as printer_1
+        # (empty [connection] = no existing printer -> don't migrate, the new one becomes printer_1)
         if n == 1 and cfg.has_section("connection") and (cfg["connection"].get("printer_ip") or "").strip():
             c = cfg["connection"]
             cfg.add_section("printer_1")
@@ -4581,7 +4581,7 @@ class KobraXBridge:
             existing_ports.add(7125)
             n = 2
 
-        # Neuen Drucker als [printer_n] anlegen, freien Port wählen
+        # Create the new printer as [printer_n], pick a free port
         new_port = 7125 + (n - 1)
         while new_port in existing_ports:
             new_port += 1
@@ -4606,13 +4606,13 @@ class KobraXBridge:
         return response
 
     async def handle_kx_printer_remove(self, request):
-        """Entfernt einen Drucker aus config.ini, dann Neustart.
+        """Removes a printer from config.ini, then restarts.
 
-        - Multi-Modus: [printer_N] wird gelöscht, übrige umnummeriert (printer_3 → printer_2),
+        - Multi mode: [printer_N] is deleted, the rest renumbered (printer_3 -> printer_2),
           printer_1 bekommt immer http_port 7125.
-        - Einzel-Modus (kein [printer_N], nur [connection]): pid "1" leert den [connection]-Block
+        - Single mode (no [printer_N], only [connection]): pid "1" clears the [connection] block
           → Bridge startet im Offline-Modus auf 7125, UI bleibt erreichbar.
-        - Wird der letzte [printer_N] entfernt: alle weg → ebenfalls "leerer" Zustand.
+        - When the last [printer_N] is removed: all gone -> also the "empty" state.
         """
         pid = str(request.match_info.get("pid", "")).strip()
         if not pid:
@@ -4629,8 +4629,8 @@ class KobraXBridge:
 
         if has_printer_sections:
             if not cfg.has_section(target):
-                return self._json_cors({"error": f"{target} nicht gefunden"}, status=404)
-            # Alle [printer_N] einsammeln (außer der zu löschenden), neu nummerieren
+                return self._json_cors({"error": f"{target} not found"}, status=404)
+            # Collect all [printer_N] (except the one being deleted), renumber
             kept = []
             n = 1
             while cfg.has_section(f"printer_{n}"):
@@ -4645,15 +4645,15 @@ class KobraXBridge:
                     cfg.set(sec, k, v)
                 cfg.set(sec, "http_port", str(7125 + i - 1))
             remaining = len(kept)
-            # War das der letzte Drucker? Dann auch [connection] leeren → wirklich "kein Drucker"
+            # Was that the last printer? Then also clear [connection] -> truly "no printer"
             if remaining == 0 and cfg.has_section("connection"):
                 for k in ("printer_ip", "username", "password", "device_id"):
                     cfg.set("connection", k, "")
         else:
-            # Einzel-Modus: nur pid "1" ist gültig (Pseudo-Eintrag aus handle_kx_printers)
+            # Single mode: only pid "1" is valid (pseudo entry from handle_kx_printers)
             if pid != "1":
-                return self._json_cors({"error": "kein Drucker mit dieser ID"}, status=404)
-            # [connection]-Werte leeren → Bridge startet ohne Drucker
+                return self._json_cors({"error": "no printer with this ID"}, status=404)
+            # Clear [connection] values -> bridge starts without a printer
             if cfg.has_section("connection"):
                 for k in ("printer_ip", "username", "password", "device_id"):
                     cfg.set("connection", k, "")
@@ -4663,16 +4663,16 @@ class KobraXBridge:
         with open(config_path, "w", encoding="utf-8") as f:
             f.write("# KX-Bridge Konfigurationsdatei\n\n")
             cfg.write(f)
-        log.info(f"Drucker {target} entfernt ({remaining} verbleibend)")
+        log.info(f"Printer {target} removed ({remaining} remaining)")
         response = self._json_cors({"status": "restarting", "removed": target, "remaining": remaining})
         asyncio.get_event_loop().call_later(0.5, self._restart_bridge)
         return response
 
     def _restart_bridge(self):
-        log.info("Bridge wird neu gestartet …")
-        # config_loader cached config.ini-Werte in os.environ ("nur wenn nicht gesetzt").
-        # Bei einem Restart muss environ bereinigt werden, sonst liest der neue Prozess
-        # die alten Werte statt der geänderten config.ini.
+        log.info("Restarting bridge...")
+        # config_loader caches config.ini values in os.environ ("only if not set").
+        # On restart, environ must be cleaned, otherwise the new process reads
+        # the old values instead of the modified config.ini.
         for _k in ("PRINTER_IP", "MQTT_PORT", "MQTT_USERNAME", "MQTT_PASSWORD",
                    "MODE_ID", "DEVICE_ID", "DEFAULT_AMS_SLOT", "AUTO_LEVELING",
                    "CAMERA_ON_PRINT", "WEB_UPLOAD_WARNING", "PRINT_START_DIALOG",
@@ -4682,14 +4682,14 @@ class KobraXBridge:
 
         in_docker = os.path.exists("/.dockerenv") or os.environ.get("KX_IN_DOCKER")
         if in_docker:
-            # Docker/systemd: Prozess beenden reicht – der Supervisor startet neu (frische environ)
+            # Docker/systemd: exiting the process is enough - the supervisor restarts (fresh environ)
             log.info("Container environment detected – exiting for supervisor restart")
             os._exit(0)
 
         frozen = getattr(sys, "frozen", False)
 
-        # Linux: os.execv ersetzt das Prozess-Image direkt – sauber auch bei PyInstaller-Onefile
-        # (subprocess+exit würde dort am gelöschten _MEIxxxx-Temp-Verzeichnis scheitern).
+        # Linux: os.execv replaces the process image directly - clean even with PyInstaller onefile
+        # (subprocess+exit would fail there on the deleted _MEIxxxx temp directory).
         if sys.platform != "win32":
             exe = sys.executable
             try:
@@ -4698,17 +4698,17 @@ class KobraXBridge:
                 else:
                     os.execv(exe, [exe] + sys.argv)
             except Exception as e:
-                log.error(f"Restart (execv) fehlgeschlagen: {e} – bitte Bridge manuell neu starten")
+                log.error(f"Restart (execv) failed: {e} - please restart the bridge manually")
                 os._exit(1)
 
-        # Windows: os.execv ist dort kaputt (neue PID, alter Prozess kehrt zurück) → subprocess
+        # Windows: os.execv is broken there (new PID, old process returns) -> subprocess
         cmd = ([sys.executable] + sys.argv[1:]) if frozen else ([sys.executable] + sys.argv)
         try:
             subprocess.Popen(cmd, cwd=os.getcwd(),
                              creationflags=(subprocess.DETACHED_PROCESS
                                             | subprocess.CREATE_NEW_PROCESS_GROUP))
         except Exception as e:
-            log.error(f"Restart fehlgeschlagen: {e} – bitte Bridge manuell neu starten")
+            log.error(f"Restart failed: {e} - please restart the bridge manually")
         os._exit(0)
 
     # ─── Update ──────────────────────────────────────────────────────────────
@@ -4719,8 +4719,8 @@ class KobraXBridge:
     GITEA_RAW_BASE      = "https://gitea.it-drui.de/viewit/KX-Bridge-Release/raw/tag"
 
     def _read_version(self) -> str:
-        # PyInstaller-Onefile entpackt VERSION (per kx-bridge.spec datas) nach
-        # sys._MEIPASS — daher _WEB_BASE statt _BASE benutzen.
+        # PyInstaller onefile unpacks VERSION (via kx-bridge.spec datas) to
+        # sys._MEIPASS - therefore use _WEB_BASE instead of _BASE.
         for base in (pathlib.Path(_WEB_BASE), pathlib.Path(_BASE), pathlib.Path(_BASE).parent):
             p = base / "VERSION"
             if p.is_file():
@@ -4737,7 +4737,7 @@ class KobraXBridge:
 
     @staticmethod
     def _parse_version(v: str) -> "tuple[int, ...]":
-        """'v0.9.1-beta1' → (0, 9, 1)  –  nur numerische Teile vor dem ersten '-'"""
+        """'v0.9.1-beta1' -> (0, 9, 1)  -  only numeric parts before the first '-'"""
         v = v.lstrip("v").split("-")[0]
         parts = re.split(r"[.\s]+", v)
         result = []
@@ -4749,7 +4749,7 @@ class KobraXBridge:
         return tuple(result) or (0,)
 
     async def handle_api_log_stream(self, request):
-        """SSE-Endpoint: sendet Log-Einträge live an den Browser."""
+        """SSE endpoint: streams log entries live to the browser."""
         resp = web.StreamResponse(headers={
             "Content-Type":  "text/event-stream",
             "Cache-Control": "no-cache",
@@ -4777,9 +4777,9 @@ class KobraXBridge:
         return resp
 
     async def handle_api_log_download(self, request):
-        """Gibt alle gepufferten Log-Einträge als Plaintext zum Download."""
+        """Returns all buffered log entries as plaintext for download."""
         header = (f"# KX-Bridge Log  |  Version {self._read_version()}  |  "
-                  f"{time.strftime('%Y-%m-%d %H:%M:%S')}  |  {len(_log_buffer)} Einträge\n")
+                  f"{time.strftime('%Y-%m-%d %H:%M:%S')}  |  {len(_log_buffer)} entries\n")
         lines = [f"[{e['ts']}] {e['lvl']:<7} {e['name']}: {e['msg']}" for e in _log_buffer]
         text = header + "\n".join(lines) + "\n"
         fname = f"kx-bridge-log_{time.strftime('%Y%m%d-%H%M%S')}.txt"
@@ -4806,13 +4806,13 @@ class KobraXBridge:
                         return web.json_response({"error": f"Gitea HTTP {resp.status}"}, status=502)
                     releases = await resp.json(content_type=None)
             if not releases:
-                return web.json_response({"error": "Keine Releases gefunden"}, status=404)
+                return web.json_response({"error": "no releases found"}, status=404)
 
             if is_nightly:
-                # Neuestes Prerelease mit nightly-Tag suchen
+                # Find the newest prerelease with a nightly tag
                 nightly_releases = [r for r in releases if r.get("prerelease") and "nightly" in r.get("tag_name", "")]
                 if not nightly_releases:
-                    return web.json_response({"error": "Keine Nightly-Releases gefunden"}, status=404)
+                    return web.json_response({"error": "no nightly releases found"}, status=404)
                 data = nightly_releases[0]
                 tag = data.get("tag_name", "")
                 # Tag-Format: "nightly-0.9.27-nightly4", current: "0.9.27-nightly4"
@@ -4830,13 +4830,13 @@ class KobraXBridge:
             elif is_dev:
                 dev_releases = [r for r in releases if "-dev+" in r.get("tag_name", "")]
                 if not dev_releases:
-                    return web.json_response({"error": "Keine Dev-Releases gefunden"}, status=404)
+                    return web.json_response({"error": "no dev releases found"}, status=404)
                 data = dev_releases[0]
             else:
-                # Stable: nur non-prerelease nehmen
+                # Stable: only take non-prereleases
                 stable_releases = [r for r in releases if not r.get("prerelease")]
                 if not stable_releases:
-                    return web.json_response({"error": "Keine Stable-Releases gefunden"}, status=404)
+                    return web.json_response({"error": "no stable releases found"}, status=404)
                 data = stable_releases[0]
             tag = data.get("tag_name", "")
             latest = tag.lstrip("v")
@@ -4857,11 +4857,11 @@ class KobraXBridge:
         except Exception as e:
             return web.json_response({"error": str(e)}, status=502)
 
-    # Bridge-Python-Module, die das Self-Update mitziehen muss. Wird nur die
-    # Hauptdatei ersetzt, crasht die neue Version ggf. mit ModuleNotFoundError.
-    # Hinweis: das Frontend liegt seit dem Theme-System unter web/themes/<name>/
-    # (keine flache .py mehr); Theme-Dateien werden vom Self-Update derzeit NICHT
-    # mitgeladen – Theme-Änderungen kommen über Docker-Image/Binary-Update.
+    # Bridge Python modules the self-update must include. If only the
+    # main file is replaced, the new version may crash with ModuleNotFoundError.
+    # Note: since the theme system, the frontend lives under web/themes/<name>/
+    # (no flat .py anymore); theme files are currently NOT included in the
+    # self-update - theme changes arrive via Docker image/binary updates.
     _UPDATE_FILES = [
         "kobrax_moonraker_bridge.py",
         "kobrax_client.py",
@@ -4874,14 +4874,14 @@ class KobraXBridge:
         new_tag = data.get("tag", "")
         if "nightly" in self._read_version():
             return web.json_response(
-                {"error": "Nightly-Updates laufen über Docker: "
+                {"error": "nightly updates are delivered via Docker: "
                           "docker compose pull && docker compose up -d"}, status=400)
         if getattr(sys, "frozen", False):
             return web.json_response(
-                {"error": "Self-Update wird im Binary-Modus nicht unterstützt – "
-                          "bitte neue Binary/Docker-Image laden."}, status=400)
+                {"error": "self-update is not supported in binary mode - "
+                          "please download the new binary/Docker image."}, status=400)
         if not new_tag:
-            return web.json_response({"error": "tag fehlt"}, status=400)
+            return web.json_response({"error": "missing tag"}, status=400)
 
         app_dir = pathlib.Path(__file__).resolve().parent
         try:
@@ -4892,21 +4892,21 @@ class KobraXBridge:
                     url = f"{self.GITEA_RAW_BASE}/{new_tag}/{fname}"
                     async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                         if resp.status != 200:
-                            # _web_assets.py o.ä. existiert evtl. in älteren Tags nicht –
-                            # Hauptdatei ist Pflicht, optionale dürfen fehlen.
+                            # _web_assets.py etc. may not exist in older tags -
+                            # the main file is mandatory, optional ones may be missing.
                             if fname == "kobrax_moonraker_bridge.py":
                                 return web.json_response(
                                     {"error": f"Download {fname}: HTTP {resp.status}"}, status=502)
                             log.warning(f"Update: {fname} not found in release ({resp.status}) – skipped")
                             continue
                         downloaded.append((app_dir / fname, await resp.read()))
-            # Phase 2: atomar ersetzen (erst nach komplettem, erfolgreichem Download)
+            # Phase 2: replace atomically (only after a complete, successful download)
             for path, content in downloaded:
                 tmp = path.with_suffix(path.suffix + ".new")
                 tmp.write_bytes(content)
                 os.replace(tmp, path)
             self._write_version(new_tag.lstrip("v"))
-            log.info(f"Update auf {new_tag} installiert ({len(downloaded)} Dateien), starte neu …")
+            log.info(f"Update to {new_tag} installed ({len(downloaded)} files), restarting...")
         except Exception as e:
             return web.json_response({"error": str(e)}, status=502)
         response = web.json_response({"status": "updating"})
@@ -4919,7 +4919,7 @@ class KobraXBridge:
         return web.json_response({"result": {}}, status=200)
 
     async def handle_favicon(self, request):
-        # Minimales 1x1 ICO damit der Browser nicht 404 loggt
+        # Minimal 1x1 ICO so the browser doesn't log a 404
         ico = bytes([
             0,0,1,0,1,0,1,1,0,0,1,0,24,0,40,0,0,0,22,0,0,0,40,0,0,0,
             1,0,0,0,2,0,0,0,1,0,24,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,
@@ -4928,35 +4928,35 @@ class KobraXBridge:
         return web.Response(body=ico, content_type="image/x-icon")
 
     # -------------------------------------------------------------------------
-    # Klipper G-Code-Script Emulation für moonraker-obico
+    # Klipper G-code script emulation for moonraker-obico
     # -------------------------------------------------------------------------
 
     async def _exec_gcode_script(self, script: str) -> str:
-        """Mappt eine Klipper- oder Marlin-G-Code-Zeile auf einen MQTT-Befehl
-        an den Kobra X. Unterstützt:
+        """Maps a Klipper or Marlin G-code line to an MQTT command
+        for the Kobra X. Supports:
         - PAUSE / M25, RESUME / M24, CANCEL_PRINT / M0/M1/M524/ABORT
         - M104 S<temp>                         → Nozzle-Temperatur
         - M140 S<temp>                         → Bett-Temperatur
         - SET_HEATER_TEMPERATURE HEATER=extruder TARGET=200   (Klipper)
         - SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=60  (Klipper)
-        Unbekannte Scripts werden mit 'ok' quittiert (Obico schickt z.B. G28
-        zum Home, das ignoriert die Bridge stillschweigend)."""
+        Unknown scripts are acknowledged with 'ok' (Obico e.g. sends G28
+        for homing, which the bridge silently ignores)."""
         if not script:
             return "ok"
         s = script.strip().upper()
         loop = asyncio.get_event_loop()
 
         def _parse_marlin_temp(line: str) -> int | None:
-            """Aus 'M104 S200' oder 'M140 S60' den Temperatur-Wert ziehen."""
+            """Extract the temperature value from 'M104 S200' or 'M140 S60'."""
             try:
                 return int(line.split("S", 1)[1].split()[0])
             except Exception:
                 return None
 
         def _parse_klipper_set_heater(line: str) -> tuple[str | None, int | None]:
-            """Aus 'SET_HEATER_TEMPERATURE HEATER=extruder TARGET=143' die
-            Heater-ID + Target rausziehen. Heater ist 'extruder' oder
-            'heater_bed', Target ist int. Liefert (None,None) bei Fehler."""
+            """Extract heater + target from 'SET_HEATER_TEMPERATURE HEATER=extruder TARGET=143'.
+            Heater ID + target. Heater is 'extruder' or
+            'heater_bed', target is int. Returns (None,None) on error."""
             heater = None
             target = None
             for part in line.split():
@@ -4970,8 +4970,8 @@ class KobraXBridge:
             return heater, target
 
         async def _set_temps(nozzle: int | None, bed: int | None):
-            """Setzt Nozzle/Bed-Temperatur über den richtigen MQTT-Pfad —
-            druckend: print/update mit taskid, idle: tempature/set mit beiden."""
+            """Sets nozzle/bed temperature via the correct MQTT path -
+            printing: print/update with taskid, idle: tempature/set with both."""
             is_printing = self._state.get("print_state") in ("printing", "paused")
             if is_printing:
                 taskid = self._state.get("taskid", "")
@@ -4986,7 +4986,7 @@ class KobraXBridge:
                         {"taskid": taskid, "settings": {"target_hotbed_temp": int(bed)}},
                     ))
             else:
-                # Idle: tempature/set via web/printer-Topic mit type-Feld
+                # Idle: tempature/set via the web/printer topic with a type field
                 # (Live-Sniff 2026-05-29). type: 0=Nozzle, 1=Bed, 2=beide.
                 if nozzle is not None and bed is not None:
                     t, n, b = 2, int(nozzle), int(bed)
@@ -5060,7 +5060,7 @@ class KobraXBridge:
         await ws.prepare(request)
         ws._loop = asyncio.get_event_loop()
         self.ws_clients.add(ws)
-        log.info(f"WS client verbunden ({len(self.ws_clients)} gesamt)")
+        log.info(f"WS client connected ({len(self.ws_clients)} total)")
 
         # Send klippy_ready notification
         await ws.send_str(json.dumps({
@@ -5082,7 +5082,7 @@ class KobraXBridge:
                 break
 
         self.ws_clients.discard(ws)
-        log.info(f"WS client getrennt ({len(self.ws_clients)} verbleibend)")
+        log.info(f"WS client disconnected ({len(self.ws_clients)} remaining)")
         return ws
 
     async def _handle_ws_rpc(self, ws: web.WebSocketResponse, raw: str):
@@ -5168,13 +5168,13 @@ class KobraXBridge:
                 script = (params.get("script") or "").strip().upper() if isinstance(params, dict) else ""
                 result = await self._exec_gcode_script(script)
             elif method in ("server.connection.identify",):
-                # Obico identifiziert sich beim Connect. Connection-ID egal.
+                # Obico identifies itself on connect. Connection ID doesn't matter.
                 result = {"connection_id": 1}
             elif method == "connection.register_remote_method":
                 # Obico registriert obico_remote_event-Callback. Wir akzeptieren leer.
                 result = "ok"
             elif method == "server.webcams.list":
-                # WS-Variante: absolute URL mit echter LAN-IP statt localhost
+                # WS variant: absolute URL with the real LAN IP instead of localhost
                 _lip = getattr(self, "_local_ip", None) or "127.0.0.1"
                 _base = f"http://{_lip}:{self._args.port}"
                 result = {"webcams": [{
@@ -5186,7 +5186,7 @@ class KobraXBridge:
                     "target_fps": 5, "aspect_ratio": "16:9",
                 }]}
             elif method == "server.history.list":
-                # Reuse HTTP-Handler-Logik (Moonraker-Schema mit Unix-TS).
+                # Reuse the HTTP handler logic (Moonraker schema with Unix TS).
                 try:
                     jobs = self._store.list_jobs(limit=50) or []
                 except Exception:
@@ -5210,9 +5210,9 @@ class KobraXBridge:
             elif method == "machine.update.status":
                 result = {"busy": False, "version_info": {}}
             elif method == "server.files.metadata":
-                # Obico + Mobileraker fragen Metadaten zu einer Datei. Dieselbe
-                # Logik wie der HTTP-Endpoint (vorher eigener kaputter Pfad mit
-                # nicht existierender Store-Methode → leere Antwort →
+                # Obico + Mobileraker request metadata for a file. Same
+                # logic as the HTTP endpoint (previously a separate broken path with
+                # a non-existent store method -> empty response ->
                 # Mobileraker-Endlosschleife, Issue #48).
                 fname = (params or {}).get("filename") if isinstance(params, dict) else None
                 fname = fname or self._state.get("filename", "")
@@ -5237,7 +5237,7 @@ class KobraXBridge:
     # -------------------------------------------------------------------------
 
     def _printer_reachable(self) -> bool:
-        """TCP-Probe auf den MQTT-Port – kein ICMP nötig, kein root erforderlich."""
+        """TCP probe on the MQTT port - no ICMP needed, no root required."""
         import socket as _socket
         try:
             with _socket.create_connection(
@@ -5255,18 +5255,18 @@ class KobraXBridge:
             # ── Offline-Modus: warten bis Drucker wieder erreichbar ──────────
             if _offline:
                 if self._printer_reachable():
-                    log.info("Drucker erreichbar – stelle MQTT-Verbindung her …")
+                    log.info("Printer reachable - establishing MQTT connection...")
                     try:
                         self.client.connect()
                         _offline = False
                         self._state["print_state"] = "standby"
                         self._state["kobra_state"] = "free"
                         self._state["connection_error"] = ""
-                        log.info("MQTT-Verbindung wiederhergestellt")
+                        log.info("MQTT connection re-established")
                     except Exception as e:
                         err = _mqtt_error_msg(e)
                         self._state["connection_error"] = err
-                        log.warning(f"Verbindungsaufbau fehlgeschlagen: {err}")
+                        log.warning(f"Connection attempt failed: {err}")
                         stop_event.wait(_probe_interval)
                         continue
                 else:
@@ -5278,7 +5278,7 @@ class KobraXBridge:
                 info = self.client.query_info()
                 if info:
                     self._on_info(info)
-                # Während Druck: print/report direkt abfragen
+                # While printing: query print/report directly
                 if self._state["print_state"] in ("printing", "preheating",
                                                    "auto_leveling", "checking", "init"):
                     print_r = self.client.publish("print", "query", timeout=3.0)
@@ -5314,9 +5314,9 @@ class KobraXBridge:
                         self._spoolman_attribute_tick({})
             except Exception as e:
                 log.warning(f"Poll-Fehler: {e}")
-                # Prüfen ob Drucker wirklich weg ist
+                # Check whether the printer is really gone
                 if not self._printer_reachable():
-                    log.info("Drucker nicht erreichbar – wechsle in Offline-Modus")
+                    log.info("Printer unreachable - switching to offline mode")
                     self._state["print_state"] = "error"
                     self._state["kobra_state"] = "offline"
                     self._state["connection_error"] = f"Printer unreachable ({self._args.printer_ip})"
@@ -5375,7 +5375,7 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_post("/printer/print/resume",      bridge.handle_print_resume)
     r.add_post("/printer/print/cancel",      bridge.handle_print_cancel)
 
-    # Moonraker-Stubs für moonraker-obico
+    # Moonraker stubs for moonraker-obico
     r.add_get("/access/api_key",             bridge.handle_access_api_key)
     r.add_get("/machine/update/status",      bridge.handle_machine_update_status)
     r.add_get("/server/history/list",        bridge.handle_history_list)
@@ -5435,9 +5435,9 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_post("/kx/filament/slots/{idx}/profile", bridge.handle_kx_filament_slot_profile)
     r.add_get("/kx/filament/visible_vendors",  bridge.handle_kx_visible_vendors)
     r.add_post("/kx/filament/visible_vendors", bridge.handle_kx_visible_vendors)
-    # Custom-Profile-Import (Issue #41) — User lädt eigene Orca-Filament-
-    # Profile als ZIP/JSON hoch (z.B. aus ~/.config/OrcaSlicer/user/<id>/filament/),
-    # weil die Bridge typischerweise nicht auf demselben Host wie OrcaSlicer läuft.
+    # Custom profile import (Issue #41) - the user uploads their own Orca filament
+    # profiles as ZIP/JSON (e.g. from ~/.config/OrcaSlicer/user/<id>/filament/),
+    # because the bridge typically does not run on the same host as OrcaSlicer.
     r.add_get("/kx/filament/profiles/user",    bridge.handle_kx_filament_profiles_user_list)
     r.add_post("/kx/filament/profiles/user",   bridge.handle_kx_filament_profiles_import)
     r.add_delete("/kx/filament/profiles/user", bridge.handle_kx_filament_profiles_user_delete)
@@ -5460,14 +5460,14 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     # WebSocket
     r.add_get("/websocket",                  bridge.handle_websocket)
 
-    # Catch-all: alle unbekannten Requests loggen statt 404
+    # Catch-all: log all unknown requests instead of 404
     r.add_route("*", "/{path:.*}",           bridge.handle_catchall)
 
     return app
 
 
 def _build_per_printer_args(base_args, p: dict):
-    """Kopiere CLI-Args, überschreibe mit Druckereintrag aus config.ini."""
+    """Copy CLI args, override with the printer entry from config.ini."""
     import copy
     a = copy.copy(base_args)
     a.printer_ip = p.get("printer_ip") or base_args.printer_ip
@@ -5505,7 +5505,7 @@ async def run_bridge(args):
     for idx, p in enumerate(printers):
         pid = str(p.get("id") or (idx + 1))
         per_args = _build_per_printer_args(args, p)
-        # Default-Port-Konvention: 7125 + (id-1) wenn kein http_port gesetzt
+        # Default port convention: 7125 + (id-1) when no http_port is set
         if not p.get("http_port") and multi_mode:
             try:
                 per_args.port = 7125 + (int(pid) - 1)
@@ -5525,19 +5525,19 @@ async def run_bridge(args):
             client, args=per_args, store=store,
             printer_id=pid, all_bridges=all_bridges,
         )
-        # printer_name aus config.ini übernehmen falls gesetzt
+        # Adopt printer_name from config.ini if set
         if p.get("name"):
             bridge._state["printer_name"] = p["name"]
             bridge._name_locked = True
         all_bridges[pid] = bridge
 
-        log.info(f"[Drucker {pid}] Verbinde mit {per_args.printer_ip}:{per_args.mqtt_port} …")
+        log.info(f"[Printer {pid}] Connecting to {per_args.printer_ip}:{per_args.mqtt_port}...")
         try:
             await loop.run_in_executor(None, client.connect)
-            log.info(f"[Drucker {pid}] MQTT verbunden")
+            log.info(f"[Printer {pid}] MQTT connected")
         except Exception as e:
             err = _mqtt_error_msg(e)
-            log.warning(f"[Drucker {pid}] Verbindung fehlgeschlagen: {err} – Offline-Modus")
+            log.warning(f"[Printer {pid}] Connection failed: {err} - offline mode")
             bridge._state["print_state"] = "error"
             bridge._state["kobra_state"] = "offline"
             bridge._state["connection_error"] = err
@@ -5555,18 +5555,28 @@ async def run_bridge(args):
         runners.append((runner, client, pid))
 
     import socket as _socket
-    try:
-        with _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM) as _s:
-            _s.connect(("8.8.8.8", 80))
-            _local_ip = _s.getsockname()[0]
-    except Exception:
-        _local_ip = args.host
-    # An alle Bridge-Instanzen weitergeben — wird für absolute Webcam-URLs genutzt
+    _in_docker = os.path.exists("/.dockerenv")
+    _host_ip_override = env_loader.BRIDGE_HOST_IP.strip()
+    if _host_ip_override:
+        _local_ip = _host_ip_override
+    else:
+        try:
+            with _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM) as _s:
+                _s.connect(("8.8.8.8", 80))
+                _local_ip = _s.getsockname()[0]
+        except Exception:
+            _local_ip = args.host
+    # Propagate to all bridge instances - used for absolute webcam URLs
     for _b in all_bridges.values():
         _b._local_ip = _local_ip
     ports = ", ".join(str(getattr(b._args, 'port', 0)) for b in all_bridges.values())
-    log.info(f"OrcaSlicer → Klipper → http://{_local_ip}:{ports}")
-    log.info("Ctrl-C zum Beenden")
+    if _in_docker and not _host_ip_override:
+        # In a container the UDP trick only yields the Docker-internal IP - don't show it
+        log.info(f"OrcaSlicer → Klipper → http://<IP of this Docker host>:{ports}")
+        log.info("Running in Docker — set BRIDGE_HOST_IP to show the exact address")
+    else:
+        log.info(f"OrcaSlicer → Klipper → http://{_local_ip}:{ports}")
+    log.info("Press Ctrl-C to stop")
 
     try:
         while True:
@@ -5584,12 +5594,12 @@ async def run_bridge(args):
                 client.disconnect()
             except Exception:
                 pass
-        log.info("Bridge beendet")
+        log.info("Bridge stopped")
 
 
 def _default_data_dir() -> str:
     """Persistenz-Verzeichnis: Docker setzt KX_DATA_DIR, Binary nutzt <exe-dir>/data,
-    Dev-Script nutzt <repo>/data (oder /app/data falls vorhanden)."""
+    Dev script uses <repo>/data (or /app/data if present)."""
     if os.environ.get("KX_DATA_DIR"):
         return os.environ["KX_DATA_DIR"]
     if getattr(sys, "frozen", False):
@@ -5600,7 +5610,7 @@ def _default_data_dir() -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Moonraker-Bridge für Anycubic Kobra X")
+    parser = argparse.ArgumentParser(description="Moonraker bridge for the Anycubic Kobra X")
     parser.add_argument("--printer-ip",  default=env_loader.PRINTER_IP,
                         help="IP-Adresse des Druckers")
     parser.add_argument("--mqtt-port",   type=int, default=env_loader.MQTT_PORT)
@@ -5621,11 +5631,11 @@ def main():
                         help="Mid-print filament sync interval in seconds (0 = only on print end)")
 
     parser.add_argument("--host",            default="0.0.0.0",
-                        help="Bind-Adresse für den Bridge-Server")
+                        help="Bind address for the bridge server")
     parser.add_argument("--port",        type=int, default=7125,
                         help="HTTP/WS-Port (Moonraker-Standard: 7125)")
     parser.add_argument("--data-dir",    default=_default_data_dir(),
-                        help="Persistenz-Verzeichnis für GCode-Store und DB")
+                        help="Persistence directory for the GCode store and DB")
     parser.add_argument(
         "--ui-theme",
         default=os.environ.get("KX_UI_THEME", "default"),
@@ -5637,7 +5647,7 @@ def main():
     if args.printer_ip and ":" in args.printer_ip:
         args.printer_ip = args.printer_ip.split(":")[0]
 
-    # Windows braucht ProactorEventLoop für asyncio.create_subprocess_exec
+    # Windows needs ProactorEventLoop for asyncio.create_subprocess_exec
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 

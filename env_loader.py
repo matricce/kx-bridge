@@ -1,6 +1,6 @@
 """
-env_loader.py – lädt Verbindungsparameter aus .env (Repo-Root oder Arbeitsverzeichnis).
-Umgebungsvariablen haben Vorrang vor .env-Werten.
+env_loader.py - loads connection parameters from .env (repo root or working directory).
+Environment variables take precedence over .env values.
 """
 import os
 import sys
@@ -39,7 +39,7 @@ def get(key: str, default: str = "") -> str:
     return os.environ.get(key, default)
 
 
-# Häufig verwendete Shortcuts
+# Frequently used shortcuts
 PRINTER_IP       = get("PRINTER_IP",       "")
 MQTT_PORT        = int(get("MQTT_PORT", "9883"))
 USERNAME         = get("MQTT_USERNAME",    "")
@@ -52,3 +52,4 @@ VIBRATION_COMPENSATION   = int(get("VIBRATION_COMPENSATION", "0"))
 CAMERA_ON_PRINT          = int(get("CAMERA_ON_PRINT", "0"))
 WEB_UPLOAD_WARNING = int(get("WEB_UPLOAD_WARNING", "1"))
 PRINT_START_DIALOG = int(get("PRINT_START_DIALOG", get("FILE_READY_DIALOG", "1")))
+BRIDGE_HOST_IP   = get("BRIDGE_HOST_IP", "")

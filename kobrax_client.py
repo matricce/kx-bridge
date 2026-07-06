@@ -1,10 +1,10 @@
 """
 kobrax_client.py – Anycubic Kobra X LAN-MQTT-Client
 
-Protokoll vollständig rekonstruiert via Sniffer 2026-04-17 (953 Nachrichten).
+Protocol fully reconstructed via sniffer 2026-04-17 (953 messages).
 
 Voraussetzungen:
-  - /tmp/anycubic_slicer.crt und .key (aus cloud_mqtt.dll @ 0x2ed5b0 / 0x2edce0)
+  - /tmp/anycubic_slicer.crt and .key (from cloud_mqtt.dll @ 0x2ed5b0 / 0x2edce0)
   - Drucker im LAN-Modus erreichbar auf Port 9883
 
 Verwendung:
@@ -121,9 +121,9 @@ class KobraXClient:
         self._buf     = b""
         self._pid     = 1
         self._lock    = threading.Lock()
-        # Generations-Marker: wird bei jedem Socket-Swap/Close erhöht, damit der
-        # Reader-Thread erkennt wenn _reconnect/_do_connect den Socket unter ihm
-        # ersetzt hat (Issue #53). Schützt gegen recv auf einem stale fd.
+        # Generation marker: incremented on every socket swap/close so the
+        # reader thread notices when _reconnect/_do_connect swapped the socket
+        # underneath it (Issue #53). Protects against recv on a stale fd.
         self._sock_gen = 0
         self._running = False
 
@@ -162,9 +162,9 @@ class KobraXClient:
         if not os.path.exists(CERT_FILE) or not os.path.exists(KEY_FILE):
             raise FileNotFoundError(
                 f"TLS-Zertifikate fehlen: anycubic_slicer.crt + anycubic_slicer.key "
-                f"müssen neben der kx-bridge Binary liegen ({_SCRIPT_DIR}/). "
-                f"Lade anycubic-certs.zip vom Gitea-Release herunter und entpacke "
-                f"die Dateien dorthin."
+                f"must sit next to the kx-bridge binary ({_SCRIPT_DIR}/). "
+                f"Download anycubic-certs.zip from the Gitea release and extract "
+                f"the files there."
             )
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ctx.check_hostname = False
@@ -172,9 +172,9 @@ class KobraXClient:
         ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
         ctx.load_cert_chain(CERT_FILE, KEY_FILE)
 
-        # Socket als lokale Variable aufbauen — der Handshake (Connect + CONNACK)
-        # läuft OHNE gehaltenes Lock, damit ein langsamer Connect die Sender nicht
-        # einfriert. Erst der fertige Socket wird unter Lock eingeschwenkt (#53).
+        # Build the socket as a local variable - the handshake (connect + CONNACK)
+        # runs WITHOUT holding the lock so a slow connect does not freeze
+        # senders. Only the finished socket is swapped in under the lock (#53).
         _ai      = socket.getaddrinfo(self.host, self.port, socket.AF_INET, socket.SOCK_STREAM)
         raw      = socket.create_connection(_ai[0][4], timeout=5)
         new_sock = ctx.wrap_socket(raw)
@@ -196,7 +196,7 @@ class KobraXClient:
             self._sock = new_sock
             self._sock_gen += 1
             self._buf = b""
-        self._subscribe(self._sub_topic())  # nimmt das Lock selbst — nicht verschachteln
+        self._subscribe(self._sub_topic())  # takes the lock itself - do not nest
         log.debug("MQTT connected to %s:%s", self.host, self.port)
 
     def connect(self):
@@ -206,10 +206,10 @@ class KobraXClient:
         time.sleep(0.3)
 
     def _ensure_reader(self):
-        """Stellt sicher dass der Reader-Thread lebt. Wenn der Reader nach einer
-        früheren disconnect/reconnect-Sequenz oder einem unbehandelten Fehler
-        gestorben ist, würden empfangene Replies sonst nie ankommen — publish()
-        würde dann zwar senden, aber auf Antworten ewig warten."""
+        """Ensures the reader thread is alive. If the reader died after a
+        previous disconnect/reconnect sequence or an unhandled error,
+        received replies would never arrive - publish()
+        would still send but wait for replies forever."""
         if not self._running:
             return  # gewollter disconnect
         t = getattr(self, "_reader_thread", None)
@@ -232,13 +232,13 @@ class KobraXClient:
             self._sock_gen += 1
 
     def _reconnect(self):
-        """Persistenter Reconnect: versucht endlos weiter bis der Drucker wieder
-        antwortet oder disconnect() gerufen wurde. Backoff cappt bei 60 s. Die
-        ersten 5 Versuche loggen als WARNING (akute Verbindungsstörung), danach
-        nur DEBUG um Log-Spam bei langem Drucker-Ausfall (z.B. über Nacht
+        """Persistent reconnect: keeps retrying forever until the printer is
+        responds or disconnect() was called. Backoff caps at 60 s. The
+        first 5 attempts log as WARNING (acute connection issue), afterwards
+        only DEBUG to avoid log spam during long printer outages (e.g. switched
         ausgeschaltet) zu vermeiden."""
-        log.warning("Verbindung verloren – reconnect…")
-        # Close + Invalidierung unter Lock, damit kein Sender mitten im sendall
+        log.warning("Connection lost - reconnecting...")
+        # Close + invalidation under the lock so no sender is mid-sendall
         # auf den gerade geschlossenen Socket trifft (Issue #53).
         with self._lock:
             try:
@@ -254,18 +254,18 @@ class KobraXClient:
             delay = delays[min(attempt, len(delays) - 1)]
             try:
                 self._do_connect()
-                log.info("Reconnect erfolgreich (nach %d Versuchen)", attempt + 1)
+                log.info("Reconnect successful (after %d attempts)", attempt + 1)
                 return True
             except Exception as e:
                 attempt += 1
                 lvl = log.warning if attempt <= 5 else log.debug
                 lvl("Reconnect fehlgeschlagen (%s, Versuch %d), warte %ss…", e, attempt, delay)
-                # Geteiltes Sleep damit disconnect() den Loop schneller bricht.
+                # Split sleep so disconnect() breaks the loop faster.
                 slept = 0.0
                 while slept < delay and self._running:
                     time.sleep(min(0.5, delay - slept))
                     slept += 0.5
-        return False  # nur wenn disconnect() gerufen wurde
+        return False  # only when disconnect() was called
 
     def _subscribe(self, topic: str):
         with self._lock:
@@ -290,15 +290,15 @@ class KobraXClient:
                             ping_ok = True
                     except Exception:
                         ping_ok = False
-                # _reconnect() AUSSERHALB des Locks aufrufen — es nimmt das Lock
-                # selbst, und threading.Lock ist nicht reentrant (sonst Deadlock).
+                # Call _reconnect() OUTSIDE the lock - it takes the lock
+                # itself, and threading.Lock is not reentrant (deadlock otherwise).
                 if not ping_ok:
                     if self._running and not self._reconnect():
                         break
                 last_ping = time.time()
-            # Aktuellen Socket + Generation unter Lock greifen, damit ein
-            # paralleler _reconnect/_do_connect-Swap uns nicht auf einem stale
-            # fd pollen lässt (Issue #53).
+            # Grab the current socket + generation under the lock so a
+            # parallel _reconnect/_do_connect swap does not leave us polling
+            # a stale fd (Issue #53).
             with self._lock:
                 sock = self._sock
                 gen  = self._sock_gen
@@ -306,37 +306,37 @@ class KobraXClient:
                 time.sleep(0.05)
                 continue
 
-            # Idle-Wartezeit OHNE Lock — select probt nur die Bereitschaft, so
-            # blockiert der Reader während Leerlauf nie das gemeinsame Lock.
+            # Idle wait WITHOUT the lock - select only probes readiness, so
+            # the reader never blocks the shared lock while idle.
             try:
                 ready, _, _ = select.select([sock], [], [], 0.2)
             except (OSError, ValueError):
-                # fd geschlossen/ungültig (Reconnect oder Disconnect mitten im select)
+                # fd closed/invalid (reconnect or disconnect mid-select)
                 if not self._running:
                     break
                 time.sleep(0.05)
                 continue
             if not ready:
-                continue  # Leerlauf, kein Lock gehalten
+                continue  # idle, no lock held
 
-            # Daten liegen an: Lock kurz greifen für das eine recv, serialisiert
-            # gegen alle sendall-Caller. recv blockiert nicht lange (select sagte
-            # ready, Socket-Timeout ist 0.2s).
+            # Data pending: briefly take the lock for the single recv, serialized
+            # against all sendall callers. recv does not block long (select said
+            # ready, socket timeout is 0.2s).
             try:
                 with self._lock:
-                    # Socket könnte zwischen select und hier ersetzt worden sein.
+                    # The socket could have been swapped between select and here.
                     if self._sock_gen != gen or self._sock is not sock:
                         continue
                     data = sock.recv(65536)
                 if not data:
-                    # Windows SSL kann kurzzeitig b"" liefern ohne echten EOF
+                    # Windows SSL can briefly return b"" without a real EOF
                     _empty_count += 1
                     if _empty_count >= 5:
                         raise ConnectionResetError("EOF")
                     continue
                 _empty_count = 0
                 self._buf += data
-                self._drain()  # außerhalb des Locks — Dispatch/event.set() bleibt prompt
+                self._drain()  # outside the lock - dispatch/event.set() stays prompt
             except ssl.SSLWantReadError:
                 continue
             except socket.timeout:
@@ -445,8 +445,8 @@ class KobraXClient:
     # -- Publish + request/response ------------------------------------------
 
     def publish(self, msg_type: str, action: str, data=None, timeout: float = 5.0) -> dict | None:
-        # Falls Reader-Thread aus historischen Gründen tot ist, wiederbeleben —
-        # sonst würden Replies nie ankommen und event.wait() läuft ins Timeout.
+        # If the reader thread is dead for historical reasons, revive it -
+        # otherwise replies would never arrive and event.wait() would time out.
         self._ensure_reader()
         msgid   = str(uuid.uuid4())
         payload = json.dumps({
@@ -471,7 +471,7 @@ class KobraXClient:
             report_registered = True
 
         topic = self._pub_topic(msg_type)
-        # Status-Poll-TX (query/getInfo) ist reines Rauschen (alle paar Sekunden) →
+        # Status poll TX (query/getInfo) is pure noise (every few seconds) ->
         # auf DEBUG. Aktions-TX (start/set/control/move/…) bleibt INFO sichtbar.
         _tx_level = logging.DEBUG if action in ("query", "getInfo") else logging.INFO
         log.log(_tx_level, "TX %-25s  action=%-12s  data=%s",
@@ -531,8 +531,8 @@ class KobraXClient:
                 self._sock.sendall(_build_publish(topic, payload))
         except Exception as e:
             log.error("web send error: %s, reconnecting…", e)
-            # Reconnect triggern (analog zu publish()); ohne Retry weil
-            # fire-and-forget — der nächste Aufruf wird auf den frischen Socket
+            # Trigger a reconnect (like publish()); no retry because it is
+            # fire-and-forget - the next call will hit the fresh socket
             # treffen.
             try:
                 self._reconnect()
@@ -579,13 +579,13 @@ class KobraXClient:
     # -- Part-Skip ("Exclude Object") ---------------------------------------
 
     def query_skip_objects(self) -> dict | None:
-        """Fragt den Drucker nach der aktuellen Objekt-/Skip-Liste."""
+        """Asks the printer for the current object/skip list."""
         return self.publish("skip", "query_obj")
 
     def skip_objects(self, names: list[str]) -> dict | None:
-        """Überspringt die genannten Objekte – auch mid-print möglich.
+        """Skips the named objects - also possible mid-print.
 
-        Namen entsprechen den EXCLUDE_OBJECT_DEFINE NAME=… Einträgen
+        Names correspond to the EXCLUDE_OBJECT_DEFINE NAME=... entries
         im GCode-Header bzw. file_details.objects_skip_parts.
         """
         return self.publish("skip", "start", {"objects_skip_parts": list(names)})
@@ -653,14 +653,14 @@ class KobraXClient:
             f"Connection: close\r\n\r\n"
         ).encode()
 
-        # Connect-Timeout kurz (LAN). Während sendall() darf der Socket so
-        # lange brauchen wie nötig — bei großen Dateien (>100 MB) und
-        # langsamerem WLAN am Drucker dauert das Schieben sonst >30 s und
-        # würde den Connect-Timeout fälschlich auslösen. Read-Timeout danach
-        # generös (Drucker verarbeitet die Datei bevor er antwortet).
+        # Short connect timeout (LAN). During sendall() the socket may take
+        # as long as needed - with large files (>100 MB) and slower WiFi
+        # at the printer, pushing otherwise takes >30 s and would falsely
+        # trip the connect timeout. The read timeout afterwards is generous
+        # (the printer processes the file before replying).
         _ai  = socket.getaddrinfo(self.host, 18910, socket.AF_INET, socket.SOCK_STREAM)
         sock = socket.create_connection(_ai[0][4], timeout=10)
-        sock.settimeout(None)  # blocking während Send
+        sock.settimeout(None)  # blocking during send
         sock.sendall(headers + body)
         sock.settimeout(180)
         response = b""
@@ -717,7 +717,7 @@ if __name__ == "__main__":
     parser.add_argument("--mode-id",   default=env_loader.MODE_ID)
     parser.add_argument("--device-id", default=env_loader.DEVICE_ID)
     parser.add_argument("--monitor",   action="store_true",
-                        help="Dauerhaft mithören und alle Reports ausgeben")
+                        help="Listen continuously and print all reports")
     args = parser.parse_args()
 
     client = KobraXClient(
@@ -741,7 +741,7 @@ if __name__ == "__main__":
 
         client.callbacks["*"] = on_msg
         client.connect()
-        print("[kobrax] Monitor-Modus aktiv (Ctrl-C zum Beenden)")
+        print("[kobrax] Monitor mode active (Ctrl-C to stop)")
         try:
             while True:
                 time.sleep(1)
@@ -755,7 +755,7 @@ if __name__ == "__main__":
         info = client.query_info()
         if info:
             d = info.get("data", {})
-            print(f"  Drucker:  {d.get('printerName')}  FW {d.get('version')}")
+            print(f"  Printer:  {d.get('printerName')}  FW {d.get('version')}")
             print(f"  Status:   {d.get('state')}")
             t = d.get("temp", {})
             print(f"  Nozzle:   {t.get('curr_nozzle_temp')}°C → {t.get('target_nozzle_temp')}°C")
@@ -764,6 +764,6 @@ if __name__ == "__main__":
             print(f"  Upload:   {urls.get('fileUploadurl')}")
             print(f"  Kamera:   {urls.get('rtspUrl')}")
         else:
-            print("  Keine Antwort")
+            print("  No response")
 
         client.disconnect()

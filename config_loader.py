@@ -1,7 +1,7 @@
 """
-config_loader.py – lädt Verbindungsparameter aus config/config.ini (primär)
-oder .env (Fallback / Migration).
-Umgebungsvariablen haben immer Vorrang.
+config_loader.py - loads connection parameters from config/config.ini (primary)
+or .env (fallback / migration).
+Environment variables always take precedence.
 """
 import os
 import sys
@@ -34,7 +34,7 @@ def _find_env_file() -> pathlib.Path | None:
 
 
 def _load_env_file(path: pathlib.Path):
-    """Lädt .env-Datei als Fallback – setzt nur Keys die noch nicht in os.environ sind."""
+    """Loads the .env file as a fallback - only sets keys not yet in os.environ."""
     with open(path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -48,7 +48,7 @@ def _load_env_file(path: pathlib.Path):
 
 
 def _load_config_file(path: pathlib.Path):
-    """Lädt config.ini und setzt Keys in os.environ (nur wenn nicht bereits gesetzt)."""
+    """Loads config.ini and sets keys in os.environ (only if not already set)."""
     cfg = configparser.ConfigParser()
     cfg.read(path, encoding="utf-8")
 
@@ -66,6 +66,7 @@ def _load_config_file(path: pathlib.Path):
         "WEB_UPLOAD_WARNING":   (CONFIG_SECTION_PRINT,   "web_upload_warning"),
         "PRINT_START_DIALOG":   (CONFIG_SECTION_PRINT,   "print_start_dialog"),
         "BRIDGE_PRINTER_NAME":  (CONFIG_SECTION_BRIDGE,  "printer_name"),
+        "BRIDGE_HOST_IP":       (CONFIG_SECTION_BRIDGE,  "host_ip"),
         "SPOOLMAN_SERVER":      (CONFIG_SECTION_SPOOLMAN, "server"),
         "SPOOLMAN_SYNC_RATE":   (CONFIG_SECTION_SPOOLMAN, "sync_rate"),
     }
@@ -124,12 +125,12 @@ def migrate_env_to_config(env_path: pathlib.Path, config_path: pathlib.Path):
     }
     with open(config_path, "w", encoding="utf-8") as f:
         f.write("# KX-Bridge Konfigurationsdatei\n")
-        f.write("# Automatisch migriert aus .env\n\n")
+        f.write("# Automatically migrated from .env\n\n")
         cfg.write(f)
 
 
 def find_config_path() -> pathlib.Path:
-    """Gibt den Pfad zur config.ini zurück (auch wenn sie noch nicht existiert)."""
+    """Returns the path to config.ini (even if it does not exist yet)."""
     for base in (_BASE, _BASE.parent):
         config_dir = base / "config"
         if config_dir.is_dir():
@@ -145,7 +146,7 @@ _env_path    = _find_env_file()
 if _config_path:
     _load_config_file(_config_path)
 elif _env_path:
-    # Kein config.ini vorhanden → aus .env migrieren
+    # No config.ini present -> migrate from .env
     _target = find_config_path()
     migrate_env_to_config(_env_path, _target)
     _load_config_file(_target)
@@ -153,13 +154,13 @@ elif _env_path:
 
 
 def list_printers() -> list[dict]:
-    """Liest alle [printer_N]-Sektionen aus config.ini.
+    """Reads all [printer_N] sections from config.ini.
 
-    Jede Sektion kann folgende Keys haben:
+    Each section may contain the following keys:
       name, printer_ip, mqtt_port, username, password, mode_id, device_id,
       bridge_url, default_ams_slot, auto_leveling
 
-    Gibt eine leere Liste zurück wenn keine [printer_N]-Sektionen vorhanden sind
+    Returns an empty list when no [printer_N] sections exist
     (Single-Printer-Betrieb via [connection]).
     """
     path = _find_config_file()
@@ -200,28 +201,28 @@ def _filament_section(printer_id: Optional[str] = None) -> str:
 
 
 def list_filament_profiles(printer_id: Optional[str] = None) -> dict[int, dict]:
-    """Liest die [filament_profiles]-Sektion aus config.ini.
+    """Reads the [filament_profiles] section from config.ini.
 
     With ``printer_id`` set, reads the per-printer ``[filament_profiles_<id>]``
     section and falls back to the legacy global ``[filament_profiles]`` while
     that printer has no own section yet.
 
-    Format pro AMS-Slot — primärer Selector ist (vendor, name), die `id` wird
-    aus der orca_filaments.json beim Speichern nachgeschlagen und mitgeführt
-    (als Hint für OrcaSlicer; das Orca-Datenmodell hat ~136 Profile mit
-    derselben filament_id wie 'OGFL99', d.h. die ID ist nicht eindeutig):
+    Format per AMS slot - the primary selector is (vendor, name); the `id` is
+    looked up from orca_filaments.json on save and carried along
+    (as a hint for OrcaSlicer; the Orca data model has ~136 profiles sharing
+    the same filament_id like 'OGFL99', i.e. the ID is not unique):
 
       [filament_profiles]
       slot_0_vendor = Polymaker
       slot_0_name   = PolyTerra PLA
       slot_0_id     = OGFL01
 
-    Gibt einen Dict {slot_index: {"id": ..., "vendor": ..., "name": ...}}
-    zurück. Leere/fehlende Slots werden NICHT aufgenommen — das Default-Mapping
-    (per filament_type) in der Bridge bleibt dann aktiv.
+    Returns a dict {slot_index: {"id": ..., "vendor": ..., "name": ...}}.
+    Empty/missing slots are NOT included - the default mapping
+    (per filament_type) in the bridge then stays active.
 
-    Backwards-Kompat: alte Configs mit nur (vendor, id) bleiben lesbar; `name`
-    fehlt dann und der Aufrufer kann optional aus der orca_filaments.json
+    Backwards compat: old configs with only (vendor, id) stay readable; `name`
+    is then missing and the caller can optionally resolve it from orca_filaments.json
     rekonstruieren.
     """
     path = _find_config_file()
@@ -236,7 +237,7 @@ def list_filament_profiles(printer_id: Optional[str] = None) -> dict[int, dict]:
         return {}
     result: dict[int, dict] = {}
     for key, value in cfg.items(section):
-        # Erwartet: slot_<idx>_id oder slot_<idx>_vendor oder slot_<idx>_name
+        # Expects: slot_<idx>_id or slot_<idx>_vendor or slot_<idx>_name
         if not key.startswith("slot_"):
             continue
         parts = key.split("_", 2)
@@ -256,11 +257,11 @@ def list_filament_profiles(printer_id: Optional[str] = None) -> dict[int, dict]:
 
 
 def save_filament_profiles(profiles: dict[int, dict], printer_id: Optional[str] = None) -> bool:
-    """Schreibt die übergebenen Slot-Profile in die [filament_profiles]-
-    Sektion der config.ini. Existierende Einträge werden komplett ersetzt.
+    """Writes the given slot profiles into the [filament_profiles]
+    section of config.ini. Existing entries are completely replaced.
 
     profiles: {slot_index: {"id": "OGFL01", "vendor": "Polymaker", "name": "PolyTerra PLA"}}
-    Mindestens vendor+name müssen gesetzt sein; id ist optional (Hint).
+    At least vendor+name must be set; id is optional (hint).
 
     With ``printer_id`` set, writes the per-printer ``[filament_profiles_<id>]``
     section only — other printers and the legacy global section are untouched.
@@ -271,8 +272,8 @@ def save_filament_profiles(profiles: dict[int, dict], printer_id: Optional[str] 
     cfg = configparser.ConfigParser()
     cfg.read(path, encoding="utf-8")
     section = _filament_section(printer_id)
-    # visible_vendors (Issue #41) ist kein Slot-Mapping — beim Ersetzen der
-    # Sektion erhalten, sonst geht der Vendor-Filter beim Slot-Save verloren.
+    # visible_vendors (Issue #41) is not a slot mapping - preserve it when
+    # replacing the section, otherwise the vendor filter is lost on slot save.
     # First save of a per-printer section inherits the legacy global filter.
     preserved_vendors = None
     if cfg.has_option(section, "visible_vendors"):
@@ -299,10 +300,10 @@ def save_filament_profiles(profiles: dict[int, dict], printer_id: Optional[str] 
 
 
 def list_visible_vendors(printer_id: Optional[str] = None) -> list[str]:
-    """Liest [filament_profiles] visible_vendors (komma-separiert) aus config.ini.
+    """Reads [filament_profiles] visible_vendors (comma-separated) from config.ini.
 
-    Vendor-Sichtbarkeitsfilter für das Slot-Profil-Dropdown (Issue #41 Option A).
-    Leere Liste = keine Einschränkung (rückwärtskompatibel: alle Vendoren).
+    Vendor visibility filter for the slot profile dropdown (Issue #41 option A).
+    Empty list = no restriction (backwards compatible: all vendors).
 
     With ``printer_id`` set, reads the per-printer section and falls back to the
     legacy global ``[filament_profiles]`` filter.
@@ -322,7 +323,7 @@ def list_visible_vendors(printer_id: Optional[str] = None) -> list[str]:
 
 
 def save_visible_vendors(vendors: list[str], printer_id: Optional[str] = None) -> bool:
-    """Schreibt visible_vendors in [filament_profiles], ohne die Slot-Mappings
+    """Writes visible_vendors into [filament_profiles] without touching the
     (slot_N_*) zu verlieren. Leere Liste entfernt den Key wieder.
 
     With ``printer_id`` set, writes the per-printer section. When that section is
@@ -431,7 +432,7 @@ def get(key: str, default: str = "") -> str:
     return os.environ.get(key, default)
 
 
-# Häufig verwendete Shortcuts
+# Frequently used shortcuts
 PRINTER_IP       = get("PRINTER_IP",       "")
 MQTT_PORT        = int(get("MQTT_PORT",    "9883"))
 USERNAME         = get("MQTT_USERNAME",    "")
@@ -446,3 +447,4 @@ WEB_UPLOAD_WARNING = int(get("WEB_UPLOAD_WARNING", "1"))
 PRINT_START_DIALOG = int(get("PRINT_START_DIALOG", get("FILE_READY_DIALOG", "1")))
 SPOOLMAN_SERVER    = get("SPOOLMAN_SERVER",    "")
 SPOOLMAN_SYNC_RATE = int(get("SPOOLMAN_SYNC_RATE", "0"))
+BRIDGE_HOST_IP     = get("BRIDGE_HOST_IP",     "")
