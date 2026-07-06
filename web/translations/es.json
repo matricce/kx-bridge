@@ -246,6 +246,7 @@
   "settings_password": "Contraseña MQTT",
   "settings_poll": "Intervalo de sondeo (segundos)",
   "settings_poll_interval_hint": "Con qué frecuencia el bridge consulta el estado de la impresora",
+  "settings_verbose_http_log": "Registrar cada solicitud HTTP (detallado)",
   "settings_poll_interval_label": "Intervalo de sondeo (segundos)",
   "settings_print": "Ajustes de impresión",
   "settings_printer_ip": "IP de impresora",

@@ -408,6 +408,7 @@ function applyLang(){
   setText('lbl-set-lang',T.settings_cat_language||'Sprache');
   setText('lbl-set-theme',T.settings_cat_theme||'Hell / Dunkel umschalten');
   setText('lbl-poll-interval',T.settings_poll||'Poll-Intervall (Sekunden)');
+  setText('lbl-verbose-http-log',T.settings_verbose_http_log||'Log every HTTP request (verbose)');
   setText('lbl-filament-mapping',T.settings_filament_mapping||'Filament-Profil-Mapping (pro Slot)');
   setText('lbl-filament-mapping-save',T.settings_filament_mapping_save||'Mapping speichern');
   setText('lbl-visible-vendors',T.settings_visible_vendors||'Sichtbare Hersteller (Profil-Dropdown)');
@@ -1099,6 +1100,7 @@ function openSettings(){
       var sec=d.poll_interval||Math.round((parseInt(localStorage.getItem('pollInterval')||'2000'))/1000)||3;
       pi.value=sec;
     }
+    var vhl=document.getElementById('s-verbose-http-log');if(vhl)vhl.checked=!!d.verbose_http_log;
     renderFilamentMapping(d.filament_profiles||{});
     renderSpoolmanSlotCard();
     // Spoolman
@@ -1861,6 +1863,7 @@ function saveSettings(){
     print_start_dialog: parseInt((document.getElementById('s-file-ready-mode')||{}).value||'1',10),
     web_upload_warning:webUploadWarning,
     poll_interval:    Math.min(60,Math.max(1,parseInt((document.getElementById('s-poll-interval')||{}).value,10)||3)),
+    verbose_http_log: (document.getElementById('s-verbose-http-log')||{}).checked?1:0,
     spoolman_server:  (document.getElementById('s-spoolman-url')||{}).value||'',
     spoolman_sync_rate: Math.max(0,parseInt((document.getElementById('s-spoolman-sync-rate')||{}).value||'30',10)),
   }).then(function(){

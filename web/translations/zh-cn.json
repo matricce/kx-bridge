@@ -246,6 +246,7 @@
   "settings_password": "MQTT 密码",
   "settings_poll": "轮询间隔（秒）",
   "settings_poll_interval_hint": "Bridge 查询打印机状态的频率",
+  "settings_verbose_http_log": "记录每个 HTTP 请求（详细模式）",
   "settings_poll_interval_label": "轮询间隔（秒）",
   "settings_print": "打印设置",
   "settings_printer_ip": "打印机 IP",

@@ -554,6 +554,10 @@
                 <input type="number" id="s-poll-interval" min="1" max="60" step="1" placeholder="3" oninput="onPollIntervalInput()">
                 <small style="color:var(--txt2)" id="lbl-poll-hint">Wie oft die Bridge den Drucker-Status abfragt</small>
               </div>
+              <div class="modal-field" style="flex-direction:row;align-items:center;gap:10px">
+                <input type="checkbox" id="s-verbose-http-log" style="width:auto;margin:0">
+                <label id="lbl-verbose-http-log" style="margin:0;cursor:pointer" for="s-verbose-http-log">Log every HTTP request (verbose)</label>
+              </div>
             </div>
           </div>
 

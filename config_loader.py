@@ -68,6 +68,7 @@ def _load_config_file(path: pathlib.Path):
         "BRIDGE_PRINTER_NAME":  (CONFIG_SECTION_BRIDGE,  "printer_name"),
         "BRIDGE_HOST_IP":       (CONFIG_SECTION_BRIDGE,  "host_ip"),
         "POLL_INTERVAL":        (CONFIG_SECTION_BRIDGE,  "poll_interval"),
+        "VERBOSE_HTTP_LOG":     (CONFIG_SECTION_BRIDGE,  "verbose_http_log"),
         "SPOOLMAN_SERVER":      (CONFIG_SECTION_SPOOLMAN, "server"),
         "SPOOLMAN_SYNC_RATE":   (CONFIG_SECTION_SPOOLMAN, "sync_rate"),
     }
@@ -450,3 +451,4 @@ SPOOLMAN_SERVER    = get("SPOOLMAN_SERVER",    "")
 SPOOLMAN_SYNC_RATE = int(get("SPOOLMAN_SYNC_RATE", "0"))
 BRIDGE_HOST_IP     = get("BRIDGE_HOST_IP",     "")
 POLL_INTERVAL      = int(get("POLL_INTERVAL",  "3"))
+VERBOSE_HTTP_LOG   = int(get("VERBOSE_HTTP_LOG", "0"))

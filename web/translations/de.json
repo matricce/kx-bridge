@@ -246,6 +246,7 @@
   "settings_password": "MQTT-Passwort",
   "settings_poll": "Poll-Intervall (Sekunden)",
   "settings_poll_interval_hint": "Wie oft die Bridge den Druckerstatus abfragt",
+  "settings_verbose_http_log": "Jede HTTP-Anfrage loggen (ausführlich)",
   "settings_poll_interval_label": "Poll-Intervall (Sekunden)",
   "settings_print": "Druckeinstellungen",
   "settings_printer_ip": "Drucker-IP",

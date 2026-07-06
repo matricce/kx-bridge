@@ -135,9 +135,13 @@ logging.basicConfig(level=logging.INFO,
                     datefmt="%H:%M:%S")
 log = logging.getLogger("bridge")
 # aiohttp logs one INFO line per HTTP request (access log) — with 2s frontend
-# polling that drowns out the bridge's own logs. Raise its own threshold so
-# only WARNING+ (actual problems) surface at the default log level.
+# polling that drowns out the bridge's own logs by default. Toggleable at
+# runtime via the verbose_http_log setting (see handle_api_settings_post).
 logging.getLogger("aiohttp.access").setLevel(logging.WARNING)
+
+
+def _set_verbose_http_log(enabled: bool):
+    logging.getLogger("aiohttp.access").setLevel(logging.INFO if enabled else logging.WARNING)
 
 # Web UI: subdirectory under web/themes/<name>/index.html
 _UI_THEME_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
@@ -4420,6 +4424,7 @@ class KobraXBridge:
             "web_upload_warning":     getattr(self._args, "web_upload_warning", 1),
             "print_start_dialog":     getattr(self._args, "print_start_dialog", 1),
             "poll_interval":    getattr(self._args, "poll_interval", 3),
+            "verbose_http_log": getattr(self._args, "verbose_http_log", 0),
             "filament_profiles": {str(k): v for k, v in self._filament_profiles.items()},
             "visible_vendors":  self._visible_vendors,
             "ace_dry_presets":  self._ace_dry_presets,
@@ -4464,6 +4469,10 @@ class KobraXBridge:
             cfg.set("bridge", "poll_interval", str(pi))
         elif not cfg.has_option("bridge", "poll_interval"):
             cfg.set("bridge", "poll_interval", "3")
+        verbose_http_log = int(bool(data.get("verbose_http_log", getattr(self._args, "verbose_http_log", 0))))
+        cfg.set("bridge", "verbose_http_log", str(verbose_http_log))
+        _set_verbose_http_log(bool(verbose_http_log))
+        self._args.verbose_http_log = verbose_http_log
         printer_name = str(data.get("printer_name", "")).strip()
         if printer_name:
             cfg.set("bridge", "printer_name", printer_name)
@@ -5449,6 +5458,7 @@ def _build_per_printer_args(base_args, p: dict):
 
 
 async def run_bridge(args):
+    _set_verbose_http_log(bool(getattr(args, "verbose_http_log", 0)))
     printers = env_loader.list_printers()
     multi_mode = bool(printers)
     if not printers:
@@ -5599,6 +5609,8 @@ def main():
                         help="Mid-print filament sync interval in seconds (0 = only on print end)")
     parser.add_argument("--poll-interval", type=int, default=env_loader.POLL_INTERVAL,
                         help="Printer poll interval in seconds")
+    parser.add_argument("--verbose-http-log", type=int, default=env_loader.VERBOSE_HTTP_LOG,
+                        help="Log every HTTP request (aiohttp access log)")
 
     parser.add_argument("--host",            default="0.0.0.0",
                         help="Bind address for the bridge server")
