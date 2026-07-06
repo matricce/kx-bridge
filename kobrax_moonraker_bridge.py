@@ -4483,7 +4483,7 @@ class KobraXBridge:
         with open(config_path, "w", encoding="utf-8") as f:
             f.write("# KX-Bridge Konfigurationsdatei\n\n")
             cfg.write(f)
-        log.info(f"Settings gespeichert in {config_path}")
+        log.info(f"Settings saved to {config_path}")
         # Send the response, then restart
         response = web.json_response({"status": "restarting"})
         asyncio.get_event_loop().call_later(0.3, self._restart_bridge)
@@ -5267,7 +5267,7 @@ class KobraXBridge:
                         # No multiColorBox data — still attribute (no transitions to skip)
                         self._spoolman_attribute_tick({})
             except Exception as e:
-                log.warning(f"Poll-Fehler: {e}")
+                log.warning(f"Poll error: {e}")
                 # Check whether the printer is really gone
                 if not self._printer_reachable():
                     log.info("Printer unreachable - switching to offline mode")
@@ -5279,7 +5279,7 @@ class KobraXBridge:
                     except Exception:
                         pass
                     _offline = True
-            stop_event.wait(3.0)
+            stop_event.wait(getattr(self._args, "poll_interval", 3))
 
 
 # ---------------------------------------------------------------------------
@@ -5583,6 +5583,8 @@ def main():
                         help="Spoolman URL (e.g. http://192.168.x.x:7912); leave empty to disable")
     parser.add_argument("--spoolman-sync-rate", type=int, default=env_loader.SPOOLMAN_SYNC_RATE,
                         help="Mid-print filament sync interval in seconds (0 = only on print end)")
+    parser.add_argument("--poll-interval", type=int, default=env_loader.POLL_INTERVAL,
+                        help="Printer poll interval in seconds")
 
     parser.add_argument("--host",            default="0.0.0.0",
                         help="Bind address for the bridge server")

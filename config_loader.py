@@ -67,6 +67,7 @@ def _load_config_file(path: pathlib.Path):
         "PRINT_START_DIALOG":   (CONFIG_SECTION_PRINT,   "print_start_dialog"),
         "BRIDGE_PRINTER_NAME":  (CONFIG_SECTION_BRIDGE,  "printer_name"),
         "BRIDGE_HOST_IP":       (CONFIG_SECTION_BRIDGE,  "host_ip"),
+        "POLL_INTERVAL":        (CONFIG_SECTION_BRIDGE,  "poll_interval"),
         "SPOOLMAN_SERVER":      (CONFIG_SECTION_SPOOLMAN, "server"),
         "SPOOLMAN_SYNC_RATE":   (CONFIG_SECTION_SPOOLMAN, "sync_rate"),
     }
@@ -448,3 +449,4 @@ PRINT_START_DIALOG = int(get("PRINT_START_DIALOG", get("FILE_READY_DIALOG", "1")
 SPOOLMAN_SERVER    = get("SPOOLMAN_SERVER",    "")
 SPOOLMAN_SYNC_RATE = int(get("SPOOLMAN_SYNC_RATE", "0"))
 BRIDGE_HOST_IP     = get("BRIDGE_HOST_IP",     "")
+POLL_INTERVAL      = int(get("POLL_INTERVAL",  "3"))
