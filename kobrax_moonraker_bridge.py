@@ -1917,6 +1917,55 @@ class KobraXBridge:
             return _ALIASES[m]
         return m
 
+    @staticmethod
+    def _material_family(mat: str) -> str:
+        """Reduce a material to its base polymer family.
+
+        PLA / PLA+ / PLA SILK / PLA MATTE -> "PLA"; PETG / PETG+ -> "PETG"; etc.
+        Used by the stale-profile guard: only a change of *family* (e.g. PETG ->
+        PLA) invalidates a saved slot profile — a change within the family
+        (PLA -> PLA SILK) must not discard an otherwise valid profile.
+        """
+        if not mat:
+            return ""
+        m = KobraXBridge._normalize_material(mat)
+        # Longer prefixes first so "PETG" is not swallowed by "PET".
+        for fam in ("PETG", "PLA", "ABS", "ASA", "TPU", "PVA", "HIPS", "PA", "PC", "PET"):
+            if m.startswith(fam):
+                return fam
+        return m
+
+    def _profile_material(self, profile: dict) -> str:
+        """Material type (e.g. "PETG") of a saved slot profile, resolved by
+        (vendor, name) from the Orca filament library. Returns "" when the
+        profile is not in the library — we do NOT guess in that case."""
+        name = (profile or {}).get("name", "")
+        if not name:
+            return ""
+        vendor = profile.get("vendor", "")
+        for p in self._load_orca_filaments():
+            if p.get("vendor") == vendor and p.get("name") == name:
+                return p.get("type", "") or ""
+        return ""
+
+    def _effective_slot_profile(self, global_idx: int, ams_material: str) -> dict:
+        """Saved slot-profile override — but only while its material *family*
+        still matches the material currently loaded in the AMS.
+
+        Non-destructive suppression (Option A): when the family no longer matches
+        (e.g. a PETG profile but PLA loaded) we return {} → the slot falls back to
+        the generic default. The override stays in config.ini and reactivates as
+        soon as the matching material is loaded again. When the profile's family
+        is unknown we do NOT suppress (fail-safe)."""
+        profile = self._filament_profiles.get(global_idx) or {}
+        if not profile.get("name"):
+            return {}
+        prof_fam = self._material_family(self._profile_material(profile))
+        ams_fam  = self._material_family(ams_material)
+        if prof_fam and ams_fam and prof_fam != ams_fam:
+            return {}
+        return profile
+
     def _build_lane_data(self) -> dict:
       """Builds BBL AMS JSON for OrcaSlicer DevFilaSystemParser::ParseV1_0.
 
@@ -1965,7 +2014,10 @@ class KobraXBridge:
             #   1. User-Wahl (config.ini [filament_profiles]) — exakte Kontrolle
             #   2. Generic fallback (_TRAY_INFO_IDX) per material type - no
             #      vendor hint; OrcaSlicer then picks its own generic preset
-            user_profile = self._filament_profiles.get(slot_index) or {}
+            # Stale-profile guard: only apply the override while its material
+            # family still matches the loaded filament (PETG profile + PLA
+            # loaded -> dropped).
+            user_profile = self._effective_slot_profile(slot_index, material)
             if user_profile.get("name"):
                 vendor    = user_profile.get("vendor", "")
                 fila_name = user_profile.get("name", "")
@@ -2145,7 +2197,9 @@ class KobraXBridge:
         # preset name -> 'Anycubic PLA' matches the printer-specific
         # preset; an empty string previously led to Generic PLA.
         if occupied:
-          user_profile = self._filament_profiles.get(_global_index) or {}
+          # Stale-profile guard (see _effective_slot_profile): only apply the
+          # override while its material family still matches the loaded filament.
+          user_profile = self._effective_slot_profile(_global_index, material)
           fila_name = user_profile.get("name") or self._default_filament_name(material)
           gate_filament_name.append(fila_name)
         else:
@@ -2484,7 +2538,9 @@ class KobraXBridge:
         slots = []
         for i, s in enumerate(self._ams_slots):
             gidx = int(s.get("global_index", i))
-            profile = self._filament_profiles.get(gidx) or {}
+            # Stale-profile guard: only show the override while its material
+            # family matches the loaded AMS material (else slot has no brand).
+            profile = self._effective_slot_profile(gidx, s.get("type", ""))
             slots.append({
                 "slot_index":  gidx,
                 "material":    s.get("type", ""),

@@ -3,6 +3,17 @@
 ## [Unreleased]
 
 ### Fixed
+- **Slot kept showing/printing a stale filament type after a spool swap.** The
+  per-slot profile override (config.ini `[filament_profiles]`) stores only
+  vendor+name and was sticky: swapping the physical filament updated the AMS
+  colour and type live, but the saved profile persisted, so a slot that held
+  e.g. "KINGROON PETG Basic" kept showing/sending PETG in the panel and the
+  OrcaSlicer lane hint even after yellow PLA was loaded — and survived restarts.
+  The override is now applied only while its material *family* still matches the
+  loaded AMS material (PLA / PLA+ / PLA SILK / PLA MATTE are one family, so
+  within-family swaps never invalidate a valid profile). On a family change the
+  slot falls back to the generic default; the override is not deleted, so
+  reloading the original material reactivates it.
 - **Filament profiles not isolated between printers in a multi-printer bridge**
   (issue #74). The slot→profile mapping and `visible_vendors` were stored in a
   single global `[filament_profiles]` section, so configuring one printer
