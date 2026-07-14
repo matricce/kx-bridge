@@ -121,6 +121,7 @@
   "lbl_feed": "进料",
   "lbl_layers": "层",
   "lbl_light": "💡 灯光",
+  "lbl_pause_reason": "打印已暂停：",
   "lbl_remaining": "剩余时间:",
   "lbl_slicer_time": "切片预估:",
   "lbl_spoolman_sync_rate": "同步频率（秒，0=打印结束）",

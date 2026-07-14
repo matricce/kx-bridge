@@ -121,6 +121,7 @@
   "lbl_feed": "Cargar",
   "lbl_layers": "Capa",
   "lbl_light": "💡 Luz",
+  "lbl_pause_reason": "Impresión pausada:",
   "lbl_remaining": "Restante:",
   "lbl_slicer_time": "Estimación del slicer:",
   "lbl_spoolman_sync_rate": "Tasa de sincronización (s, 0=fin impresión)",

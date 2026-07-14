@@ -121,6 +121,7 @@
   "lbl_feed": "Carica",
   "lbl_layers": "Layer",
   "lbl_light": "💡 Luce",
+  "lbl_pause_reason": "Stampa in pausa:",
   "lbl_remaining": "Rimanente:",
   "lbl_slicer_time": "Stima slicer:",
   "lbl_spoolman_sync_rate": "Frequenza sync (s, 0=fine stampa)",
