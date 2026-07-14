@@ -3634,7 +3634,7 @@ class KobraXBridge:
             # filter applies and empty/shifted slots are not mapped incorrectly.
             gcode_filaments = None
             try:
-                db_file = self._db.get_file_by_name(filename)
+                db_file = self._store.get_file_by_name(filename)
                 if db_file and db_file.get("gcode_filaments"):
                     gcode_filaments = json.loads(db_file["gcode_filaments"])
             except Exception as e:
