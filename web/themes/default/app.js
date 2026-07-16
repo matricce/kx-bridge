@@ -746,6 +746,17 @@ function applyState(){
   // connection error banner – nur wenn überhaupt ein Drucker konfiguriert ist
   var banner=document.getElementById('conn-error-banner');
   if(banner){if(s.connection_error&&_printers.length>0){banner.textContent='⚠ '+tr('lbl_conn_error')+' '+s.connection_error;banner.style.display='block';}else{banner.style.display='none';}}
+  var pauseBanner=document.getElementById('pause-msg-banner');
+  if(pauseBanner){
+    if(s.pause_msg && s.print_state==='paused'){
+      var codePart = (s.error_code==0) ? ' ' :
+        ' [<a href="https://wiki.anycubic.com/en/error-codes/'+s.error_code+'-code" target="_blank">'+s.error_code+'</a>] ';
+      pauseBanner.innerHTML='⏸ '+tr('lbl_pause_reason')+codePart+s.pause_msg;
+      pauseBanner.style.display='block';
+    }else{
+      pauseBanner.style.display='none';
+    }
+  }
   var bannerVisible=false;
   var frb=document.getElementById('file-ready-banner');
   if(frb){

@@ -121,6 +121,7 @@
   "lbl_feed": "Load",
   "lbl_layers": "Layer",
   "lbl_light": "💡 Light",
+  "lbl_pause_reason": "Print paused:",
   "lbl_remaining": "Remaining:",
   "lbl_slicer_time": "Slicer estimate:",
   "lbl_spoolman_sync_rate": "Sync rate (s, 0=end of print)",

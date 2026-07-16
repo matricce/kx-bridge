@@ -893,6 +893,8 @@ class KobraXBridge:
           "filament_mode":      "toolhead",
           "supplies_usage":     0,
           "ace_drying": {"status": 0, "target_temp": 0, "duration": 0, "remain_time": 0, "humidity": None, "current_temp": None},
+          "error_code":         0,
+          "pause_msg":          "",
         }
         self._ams_slots: list[dict] = []       # flat global list; each entry has global_index + box_id
         self._ams_loaded_slot: int = -1        # global slot index of currently loaded slot
@@ -1205,6 +1207,17 @@ class KobraXBridge:
         elif kobra_state in ("free", "finished", "stoped", "canceled"):
             self._camera_autostarted = False
             self._camera_user_stopped = False  # release for the next print
+        
+        if kobra_state in ("pause", "paused"):
+            pause_msg = payload.get("msg", "")
+            if pause_msg:
+                error_code = payload.get("code", 0)
+                self._state["error_code"] = error_code
+                self._state["pause_msg"] = pause_msg
+                log.warning(f"Printer paused: [{error_code}] {pause_msg}")
+        elif kobra_state in ("resuming", "resumed", "printing", "finished", "stoped", "canceled"):
+            self._state["error_code"] = 0
+            self._state["pause_msg"] = ""
 
         # Job-History: Druckstart erkennen
         if kobra_state == "printing" and not self._current_job_id:
@@ -4359,6 +4372,8 @@ class KobraXBridge:
             "file_ready":       s["file_ready"],
             "print_start_dialog": s.get("print_start_dialog", getattr(self._args, "print_start_dialog", 1)),
             "version":          self._read_version(),
+            "pause_msg":        s.get("pause_msg", ""),
+            "error_code":       s.get("error_code", 0),
         })
 
     async def handle_moonraker_database(self, request):

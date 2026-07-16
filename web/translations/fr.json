@@ -121,6 +121,7 @@
   "lbl_feed": "Charger",
   "lbl_layers": "Couche",
   "lbl_light": "💡 Lumière",
+  "lbl_pause_reason": "Impression en pause :",
   "lbl_remaining": "Restant :",
   "lbl_slicer_time": "Estimation slicer :",
   "lbl_spoolman_sync_rate": "Taux de sync. (s, 0=fin impression)",

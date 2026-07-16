@@ -121,6 +121,7 @@
   "lbl_feed": "Einziehen",
   "lbl_layers": "Layer",
   "lbl_light": "💡 Licht",
+  "lbl_pause_reason": "Druck pausiert:",
   "lbl_remaining": "Restzeit:",
   "lbl_slicer_time": "Slicer-Schätzung:",
   "lbl_spoolman_sync_rate": "Sync-Rate (s, 0=Druckende)",
