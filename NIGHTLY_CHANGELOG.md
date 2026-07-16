@@ -1,5 +1,6 @@
 ## Changes in this build
 
+- Fix: a per-slot filament profile override (custom vendor/name mapping) kept showing/sending the old filament type after the physical spool was swapped for a different material — the override is now suppressed once the material family no longer matches what's actually loaded, and reactivates automatically if you swap back (PR #88, thanks @walterioo)
 - Feat: the dashboard is now fully customizable — enter edit mode to freely drag, resize (via GridStack.js), hide, and rearrange every card on a 12-column snap grid
 - Feat: two built-in layout presets ("Standard", "Wide desktop" per Issue #89's original proposal) plus the ability to save your own layout as a named custom preset, switch between them, and delete presets you no longer need
 - Fix: camera stream would freeze after ~15-30 minutes — non-monotonic timestamps from the printer's FLV stream broke ffmpeg's realtime pacing; now handled with `-use_wallclock_as_timestamps` (Issue #90)
