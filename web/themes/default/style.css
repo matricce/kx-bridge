@@ -95,18 +95,63 @@ main{flex:1;overflow-y:auto;padding:20px}
 
 /* ── CARD ── */
 .card{background:var(--card);border:1px solid var(--border);border-radius:12px;
-  padding:18px;transition:box-shadow .15s,transform .15s}
+  padding:18px;transition:box-shadow .15s,transform .15s;container-type:inline-size}
 .card:hover{box-shadow:0 4px 20px rgba(0,0,0,.3);transform:translateY(-1px)}
 .card-title{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--txt2);
   margin-bottom:14px;display:flex;align-items:center;gap:8px}
 .card-title span{font-size:14px}
+
+/* ── DASHBOARD FREE GRID (GridStack) ── */
+/* .grid-stack-item-content is already position:absolute + fills the cell
+   (GridStack's own CSS). The card inside just needs to fill that box — it
+   must NOT be position:absolute itself, or it can sit above/intercept
+   GridStack's resize-handle hit area and drag listeners. */
+/* Doc pattern: the card fills its cell; content scrolls if the user resizes
+   the cell smaller than the content needs. */
+.grid-stack-item-content>.card{width:100%;height:100%;margin:0;overflow:auto;box-sizing:border-box}
+/* .card:hover{transform:translateY(-1px)} creates a new containing block right
+   as the user starts dragging, throwing off GridStack's position math. Kill
+   the hover transform for dashboard cards specifically. */
+.grid-stack-item-content>.card:hover{transform:none}
+/* Edit mode: dashed outline + grab cursor on each item */
+#dash-grid.editing .grid-stack-item-content>.card{cursor:grab;
+  outline:1px dashed var(--accent);outline-offset:-1px;user-select:none}
+/* GridStack placeholder styled to theme */
+.grid-stack>.grid-stack-placeholder>.placeholder-content{
+  background:rgba(120,150,255,.12);border:1px dashed var(--accent);border-radius:12px}
+/* Resize handles only visible in edit mode */
+#dash-grid:not(.editing) .ui-resizable-handle{display:none!important}
+/* Per-card controls (hide button) */
+.dash-card-controls{display:none;position:absolute;top:8px;right:8px;gap:4px;z-index:6}
+#dash-grid.editing .dash-card-controls{display:flex}
+.dash-card-ctrl-btn{width:24px;height:24px;border-radius:6px;border:1px solid var(--border);
+  background:var(--raised);color:var(--txt2);cursor:pointer;font-size:12px;
+  display:flex;align-items:center;justify-content:center;line-height:1}
+.dash-card-ctrl-btn:hover{color:var(--accent);border-color:var(--accent)}
+#dash-hidden-bar{display:none;flex-wrap:wrap;gap:8px;margin-top:12px;padding:10px;
+  border:1px dashed var(--border);border-radius:10px}
+#dash-hidden-bar.show{display:flex}
+.dash-hidden-chip{display:flex;align-items:center;gap:6px;padding:4px 10px;font-size:12px;
+  background:var(--raised);border:1px solid var(--border);border-radius:20px;color:var(--txt2)}
+.dash-hidden-chip button{background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;padding:0}
+
+@media(max-width:768px){
+  #dash-toolbar{display:none}
+}
 
 /* ── HERO ── */
 .hero{grid-column:1/-1;display:grid;grid-template-columns:1fr 320px;gap:16px}
 @media(max-width:900px){.hero{grid-template-columns:1fr}}
 .cam-wrap{background:#0a0a0e;border-radius:10px;overflow:hidden;
   min-height:180px;max-height:320px;display:flex;align-items:center;justify-content:center;position:relative}
-.cam-wrap img,.cam-wrap video{width:100%;max-height:320px;height:auto;display:block;object-fit:contain}
+.cam-wrap img,.cam-wrap video{width:100%;max-height:320px;height:auto;display:block;object-fit:contain;
+  -webkit-user-drag:none;user-select:none}
+/* Inside the dashboard grid the camera card can be resized taller than the
+   default 320px cap — flex column: title row keeps its height, cam view
+   flexes to fill whatever cell height the user chose. */
+.grid-stack-item-content>#card-camera{display:flex;flex-direction:column}
+.grid-stack-item-content .cam-wrap{flex:1;min-height:0;max-height:none}
+.grid-stack-item-content .cam-wrap img,.grid-stack-item-content .cam-wrap video{max-height:100%;height:100%}
 .cam-placeholder{color:var(--txt2);font-size:13px;text-align:center;padding:20px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .cam-spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,.15);
@@ -161,6 +206,12 @@ main{flex:1;overflow-y:auto;padding:20px}
 /* ── TEMPS ── */
 .temp-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .temp-card-inner{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@container (max-width:340px){
+  .temp-card-inner{grid-template-columns:1fr}
+  .temp-val{font-size:24px}
+  .temp-edit{flex-wrap:wrap}
+  .temp-input{width:100%}
+}
 .temp-block{background:var(--raised);border-radius:10px;padding:14px;position:relative}
 .temp-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt2);margin-bottom:6px}
 .temp-row{display:flex;align-items:baseline;gap:6px}

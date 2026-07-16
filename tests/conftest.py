@@ -2,12 +2,13 @@
 Shared fixtures für KX-Bridge Tests.
 Startet die Bridge in-process mit einem Mock-MQTT-Client (kein Drucker nötig).
 """
-import sys, types, argparse, pytest, pytest_asyncio
+import sys, types, argparse, tempfile, pytest, pytest_asyncio
 from unittest.mock import MagicMock
 from aiohttp.test_utils import TestClient, TestServer
 
 # ── Pfad ──────────────────────────────────────────────────────────────────────
-sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent / "bridge"))
+# Flat repo layout (no bridge/ subfolder anymore) — point at the repo root.
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent))
 
 # ── env_loader mocken (keine .env nötig) ──────────────────────────────────────
 env_mod = types.ModuleType("env_loader")
@@ -41,6 +42,7 @@ def make_args(**overrides):
         device_id   = "",
         host        = "127.0.0.1",
         port        = 7125,
+        data_dir    = tempfile.mkdtemp(prefix="kxtest-"),
     )
     for k, v in overrides.items():
         setattr(args, k, v)

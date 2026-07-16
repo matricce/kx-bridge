@@ -6,7 +6,9 @@
 <title>KX-Bridge</title>
 <link rel="stylesheet" href="/kx/ui/style.css">
 <link rel="stylesheet" href="/kx/ui/lib/pickr-nano.min.css">
+<link rel="stylesheet" href="/kx/ui/lib/gridstack.min.css">
 <script src="/kx/ui/lib/pickr.min.js"></script>
+<script src="/kx/ui/lib/gridstack-all.min.js"></script>
 <body>
 
 <div id="conn-error-banner" style="display:none;background:#c0392b;color:#fff;padding:10px 18px;font-size:14px;text-align:center;position:sticky;top:0;z-index:999;"></div>
@@ -137,9 +139,19 @@
   <main>
     <!-- ═══ DASHBOARD ═══ -->
     <div class="panel active" id="panel-dashboard">
-      <div class="grid">
+      <div id="dash-toolbar" style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:10px">
+        <select id="dash-preset" onchange="applyDashPreset(this.value)" style="display:none;padding:4px 8px;font-size:12px;background:var(--raised);color:var(--txt);border:1px solid var(--border);border-radius:6px">
+          <option value="standard" id="dash-preset-standard">Standard</option>
+          <option value="wide89" id="dash-preset-wide89">Desktop breit</option>
+        </select>
+        <button id="dash-preset-delete-btn" onclick="deleteCurrentDashPreset()" style="display:none;padding:4px 10px;font-size:12px;background:var(--raised);color:var(--err);border:1px solid var(--border);border-radius:6px;cursor:pointer">🗑</button>
+        <button id="dash-preset-save-btn" onclick="saveCurrentAsDashPreset()" style="display:none;padding:4px 10px;font-size:12px;background:var(--raised);color:var(--txt2);border:1px solid var(--border);border-radius:6px;cursor:pointer">💾 <span id="dash-lbl-save-preset">Als Preset speichern</span></button>
+        <button id="dash-reset-btn" onclick="resetDashLayout()" style="display:none;padding:4px 10px;font-size:12px;background:var(--raised);color:var(--txt2);border:1px solid var(--border);border-radius:6px;cursor:pointer">↺ <span id="dash-lbl-reset">Zurücksetzen</span></button>
+        <button id="dash-edit-btn" onclick="toggleDashEdit()" style="padding:4px 10px;font-size:12px;background:var(--raised);color:var(--txt2);border:1px solid var(--border);border-radius:6px;cursor:pointer">🖉 <span id="dash-lbl-edit">Dashboard anpassen</span></button>
+      </div>
+      <div class="grid-stack" id="dash-grid">
         <!-- Kamera -->
-        <div class="card" style="grid-column:1/-1">
+        <div class="card" id="card-camera" data-card="camera" gs-w="12" gs-h="7">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
             <div class="card-title" style="margin-bottom:0"><span>📷</span> <span id="d-card-cam">Kamera</span></div>
             <div style="display:flex;align-items:center;gap:10px">
@@ -154,7 +166,7 @@
           <div class="cam-wrap" id="cam-wrap">
             <div class="cam-placeholder" id="cam-placeholder"><span id="cam-placeholder-txt">📷 Kamera nicht gestartet</span></div>
             <div class="cam-spinner" id="cam-spinner"></div>
-            <img id="cam-img" style="display:none;width:100%;height:auto" alt="Kamera">
+            <img id="cam-img" draggable="false" style="display:none;width:100%;height:auto" alt="Kamera">
             <div class="cam-overlay" id="cam-overlay" style="display:none">
               <div style="font-size:12px;color:#fff" id="cam-fname"></div>
             </div>
@@ -164,7 +176,7 @@
         </div>
 
         <!-- Fortschritt -->
-        <div class="card" style="grid-column:1/-1">
+        <div class="card" id="card-progress" data-card="progress" gs-w="12" gs-h="6">
           <div class="card-title"><span>◉</span> <span id="d-card-progress">Fortschritt</span></div>
           <img id="d-thumbnail" src="" alt="" style="display:none;width:100%;max-height:160px;object-fit:contain;border-radius:8px;background:#111;margin-bottom:10px">
           <div class="pct-big"><span id="d-pct">0</span><small>%</small></div>
@@ -210,7 +222,7 @@
         </div>
 
         <!-- Temperatursteuerung + Verlauf -->
-        <div class="card" style="grid-column:1/-1">
+        <div class="card" id="card-temps" data-card="temps" gs-w="6" gs-h="7">
           <div class="card-title"><span>⊙</span> <span id="d-card-temps">Temperaturen</span></div>
           <div class="temp-card-inner">
             <div class="temp-block">
@@ -253,7 +265,7 @@
         </div>
 
         <!-- Achsensteuerung -->
-        <div class="card">
+        <div class="card" id="card-motion" data-card="motion" gs-w="6" gs-h="7">
           <div class="card-title"><span>✛</span> <span id="ptitle-motion-xy">Achsensteuerung</span></div>
           <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
             <!-- XY -->
@@ -301,7 +313,7 @@
         </div>
 
         <!-- Print Speed -->
-        <div class="card">
+        <div class="card" id="card-speed" data-card="speed" gs-w="6" gs-h="3">
           <div class="card-title"><span>🏎</span> <span id="d-card-speed">Druckgeschwindigkeit</span></div>
           <div style="display:flex;gap:8px;margin-top:4px">
             <button class="spd-btn" id="d-spd-1" onclick="setSpeed(1)">
@@ -323,7 +335,7 @@
         </div>
 
         <!-- Lüfter -->
-        <div class="card">
+        <div class="card" id="card-fan" data-card="fan" gs-w="6" gs-h="3">
           <div class="card-title"><span>🌀</span> <span id="d-card-lightfan">Lüfter</span></div>
           <div class="slider-row">
             <input type="range" class="slider" min="0" max="100" value="0" id="d-fan" oninput="document.getElementById('d-fan-val').textContent=this.value" onchange="setFan()">
@@ -338,18 +350,19 @@
           </div>
         </div>
 
-        <div id="d-ace-dry-wrap" style="display:none">
-          <div id="d-ace-dry-grid" style="display:contents"></div>
-        </div>
-
         <!-- AMS -->
-        <div class="card" style="grid-column:1/-1" id="d-ams-card">
+        <div class="card" id="d-ams-card" data-card="ams" gs-w="12" gs-h="4">
           <div class="card-title"><span>◫</span> <span id="d-card-ams">Filament</span></div>
           <div class="ams-slots" id="ams-slots">
             <div style="grid-column:1/-1;text-align:center;color:var(--txt2);padding:20px" id="ams-no-data">Keine AMS-Daten empfangen</div>
           </div>
         </div>
       </div>
+      <!-- ACE-Trocknung: außerhalb des GridStack-Grids, per Drucker-State eingeblendet -->
+      <div id="d-ace-dry-wrap" class="grid" style="display:none;margin-top:16px">
+        <div id="d-ace-dry-grid" style="display:contents"></div>
+      </div>
+      <div id="dash-hidden-bar"></div>
     </div>
 
     <!-- ═══ CONSOLE ═══ -->

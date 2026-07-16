@@ -40,14 +40,14 @@ async def test_settings_get_returns_configured_values(client_configured):
 
 
 @pytest.mark.asyncio
-async def test_settings_post_writes_env(client):
-    """POST /api/settings schreibt Werte in .env-Datei."""
+async def test_settings_post_writes_config_ini(client):
+    """POST /api/settings schreibt Werte in config.ini (Migration von .env, v0.9.x)."""
     c, bridge = client
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        env_path = pathlib.Path(tmpdir) / ".env"
-        env_path.write_text("")
-        bridge._find_env_path = lambda: env_path
+        config_path = pathlib.Path(tmpdir) / "config.ini"
+        bridge._find_config_path = lambda: config_path
+        bridge._restart_bridge = lambda: None  # POST triggers a restart — don't kill the test process
 
         resp = await c.post("/api/settings", json={
             "printer_ip": "10.0.0.5",
@@ -59,24 +59,28 @@ async def test_settings_post_writes_env(client):
         })
         assert resp.status == 200
 
-        content = env_path.read_text()
-        assert "PRINTER_IP=10.0.0.5"          in content
-        assert "MQTT_USERNAME=userABCD"        in content
-        assert "DEVICE_ID=deadbeef01234567"    in content
+        content = config_path.read_text()
+        assert "printer_ip = 10.0.0.5"       in content
+        assert "username = userABCD"         in content
+        assert "device_id = deadbeef01234567" in content
 
 
 @pytest.mark.asyncio
 async def test_settings_post_preserves_existing_keys(client):
-    """POST darf unbekannte Keys in .env nicht löschen (z.B. GITEA_TOKEN)."""
+    """POST darf unbekannte Sections/Optionen in config.ini nicht löschen (z.B. Spoolman-Server)."""
     c, bridge = client
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        env_path = pathlib.Path(tmpdir) / ".env"
-        env_path.write_text("GITEA_TOKEN=mytoken\nPRINTER_IP=old\n")
-        bridge._find_env_path = lambda: env_path
+        config_path = pathlib.Path(tmpdir) / "config.ini"
+        config_path.write_text(
+            "[spoolman]\nserver = http://192.168.1.50:7912\n\n"
+            "[connection]\nprinter_ip = old\n"
+        )
+        bridge._find_config_path = lambda: config_path
+        bridge._restart_bridge = lambda: None
 
         await c.post("/api/settings", json={"printer_ip": "10.0.0.99"})
 
-        content = env_path.read_text()
-        assert "GITEA_TOKEN=mytoken" in content
-        assert "PRINTER_IP=10.0.0.99" in content
+        content = config_path.read_text()
+        assert "server = http://192.168.1.50:7912" in content
+        assert "printer_ip = 10.0.0.99" in content

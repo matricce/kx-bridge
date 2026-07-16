@@ -643,7 +643,12 @@ class CameraCache:
         if url.lower().startswith("rtsp://"):
             args += ["-probesize", "32", "-analyzeduration", "0", "-rtsp_transport", "tcp"]
         else:
-            args += ["-probesize", "500000", "-analyzeduration", "500000"]
+            # The printer's FLV source occasionally emits non-monotonic container
+            # timestamps (PTS jumps of days) while the video data itself stays
+            # valid. Without this flag ffmpeg's realtime pacing breaks on such a
+            # jump and the stream stalls after ~15-30 min (Issue #90).
+            args += ["-use_wallclock_as_timestamps", "1",
+                     "-probesize", "500000", "-analyzeduration", "500000"]
         return args
 
     async def _run_jpeg_loop(self):
@@ -3759,21 +3764,33 @@ class KobraXBridge:
         # (only the bare HTML) -> without inlining neither
         # a single button works there (Issue #29). It is equally correct in a normal browser.
         base = os.path.join(_WEB_BASE, "web", "themes", self._ui_theme)
-        try:
-            css = pathlib.Path(os.path.join(base, "style.css")).read_text(encoding="utf-8")
-            page = page.replace(
-                '<link rel="stylesheet" href="/kx/ui/style.css">',
-                "<style>\n" + css + "\n</style>")
-        except OSError:
-            pass
-        try:
-            js = pathlib.Path(os.path.join(base, "app.js")).read_text(encoding="utf-8")
-            js = js.replace("'__VERSION__'", f"'{self._read_version()}'")
-            page = page.replace(
-                '<script src="/kx/ui/app.js"></script>',
-                "<script>\n" + js + "\n</script>")
-        except OSError:
-            pass
+
+        # Inline vendored lib CSS/JS too — the OrcaSlicer webview loads no
+        # external <link>/<script src>, so GridStack (and its stylesheet) must
+        # be embedded like style.css/app.js. Order matters: GridStack's <script>
+        # sits in <head>, before app.js, so it is defined when app.js inits.
+        def _inline_css(rel_path: str, link_tag: str):
+            nonlocal page
+            try:
+                data = pathlib.Path(os.path.join(base, rel_path)).read_text(encoding="utf-8")
+                page = page.replace(link_tag, "<style>\n" + data + "\n</style>")
+            except OSError:
+                pass
+
+        def _inline_js(rel_path: str, script_tag: str, version_sub: bool = False):
+            nonlocal page
+            try:
+                data = pathlib.Path(os.path.join(base, rel_path)).read_text(encoding="utf-8")
+                if version_sub:
+                    data = data.replace("'__VERSION__'", f"'{self._read_version()}'")
+                page = page.replace(script_tag, "<script>\n" + data + "\n</script>")
+            except OSError:
+                pass
+
+        _inline_css("lib/gridstack.min.css", '<link rel="stylesheet" href="/kx/ui/lib/gridstack.min.css">')
+        _inline_js("lib/gridstack-all.min.js", '<script src="/kx/ui/lib/gridstack-all.min.js"></script>')
+        _inline_css("style.css", '<link rel="stylesheet" href="/kx/ui/style.css">')
+        _inline_js("app.js", '<script src="/kx/ui/app.js"></script>', version_sub=True)
 
         return web.Response(text=page, content_type="text/html",
                             headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
@@ -4132,10 +4149,10 @@ class KobraXBridge:
         printer and is ~1 s faster)."""
         url = self._state.get("camera_url", "")
         if not url:
-            return web.Response(status=503, text="Keine Kamera-URL bekannt")
+            return web.Response(status=503, text="No camera URL known")
         self.camera_cache.set_url(url)
         await self.camera_cache.ensure_running()
-        # Initialer Warmup: bis zu 5 s auf ersten Frame warten
+        # Initial warmup: wait up to 5s for the first frame
         deadline = time.time() + 5.0
         while not self.camera_cache.latest_jpeg and time.time() < deadline:
             await asyncio.sleep(0.1)
@@ -4154,7 +4171,7 @@ class KobraXBridge:
         """MJPEG proxy: FLV → MJPEG via ffmpeg, served as multipart/x-mixed-replace."""
         url = self._state.get("camera_url", "")
         if not url:
-            return web.Response(status=503, text="Keine Kamera-URL bekannt")
+            return web.Response(status=503, text="No camera URL known")
 
         is_rtsp = url.lower().startswith("rtsp://")
         ffmpeg_input_args = [
@@ -4164,7 +4181,9 @@ class KobraXBridge:
         if is_rtsp:
             ffmpeg_input_args += ["-probesize", "32", "-analyzeduration", "0", "-rtsp_transport", "tcp"]
         else:
-            ffmpeg_input_args += ["-probesize", "1000000", "-analyzeduration", "1000000"]
+            # See CameraCache._input_args - same non-monotonic-timestamp fix (Issue #90).
+            ffmpeg_input_args += ["-use_wallclock_as_timestamps", "1",
+                                  "-probesize", "1000000", "-analyzeduration", "1000000"]
 
         # Start ffmpeg BEFORE the StreamResponse is opened
         # (so we can still send a normal HTTP response on error)
@@ -4245,7 +4264,7 @@ class KobraXBridge:
         additional FLV connection to the printer (single-client limit)."""
         url = self._state.get("camera_url", "")
         if not url:
-            return web.Response(status=503, text="Keine Kamera-URL bekannt")
+            return web.Response(status=503, text="No camera URL known")
         self.camera_cache.set_url(url)
         await self.camera_cache.ensure_running()
 

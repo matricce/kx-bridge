@@ -409,6 +409,15 @@ function applyLang(){
   setText('lbl-set-theme',T.settings_cat_theme||'Hell / Dunkel umschalten');
   setText('lbl-poll-interval',T.settings_poll||'Poll-Intervall (Sekunden)');
   setText('lbl-verbose-http-log',T.settings_verbose_http_log||'Log every HTTP request (verbose)');
+  var dashLbl=document.getElementById('dash-lbl-edit');
+  if(dashLbl)dashLbl.textContent=_dashEditing?(T.dash_done||'Done'):(T.dash_edit||'Customize dashboard');
+  setText('dash-lbl-reset',T.dash_reset||'Reset');
+  setText('dash-lbl-save-preset',T.dash_save_preset||'Save as preset');
+  var dashPresetStd=document.getElementById('dash-preset-standard');
+  if(dashPresetStd)dashPresetStd.textContent=T.dash_preset_standard||'Standard';
+  var dashPresetWide=document.getElementById('dash-preset-wide89');
+  if(dashPresetWide)dashPresetWide.textContent=T.dash_preset_wide89||'Wide desktop';
+  if(document.getElementById('dash-hidden-bar'))_dashRenderHiddenBar();
   setText('lbl-filament-mapping',T.settings_filament_mapping||'Filament-Profil-Mapping (pro Slot)');
   setText('lbl-filament-mapping-save',T.settings_filament_mapping_save||'Mapping speichern');
   setText('lbl-visible-vendors',T.settings_visible_vendors||'Sichtbare Hersteller (Profil-Dropdown)');
@@ -1971,8 +1980,313 @@ var pollTimer;
   }).catch(function(){});
   poll();pollTimer=setInterval(poll,ms);
   setInterval(_loadSpoolmanStatus,30000);
+  // initDashGrid() is called at the very end of the file, after all the
+  // DASH_* var declarations below have executed (they are hoisted but not yet
+  // assigned at this point in the IIFE).
 })();
 
+// ── Dashboard Free Grid (Issue #89) ────────────────────────────────────────
+// User-customizable dashboard powered by GridStack (v10, docs: gridstack.js).
+// Cards move + resize on a 12-column snap grid; layout persisted per browser
+// in localStorage. Built on documented APIs only:
+//   - float:false (default)  -> compact packing, no holes between cards
+//   - staticGrid:true        -> locked by default, setStatic(false) in edit mode
+//   - grid.save(false)/load(layout,false) -> serialize/restore by gs-id
+//   - draggable.cancel       -> inputs/buttons/img excluded from drag start
+//   - columnOpts.breakpoints -> 1-column below 700px GRID width (sidebar-aware)
+var DASH_STORAGE_KEY='dashLayout';
+var DASH_LAYOUT_VERSION=3;   // v1/v2 = older editors; discard those states
+var DASH_CARD_KEYS=['camera','progress','temps','motion','speed','fan','ams'];
+// Layout arrays in GridStack save()/load() format. cellHeight=60px.
+var DASH_DEFAULT_LAYOUT=[
+  {id:'camera',  x:0,y:0, w:12,h:7},
+  {id:'progress',x:0,y:7, w:12,h:6},
+  {id:'temps',   x:0,y:13,w:6, h:7},
+  {id:'motion',  x:6,y:13,w:6, h:7},
+  {id:'speed',   x:0,y:20,w:6, h:3},
+  {id:'fan',     x:6,y:20,w:6, h:3},
+  {id:'ams',     x:0,y:23,w:12,h:4},
+];
+// "Wide desktop" preset (Blaim, Issue #89): big camera left, settings center,
+// motion right.
+var DASH_PRESET_WIDE=[
+  {id:'progress',x:0, y:0, w:12,h:4},
+  {id:'camera',  x:0, y:4, w:6, h:11},
+  {id:'temps',   x:6, y:4, w:3, h:7},
+  {id:'speed',   x:6, y:11,w:3, h:2},
+  {id:'fan',     x:6, y:13,w:3, h:2},
+  {id:'motion',  x:9, y:4, w:3, h:11},
+  {id:'ams',     x:0, y:15,w:12,h:4},
+];
+var _dashGrid=null;
+var _dashEditing=false;
+var _dashHidden=[];   // [{id,x,y,w,h}] cards currently hidden (position kept for re-show)
+
+// GridStack requires .grid-stack-item > .grid-stack-item-content around each
+// card — wrap the existing .card elements in place (IDs/event handlers survive,
+// appendChild moves nodes without recreating them).
+function _dashWrapCards(){
+  var grid=document.getElementById('dash-grid');
+  if(!grid)return;
+  DASH_CARD_KEYS.forEach(function(key){
+    var card=grid.querySelector('[data-card="'+key+'"]');
+    if(!card||card.parentNode.classList.contains('grid-stack-item-content'))return;
+    var item=document.createElement('div');
+    item.className='grid-stack-item';
+    item.setAttribute('gs-id',key);
+    var content=document.createElement('div');
+    content.className='grid-stack-item-content';
+    grid.insertBefore(item,card);
+    item.appendChild(content);
+    content.appendChild(card);
+  });
+}
+
+function _dashItem(key){
+  return document.querySelector('#dash-grid .grid-stack-item[gs-id="'+key+'"]');
+}
+
+function _dashLoadState(){
+  try{
+    var raw=localStorage.getItem(DASH_STORAGE_KEY);
+    if(!raw)return null;
+    var s=JSON.parse(raw);
+    if(!s||s.version!==DASH_LAYOUT_VERSION||!Array.isArray(s.layout))return null;
+    return s;
+  }catch(e){return null;}
+}
+function _dashSaveState(){
+  if(!_dashGrid)return;
+  localStorage.setItem(DASH_STORAGE_KEY,JSON.stringify({
+    version:DASH_LAYOUT_VERSION,
+    layout:_dashGrid.save(false),   // [{id,x,y,w,h},…] — visible widgets only
+    hidden:_dashHidden.slice(),
+  }));
+}
+
+function initDashGrid(){
+  var el=document.getElementById('dash-grid');
+  if(!el||typeof GridStack==='undefined')return;
+  _dashWrapCards();
+  _dashGrid=GridStack.init({
+    cellHeight:60,
+    margin:8,
+    staticGrid:true,   // locked by default; setStatic(false) enables drag+resize
+    columnOpts:{breakpoints:[{w:700,c:1}]},  // grid-width based (sidebar-aware)
+    draggable:{cancel:'input,textarea,button,select,option,img,.slider'},
+  },el);
+  var state=_dashLoadState();
+  if(state){
+    _dashHidden=Array.isArray(state.hidden)?state.hidden:[];
+    _dashGrid.load(state.layout,false);       // update matching ids, no add/remove
+    _dashHidden.forEach(function(n){
+      var item=_dashItem(n.id);
+      if(item){_dashGrid.removeWidget(item,false);item.style.display='none';}
+    });
+  }else{
+    _dashGrid.load(DASH_DEFAULT_LAYOUT,false);
+  }
+  _dashGrid.on('change',function(){if(_dashEditing)_dashSaveState();});
+  _dashRefreshPresetDropdown();
+}
+
+function toggleDashEdit(){
+  if(!_dashGrid)return;
+  _dashEditing=!_dashEditing;
+  _dashGrid.setStatic(!_dashEditing);
+  document.getElementById('dash-grid').classList.toggle('editing',_dashEditing);
+  document.getElementById('dash-lbl-edit').textContent=_dashEditing?(T.dash_done||'Done'):(T.dash_edit||'Customize dashboard');
+  document.getElementById('dash-reset-btn').style.display=_dashEditing?'':'none';
+  document.getElementById('dash-preset').style.display=_dashEditing?'':'none';
+  document.getElementById('dash-preset-save-btn').style.display=_dashEditing?'':'none';
+  _dashUpdatePresetDeleteBtn();
+  if(_dashEditing)_dashInjectControls(); else _dashRemoveControls();
+  _dashRenderHiddenBar();
+  if(!_dashEditing)_dashSaveState();
+}
+
+// ── Custom presets (user-saved layouts) ────────────────────────────────────
+var DASH_CUSTOM_PRESETS_KEY='dashCustomPresets';
+var DASH_BUILTIN_PRESET_IDS=['standard','wide89'];
+
+function _dashLoadCustomPresets(){
+  try{
+    var raw=localStorage.getItem(DASH_CUSTOM_PRESETS_KEY);
+    var obj=raw?JSON.parse(raw):{};
+    return (obj&&typeof obj==='object')?obj:{};
+  }catch(e){return {};}
+}
+function _dashSaveCustomPresets(presets){
+  localStorage.setItem(DASH_CUSTOM_PRESETS_KEY,JSON.stringify(presets));
+}
+
+function _dashRefreshPresetDropdown(){
+  var sel=document.getElementById('dash-preset');
+  if(!sel)return;
+  var current=sel.value;
+  var customs=_dashLoadCustomPresets();
+  // Remove previously-rendered custom <option>s, keep the two built-ins.
+  Array.prototype.slice.call(sel.querySelectorAll('option')).forEach(function(o){
+    if(DASH_BUILTIN_PRESET_IDS.indexOf(o.value)===-1)sel.removeChild(o);
+  });
+  Object.keys(customs).sort().forEach(function(name){
+    var opt=document.createElement('option');
+    opt.value='custom:'+name;
+    opt.textContent=name;
+    sel.appendChild(opt);
+  });
+  if(Array.prototype.some.call(sel.options,function(o){return o.value===current;}))sel.value=current;
+  _dashUpdatePresetDeleteBtn();
+}
+
+function _dashUpdatePresetDeleteBtn(){
+  var sel=document.getElementById('dash-preset');
+  var delBtn=document.getElementById('dash-preset-delete-btn');
+  if(!sel||!delBtn)return;
+  var isCustom=sel.value.indexOf('custom:')===0;
+  delBtn.style.display=(_dashEditing&&isCustom)?'':'none';
+}
+
+function saveCurrentAsDashPreset(){
+  if(!_dashGrid)return;
+  var name=(prompt(T.dash_preset_name_prompt||'Preset name:')||'').trim();
+  if(!name)return;
+  var customs=_dashLoadCustomPresets();
+  customs[name]=_dashGrid.save(false);
+  _dashSaveCustomPresets(customs);
+  _dashRefreshPresetDropdown();
+  var sel=document.getElementById('dash-preset');
+  if(sel)sel.value='custom:'+name;
+  _dashUpdatePresetDeleteBtn();
+}
+
+function deleteCurrentDashPreset(){
+  var sel=document.getElementById('dash-preset');
+  if(!sel||sel.value.indexOf('custom:')!==0)return;
+  var name=sel.value.slice(7);
+  if(!confirm((T.dash_preset_delete_confirm||'Delete preset "{name}"?').replace('{name}',name)))return;
+  var customs=_dashLoadCustomPresets();
+  delete customs[name];
+  _dashSaveCustomPresets(customs);
+  sel.value='standard';
+  _dashRefreshPresetDropdown();
+  resetDashLayout();
+}
+
+function _dashInjectControls(){
+  DASH_CARD_KEYS.forEach(function(key){
+    if(_dashHidden.some(function(n){return n.id===key;}))return;
+    var content=document.querySelector('#dash-grid .grid-stack-item[gs-id="'+key+'"] .grid-stack-item-content');
+    if(!content||content.querySelector('.dash-card-controls'))return;
+    var ctrl=document.createElement('div');
+    ctrl.className='dash-card-controls';
+    var hideBtn=document.createElement('button');
+    hideBtn.className='dash-card-ctrl-btn';
+    hideBtn.title=T.dash_hide||'Hide';
+    hideBtn.textContent='👁';
+    hideBtn.addEventListener('click',function(e){e.stopPropagation();dashHideCard(key);});
+    ctrl.appendChild(hideBtn);
+    content.appendChild(ctrl);
+  });
+}
+function _dashRemoveControls(){
+  var nodes=document.querySelectorAll('#dash-grid .dash-card-controls');
+  Array.prototype.forEach.call(nodes,function(n){n.parentNode&&n.parentNode.removeChild(n);});
+}
+
+function _dashCardLabel(key){
+  var card=document.querySelector('[data-card="'+key+'"]');
+  if(!card)return key;
+  var t=card.querySelector('.card-title');
+  return t?t.textContent.trim():key;
+}
+
+function _dashRenderHiddenBar(){
+  var bar=document.getElementById('dash-hidden-bar');
+  if(!bar)return;
+  bar.innerHTML='';
+  if(!_dashEditing||!_dashHidden.length){bar.classList.remove('show');return;}
+  bar.classList.add('show');
+  var label=document.createElement('span');
+  label.textContent=(T.dash_hidden_cards||'Hidden cards')+': ';
+  bar.appendChild(label);
+  _dashHidden.forEach(function(n){
+    var chip=document.createElement('span');
+    chip.className='dash-hidden-chip';
+    chip.appendChild(document.createTextNode(_dashCardLabel(n.id)+' '));
+    var btn=document.createElement('button');
+    btn.textContent='👁';
+    btn.title=T.dash_show||'Show';
+    btn.addEventListener('click',function(){dashShowCard(n.id);});
+    chip.appendChild(btn);
+    bar.appendChild(chip);
+  });
+}
+
+function dashHideCard(key){
+  if(_dashHidden.some(function(n){return n.id===key;}))return;
+  var item=_dashItem(key);
+  if(!item||!_dashGrid)return;
+  // Remember position/size so re-show can restore it.
+  var n=item.gridstackNode||{};
+  _dashHidden.push({id:key,x:n.x,y:n.y,w:n.w,h:n.h});
+  _dashGrid.removeWidget(item,false);   // keep DOM element, drop the widget
+  item.style.display='none';
+  _dashSaveState();
+  _dashRenderHiddenBar();
+}
+function dashShowCard(key){
+  var entry=null;
+  _dashHidden=_dashHidden.filter(function(n){if(n.id===key){entry=n;return false;}return true;});
+  var item=_dashItem(key);
+  if(item&&_dashGrid){
+    item.style.display='';
+    _dashGrid.makeWidget(item);
+    if(entry&&entry.w)_dashGrid.update(item,{x:entry.x,y:entry.y,w:entry.w,h:entry.h});
+    if(_dashEditing)_dashInjectControls();
+  }
+  _dashSaveState();
+  _dashRenderHiddenBar();
+}
+
+function _dashShowAllHidden(){
+  _dashHidden.slice().forEach(function(n){dashShowCard(n.id);});
+  _dashHidden=[];
+}
+
+function resetDashLayout(){
+  if(!_dashGrid)return;
+  localStorage.removeItem(DASH_STORAGE_KEY);
+  var sel=document.getElementById('dash-preset');if(sel)sel.value='standard';
+  _dashShowAllHidden();
+  _dashGrid.load(DASH_DEFAULT_LAYOUT,false);
+  if(_dashEditing){_dashInjectControls();_dashSaveState();}
+  _dashRenderHiddenBar();
+}
+function applyDashPreset(name){
+  if(name==='standard'){resetDashLayout();return;}
+  if(!_dashGrid)return;
+  var layout=null;
+  if(name==='wide89'){
+    layout=DASH_PRESET_WIDE;
+  }else if(name.indexOf('custom:')===0){
+    var customs=_dashLoadCustomPresets();
+    layout=customs[name.slice(7)];
+  }
+  if(!layout)return;
+  var sel=document.getElementById('dash-preset');
+  if(sel)sel.value=name;   // keep the dropdown in sync even when called directly
+  _dashShowAllHidden();
+  _dashGrid.load(layout,false);
+  _dashUpdatePresetDeleteBtn();
+  if(_dashEditing)_dashInjectControls();
+  _dashSaveState();
+  _dashRenderHiddenBar();
+}
+
+// Init now — all DASH_* declarations above have run, and app.js loads at
+// </body>, so the DOM is ready.
+initDashGrid();
 // ── Print actions ──
 function printAction(a){
   post('/printer/print/'+a,{}).then(function(){clog('Druck: '+a,'msg-ok');poll()})
