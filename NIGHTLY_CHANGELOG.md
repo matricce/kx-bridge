@@ -1,7 +1,5 @@
 ## Changes in this build
 
-- Fix: a per-slot filament profile override (custom vendor/name mapping) kept showing/sending the old filament type after the physical spool was swapped for a different material — the override is now suppressed once the material family no longer matches what's actually loaded, and reactivates automatically if you swap back (PR #88, thanks @walterioo)
-- Feat: the dashboard is now fully customizable — enter edit mode to freely drag, resize (via GridStack.js), hide, and rearrange every card on a 12-column snap grid
-- Feat: two built-in layout presets ("Standard", "Wide desktop" per Issue #89's original proposal) plus the ability to save your own layout as a named custom preset, switch between them, and delete presets you no longer need
-- Fix: camera stream would freeze after ~15-30 minutes — non-monotonic timestamps from the printer's FLV stream broke ffmpeg's realtime pacing; now handled with `-use_wallclock_as_timestamps` (Issue #90)
-- Fix: the camera card's height was previously capped at 320px and its image intercepted drag events — camera can now be resized freely like any other dashboard card
+- Fix: dashboard reprint from the cache path crashed with an AttributeError (`self._db` did not exist) instead of applying the filament slot filter (PR #93, thanks @Pavulon87)
+- Feat: the dashboard now shows a banner with the reason and error code when a print is paused, with a direct link to the Anycubic error-code docs (PR #92, thanks @Pavulon87)
+- Fix: `/api/camera/stream` (the MJPEG live view used by the dashboard and every Moonraker-compatible client) opened a brand-new ffmpeg process and printer connection per HTTP client — two simultaneous viewers could already exhaust the printer's very limited camera connection slots and cause intermittent "stream unavailable"/429 failures. All consumers now share one ffmpeg process via the same fanout pattern already used for the H.264 stream (credit to @Pavulon87 for the fix and for finding two related race conditions along the way)

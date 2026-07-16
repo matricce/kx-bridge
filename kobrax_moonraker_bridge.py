@@ -588,15 +588,23 @@ class GCodeStore:
 class CameraCache:
     """Zentraler Kamera-Demuxer.
 
-    Keeps ONE ffmpeg process open that reads the FLV stream from the printer
-    and produces two outputs in parallel:
+    Keeps ONE ffmpeg process per output type open that reads the FLV stream
+    from the printer and produces:
       - MJPEG @ 2fps -> last frame in RAM for /api/camera/snapshot
       - MPEG-TS (-c:v copy) -> fanout to all /api/camera/h264 subscribers
+      - MJPEG @ 15fps/640px -> fanout to all /api/camera/stream subscribers
+        (the live-view used by the dashboard AND by every Moonraker-compatible
+        client, since server.webcams.list advertises this same stream_url)
 
     Damit:
-      * Only ONE FLV connection to the printer (solves the single-client limit / 429)
+      * Only ONE FLV connection to the printer per output type (solves the
+        single-client limit / 429) - previously /api/camera/stream opened a
+        brand-new, uncached ffmpeg + printer connection per HTTP client, which
+        competed with the cached jpeg/h264 connections for the printer's very
+        limited number of concurrent camera clients and caused intermittent
+        "stream unavailable" failures.
       * Snapshots are instant (memory read, no ffmpeg spawn per request)
-      * Multiple parallel H.264 consumers possible (plugin + web UI + ...)
+      * Multiple parallel H.264/MJPEG consumers possible (plugin + web UI + ...)
 
     Lazy start on the first consumer, auto-restart on ffmpeg crash.
     """
@@ -610,33 +618,65 @@ class CameraCache:
         self.latest_jpeg: bytes = b""
         self.latest_jpeg_ts: float = 0.0
         self.h264_subscribers: "set[asyncio.Queue[bytes]]" = set()
+        self.mjpeg_subscribers: "set[asyncio.Queue[bytes]]" = set()
         self._proc_jpeg: "asyncio.subprocess.Process | None" = None
         self._proc_h264: "asyncio.subprocess.Process | None" = None
+        self._proc_mjpeg: "asyncio.subprocess.Process | None" = None
         self._task_jpeg: "asyncio.Task | None" = None
         self._task_h264: "asyncio.Task | None" = None
+        self._task_mjpeg: "asyncio.Task | None" = None
         self._lock = asyncio.Lock()
         self._fail_count_jpeg: int = 0
         self._fail_count_h264: int = 0
+        self._fail_count_mjpeg: int = 0
 
     def set_url(self, url: str):
         self._url = url
 
     def reset(self):
-        """Reset backoff counters and kill running ffmpeg processes."""
+        """Reset backoff counters and forcefully tear down any running
+        ffmpeg loops - including cancelling their background tasks.
+
+        Only killing the ffmpeg subprocess is not enough: the owning task
+        might currently be sitting in `await asyncio.sleep(delay)` from a
+        previous exponential backoff (up to 300s) after an earlier failure.
+        Resetting the fail-count doesn't wake it up early, so a user
+        clicking "reset" could see nothing happen for minutes. Cancelling
+        the task guarantees an immediate, clean restart on the next
+        ensure_running() call.
+        """
         self._fail_count_jpeg = 0
         self._fail_count_h264 = 0
-        for proc in (self._proc_jpeg, self._proc_h264):
+        self._fail_count_mjpeg = 0
+        for task in (self._task_jpeg, self._task_h264, self._task_mjpeg):
+            if task is not None and not task.done():
+                task.cancel()
+        for proc in (self._proc_jpeg, self._proc_h264, self._proc_mjpeg):
             if proc is not None:
                 try:
                     proc.kill()
                 except Exception:
                     pass
+        self._task_jpeg = self._task_h264 = self._task_mjpeg = None
+        self._proc_jpeg = self._proc_h264 = self._proc_mjpeg = None
 
     async def ensure_running(self):
-        if self._proc_jpeg is None or self._proc_jpeg.returncode is not None:
+        # NOTE: we check the *task* state, not self._proc_* - the process
+        # handle is only assigned later, inside the task body, once ffmpeg
+        # has actually been spawned. Checking self._proc_* here left a race
+        # window: two callers arriving before the newly-created task got a
+        # chance to run would both see "no process yet" and each spawn a
+        # duplicate ffmpeg + duplicate printer connection, silently
+        # orphaning the older one (whichever task's coroutine runs last
+        # overwrites the shared self._proc_* reference, so nobody keeps a
+        # handle to kill the earlier orphaned process). Task creation is
+        # synchronous, so checking self._task_* here is race-free.
+        if self._task_jpeg is None or self._task_jpeg.done():
             self._task_jpeg = asyncio.create_task(self._run_jpeg_loop())
-        if self._proc_h264 is None or self._proc_h264.returncode is not None:
+        if self._task_h264 is None or self._task_h264.done():
             self._task_h264 = asyncio.create_task(self._run_h264_loop())
+        if self._task_mjpeg is None or self._task_mjpeg.done():
+            self._task_mjpeg = asyncio.create_task(self._run_mjpeg_loop())
 
     def _input_args(self, url: str) -> list[str]:
         args = ["-fflags", "nobuffer", "-flags", "low_delay"]
@@ -793,6 +833,98 @@ class CameraCache:
                 await asyncio.sleep(delay)
             else:
                 self._fail_count_h264 = 0
+                await asyncio.sleep(2.0)
+
+    async def _run_mjpeg_loop(self):
+        """Keeps an ffmpeg process alive that fans out MJPEG@15fps/640px
+        (complete JPEG frames) to all /api/camera/stream subscribers."""
+        while True:
+            url = self._url
+            if not url:
+                await asyncio.sleep(2.0)
+                continue
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    _find_ffmpeg(), "-loglevel", "warning",
+                    *self._input_args(url), "-i", url,
+                    "-vf", "fps=15,scale=640:-1",
+                    "-f", "image2pipe", "-vcodec", "mjpeg", "-q:v", "3",
+                    "-flush_packets", "1", "pipe:1",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                self._proc_mjpeg = proc
+            except Exception as e:
+                log.warning(f"CameraCache: ffmpeg-mjpeg start failed: {e}")
+                await asyncio.sleep(3.0)
+                continue
+
+            buf = b""
+            rc = None
+            try:
+                while True:
+                    chunk = await proc.stdout.read(self.TS_CHUNK)
+                    if not chunk:
+                        break
+                    buf += chunk
+                    # extract complete JPEG frames and fan them out whole
+                    # (so every subscriber gets clean multipart boundaries,
+                    # not arbitrary byte chunks like the h264/mpegts fanout)
+                    while True:
+                        start = buf.find(self.JPEG_SOI)
+                        if start == -1:
+                            buf = b""
+                            break
+                        end = buf.find(self.JPEG_EOI, start + 2)
+                        if end == -1:
+                            buf = buf[start:]
+                            break
+                        frame = buf[start:end + 2]
+                        buf = buf[end + 2:]
+                        for q in list(self.mjpeg_subscribers):
+                            if q.full():
+                                try:
+                                    q.get_nowait()
+                                except Exception:
+                                    pass
+                            try:
+                                q.put_nowait(frame)
+                            except Exception:
+                                pass
+            except Exception as e:
+                log.debug(f"CameraCache: mjpeg-loop unterbrochen: {e}")
+            finally:
+                # NOTE: cleanup operates on the local `proc` reference, not
+                # on self._proc_mjpeg. If this task got cancelled (e.g. by
+                # reset()) a new task may already have started and assigned
+                # its own process to self._proc_mjpeg by the time we reach
+                # here - killing that shared attribute instead of our own
+                # local proc would kill the WRONG (newer) process.
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                try:
+                    await proc.wait()
+                except Exception:
+                    pass
+                rc = proc.returncode
+                if rc:
+                    try:
+                        err = await proc.stderr.read(500)
+                        if err:
+                            log.warning(f"CameraCache: ffmpeg-mjpeg stderr: {err.decode(errors='replace').strip()}")
+                    except Exception:
+                        pass
+                if self._proc_mjpeg is proc:
+                    self._proc_mjpeg = None
+            if rc:
+                self._fail_count_mjpeg += 1
+                delay = min(2.0 * (2 ** self._fail_count_mjpeg), 300.0)
+                log.warning(f"CameraCache: ffmpeg-mjpeg exit {rc}, retry in {delay:.0f}s (Versuch {self._fail_count_mjpeg})")
+                await asyncio.sleep(delay)
+            else:
+                self._fail_count_mjpeg = 0
                 await asyncio.sleep(2.0)
 
 
@@ -4151,10 +4283,15 @@ class KobraXBridge:
         Useful after a 429 lock (Retry-After expired) or after a printer restart."""
         self.camera_cache.reset()
         url = self._state.get("camera_url", "")
-        if url:
-            self.camera_cache.set_url(url)
-            await self.camera_cache.ensure_running()
-        return web.json_response({"result": "ok"})
+        if not url:
+            log.warning("Camera reset requested but no camera_url is known yet (waiting for printer status)")
+            return web.json_response({
+                "result": "no_url",
+                "message": "No camera URL known yet - wait for the next printer status update, or start a print/enable the camera first.",
+            })
+        self.camera_cache.set_url(url)
+        await self.camera_cache.ensure_running()
+        return web.json_response({"result": "ok", "url": url})
 
     async def handle_api_camera_snapshot(self, request):
         """Last JPEG frame from the CameraCache - instant from RAM,
@@ -4181,45 +4318,26 @@ class KobraXBridge:
         return web.Response(body=jpeg, content_type="image/jpeg", headers=headers)
 
     async def handle_camera_stream(self, request):
-        """MJPEG proxy: FLV → MJPEG via ffmpeg, served as multipart/x-mixed-replace."""
+        """MJPEG live view, served as multipart/x-mixed-replace.
+
+        Fed from the central CameraCache fanout (same pattern as
+        handle_camera_h264) instead of spawning a dedicated ffmpeg process
+        per HTTP client. The printer's camera server only tolerates a very
+        limited number of concurrent connections (see CameraCache docstring)
+        - previously every consumer of this endpoint (dashboard, OrcaSlicer,
+        moonraker-obico, a second browser tab, ...) opened its own separate
+        connection, so two simultaneous viewers could already exhaust the
+        printer's connection limit and cause intermittent "stream
+        unavailable" failures. Now all consumers share one connection.
+        """
         url = self._state.get("camera_url", "")
         if not url:
             return web.Response(status=503, text="No camera URL known")
+        self.camera_cache.set_url(url)
+        await self.camera_cache.ensure_running()
 
-        is_rtsp = url.lower().startswith("rtsp://")
-        ffmpeg_input_args = [
-            "-fflags", "nobuffer",
-            "-flags", "low_delay",
-        ]
-        if is_rtsp:
-            ffmpeg_input_args += ["-probesize", "32", "-analyzeduration", "0", "-rtsp_transport", "tcp"]
-        else:
-            # See CameraCache._input_args - same non-monotonic-timestamp fix (Issue #90).
-            ffmpeg_input_args += ["-use_wallclock_as_timestamps", "1",
-                                  "-probesize", "1000000", "-analyzeduration", "1000000"]
-
-        # Start ffmpeg BEFORE the StreamResponse is opened
-        # (so we can still send a normal HTTP response on error)
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                _find_ffmpeg(), "-loglevel", "quiet",
-                *ffmpeg_input_args,
-                "-i", url,
-                "-vf", "fps=15,scale=640:-1",
-                "-f", "image2pipe",
-                "-vcodec", "mjpeg",
-                "-q:v", "3",
-                "-flush_packets", "1",
-                "pipe:1",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-        except (FileNotFoundError, OSError) as e:
-            log.warning("Camera: ffmpeg not found – camera stream unavailable")
-            return web.Response(status=503, text="ffmpeg not found")
-        except Exception as e:
-            log.warning(f"Camera: could not start ffmpeg: {e}")
-            return web.Response(status=503, text=str(e))
+        q: asyncio.Queue[bytes] = asyncio.Queue(maxsize=8)
+        self.camera_cache.mjpeg_subscribers.add(q)
 
         boundary = "kobraxframe"
         resp = web.StreamResponse(headers={
@@ -4228,46 +4346,24 @@ class KobraXBridge:
             "Connection": "keep-alive",
         })
         await resp.prepare(request)
-
-        buf = b""
         try:
             while True:
-                chunk = await proc.stdout.read(65536)
-                if not chunk:
+                frame = await q.get()
+                header = (
+                    f"--{boundary}\r\n"
+                    f"Content-Type: image/jpeg\r\n"
+                    f"Content-Length: {len(frame)}\r\n\r\n"
+                ).encode()
+                try:
+                    await resp.write(header + frame + b"\r\n")
+                except (ConnectionResetError, asyncio.CancelledError):
                     break
-                buf += chunk
-                # Extract complete JPEG frames (SOI=FFD8, EOI=FFD9)
-                while True:
-                    start = buf.find(b"\xff\xd8")
-                    if start == -1:
-                        buf = b""
-                        break
-                    end = buf.find(b"\xff\xd9", start + 2)
-                    if end == -1:
-                        buf = buf[start:]
-                        break
-                    frame = buf[start:end + 2]
-                    buf = buf[end + 2:]
-                    header = (
-                        f"--{boundary}\r\n"
-                        f"Content-Type: image/jpeg\r\n"
-                        f"Content-Length: {len(frame)}\r\n\r\n"
-                    ).encode()
-                    try:
-                        await resp.write(header + frame + b"\r\n")
-                    except Exception:
-                        return resp
+                except Exception:
+                    break
         except Exception as e:
             log.warning(f"Camera stream interrupted: {e}")
         finally:
-            try:
-                proc.kill()
-            except Exception:
-                pass
-            try:
-                await proc.wait()
-            except Exception:
-                pass
+            self.camera_cache.mjpeg_subscribers.discard(q)
 
         return resp
 
