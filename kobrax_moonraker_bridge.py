@@ -1585,7 +1585,10 @@ class KobraXBridge:
 
         Modes:
         - toolhead: only toolhead slots
-        - ace_direct: ACE channels directly mapped (no toolhead box present)
+        - ace_direct: ACE channels directly mapped, no toolhead box present.
+          Covers one unit (Kobra X) as well as multiple daisy-chained units
+          (Kobra S1 with 2+ ACE Pro, Issue #95) — each unit contributes a
+          block of 4 global slots at box_id * 4.
         - ace_hub: toolhead + ACE via hub (slot 4 as hub path)
         """
         toolhead = any(b.get("id") == -1 for b in boxes)
@@ -1621,19 +1624,22 @@ class KobraXBridge:
             return global_slots, global_loaded
 
         if mode == "ace_direct":
-          # ace_direct exposes exactly 4 channels total.
-          # If firmware reports multiple ACE boxes, keep only the first one.
-          if ace_boxes:
-            ace = ace_boxes[0]
-            ace_id = ace["id"]
-            for local_idx, s in enumerate((ace.get("slots") or [])[:4]):
-              s = dict(s)
-              s["global_index"] = local_idx
-              s["box_id"] = ace_id
-              global_slots.append(s)
-            ace_loaded = ace.get("loaded_slot", -1)
-            if 0 <= ace_loaded < 4:
-              global_loaded = ace_loaded
+            # One or more ACE units, no toolhead buffer (Kobra X: 1 unit,
+            # Kobra S1: up to 2+ units, Issue #95). Global index =
+            # box_id * 4 + local slot, so the numbering matches
+            # _global_to_box_slot's //4-%4 fallback and stays stable
+            # regardless of report order.
+            for ace in ace_boxes:
+                ace_id = int(ace["id"])
+                base = ace_id * 4
+                for local_idx, s in enumerate((ace.get("slots") or [])[:4]):
+                    s = dict(s)
+                    s["global_index"] = base + local_idx
+                    s["box_id"] = ace_id
+                    global_slots.append(s)
+                ace_loaded = ace.get("loaded_slot", -1)
+                if 0 <= ace_loaded < 4:
+                    global_loaded = base + ace_loaded
             return global_slots, global_loaded
 
         # ace_hub
@@ -1824,20 +1830,18 @@ class KobraXBridge:
         if box_id == -1:
             return local_slot
         if self._filament_mode == "ace_direct":
-            return local_slot
+            # Multi-ACE (Issue #95): each unit occupies its own block of 4.
+            # Identical to the old `return local_slot` for a single unit (id 0).
+            return box_id * 4 + local_slot
         return 3 + box_id * 4 + local_slot
 
     def _slot_activity_map(self, boxes: list, global_loaded: int = -1) -> dict:
         """Build {global_slot_index: loading|unloading} from feed_status data."""
+        # Note: all boxes are considered — the old primary_ace_id filter (skip
+        # every ACE box except the first in ace_direct mode) is gone since the
+        # slot aggregation now handles multiple ACE units (Issue #95).
         activity: dict = {}
-        primary_ace_id = -1
-        if self._filament_mode == "ace_direct":
-            ace_ids = sorted(int(b.get("id", -1)) for b in boxes if int(b.get("id", -1)) >= 0)
-            if ace_ids:
-                primary_ace_id = ace_ids[0]
         for box in boxes:
-            if self._filament_mode == "ace_direct" and primary_ace_id >= 0 and int(box.get("id", -1)) != primary_ace_id:
-                continue
             fs = box.get("feed_status") or {}
             current_status = int(fs.get("current_status", -1))
             local_slot = int(fs.get("slot_index", -1))

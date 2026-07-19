@@ -354,6 +354,9 @@ function applyLang(){
   setText('store-web-verify-msg',T.store_web_verify_msg);
   setText('store-web-verify-confirm',T.store_web_verify_confirm);
   setText('store-web-verify-abort',T.store_web_verify_abort);
+  setText('store-lbl-select-all',T.store_select_all||'Select All');
+  setText('store-lbl-delete-selected',T.store_delete_selected||'Delete Selected');
+  setText('store-lbl-exit-select',T.store_exit_select||'Cancel');
   // Dashboard card titles
   setText('d-card-progress',T.card_progress);
   setText('d-card-temps',T.card_temps);
@@ -2756,8 +2759,40 @@ function aceDryStop(aceId){
 function loadStore(){
   fetch(_apiUrl('/kx/files')).then(function(r){return r.json()}).then(function(d){
     storeFiles=d.result||[];
+    // Reset any pending selection - stale ids from a deleted/renamed file
+    // should never carry over into a fresh file list.
+    storeExitSelectMode();
     renderStore();
   }).catch(function(e){clog('Store-Fehler: '+e,'msg-err')});
+}
+
+// Applies the store's search/filter/sort controls to storeFiles. Shared by
+// renderStore() and storeToggleSelectAll() so "Select All" only selects what
+// the user can currently see, not the entire (possibly filtered-out) list.
+function _storeFilteredFiles(){
+  var q=(document.getElementById('store-search')||{value:''}).value.toLowerCase().trim();
+  var filter=(document.getElementById('store-filter')||{value:'all'}).value;
+  var sort=(document.getElementById('store-sort')||{value:'date_desc'}).value;
+
+  var files=storeFiles.filter(function(f){
+    if(q&&f.filename.toLowerCase().indexOf(q)===-1) return false;
+    if(filter==='completed'&&f.last_print_status!=='completed') return false;
+    if(filter==='failed'&&(f.last_print_status!=='cancelled'&&f.last_print_status!=='failed')) return false;
+    if(filter==='never'&&f.last_print_status) return false;
+    return true;
+  });
+
+  files.sort(function(a,b){
+    if(sort==='name_asc') return a.filename.localeCompare(b.filename);
+    if(sort==='duration_asc'){
+      var da=a.last_print_duration||a.est_print_time_sec||0;
+      var db=b.last_print_duration||b.est_print_time_sec||0;
+      return da-db;
+    }
+    // date_desc (default)
+    return (b.uploaded_at||'').localeCompare(a.uploaded_at||'');
+  });
+  return files;
 }
 
 function uploadGcode(file){
@@ -2804,32 +2839,7 @@ function uploadGcode(file){
 function renderStore(){
   var grid=document.getElementById('store-grid');
   var empty=document.getElementById('store-empty');
-
-  // Suche
-  var q=(document.getElementById('store-search')||{value:''}).value.toLowerCase().trim();
-  // Filter
-  var filter=(document.getElementById('store-filter')||{value:'all'}).value;
-  // Sortierung
-  var sort=(document.getElementById('store-sort')||{value:'date_desc'}).value;
-
-  var files=storeFiles.filter(function(f){
-    if(q&&f.filename.toLowerCase().indexOf(q)===-1) return false;
-    if(filter==='completed'&&f.last_print_status!=='completed') return false;
-    if(filter==='failed'&&(f.last_print_status!=='cancelled'&&f.last_print_status!=='failed')) return false;
-    if(filter==='never'&&f.last_print_status) return false;
-    return true;
-  });
-
-  files.sort(function(a,b){
-    if(sort==='name_asc') return a.filename.localeCompare(b.filename);
-    if(sort==='duration_asc'){
-      var da=a.last_print_duration||a.est_print_time_sec||0;
-      var db=b.last_print_duration||b.est_print_time_sec||0;
-      return da-db;
-    }
-    // date_desc (default)
-    return (b.uploaded_at||'').localeCompare(a.uploaded_at||'');
-  });
+  var files=_storeFilteredFiles();
 
   if(!storeFiles.length){
     empty.textContent=T.store_empty;
@@ -2862,22 +2872,56 @@ function renderStore(){
     } else if(!f.last_print_status){
       lastInfo='<div style="font-size:11px;color:var(--txt2);margin-bottom:2px;opacity:.6">'+T.store_never+'</div>';
     }
-    return '<div style="background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:10px;display:flex;flex-direction:column">'+
+    var isSelected=!!_storeSelected[f.id];
+    var selectBorder=isSelected?'border:2px solid var(--accent);padding:9px':'border:1px solid var(--border);padding:10px';
+    // Always visible (not just once select mode is on) - otherwise there is
+    // no way to ever enter select mode, since it's normally entered by
+    // clicking this very checkbox. White circle behind it so it stays
+    // legible against any thumbnail.
+    var checkbox='<span style="position:absolute;top:6px;left:6px;width:22px;height:22px;'+
+      'border-radius:50%;background:rgba(255,255,255,.85);z-index:2;display:flex;'+
+      'align-items:center;justify-content:center">'+
+      '<input type="checkbox" class="store-card-cb" '+(isSelected?'checked':'')+
+      ' onclick="event.stopPropagation();storeToggleSelect(\''+f.id+'\')" '+
+      'style="width:16px;height:16px;margin:0"></span>';
+    var cardClick=_storeSelectMode?'onclick="storeToggleSelect(\''+f.id+'\')" style="cursor:pointer;position:relative;background:var(--raised);border-radius:8px;'+selectBorder+';display:flex;flex-direction:column"':
+      'style="position:relative;background:var(--raised);border-radius:8px;'+selectBorder+';display:flex;flex-direction:column"';
+    return '<div '+cardClick+'>'+
+      checkbox+
       thumb+
       '<div title="'+f.filename+'" style="font-size:12px;font-weight:600;margin-bottom:4px;color:var(--txt)">'+name+statusBadge+'</div>'+
       lastInfo+
       '<div style="font-size:11px;color:var(--txt2);margin-bottom:2px">⏱ '+T.store_estimate+': '+est+'</div>'+
       '<div style="font-size:11px;color:var(--txt2);margin-bottom:8px">📅 '+date+'</div>'+
       '<div style="display:flex;gap:6px;margin-top:auto">'+
-        '<button onclick="storePrint(\''+f.id+'\',\''+f.filename.replace(/'/g,"\\'")+'\')" '+
+        '<button onclick="event.stopPropagation();storePrint(\''+f.id+'\',\''+f.filename.replace(/'/g,"\\'")+'\')" '+
           'style="flex:1;font-size:12px;padding:5px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer">'+T.store_print+'</button>'+
-        '<button onclick="storeDownload(\''+f.id+'\')" title="'+T.store_download+'" '+
+        '<button onclick="event.stopPropagation();storeDownload(\''+f.id+'\')" title="'+T.store_download+'" '+
           'style="font-size:12px;padding:5px 8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt2);cursor:pointer">⬇</button>'+
-        '<button onclick="storeDelete(\''+f.id+'\')" '+
+        '<button onclick="event.stopPropagation();storeDelete(\''+f.id+'\')" '+
           'style="font-size:12px;padding:5px 8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt2);cursor:pointer">🗑</button>'+
       '</div>'+
     '</div>';
   }).join('');
+
+  _storeUpdateSelectBar(files);
+}
+
+// Reflects the current selection onto the select-all checkbox (incl.
+// indeterminate state), the selected-count label, and the delete button's
+// disabled state. `files` is the currently-filtered/visible list.
+function _storeUpdateSelectBar(files){
+  var selectAll=document.getElementById('store-select-all');
+  var countEl=document.getElementById('store-selected-count');
+  var delBtn=document.getElementById('store-delete-selected-btn');
+  if(!selectAll||!countEl||!delBtn)return;
+  var visibleIds=files.map(function(f){return f.id;});
+  var selectedVisible=visibleIds.filter(function(id){return _storeSelected[id];});
+  var n=selectedVisible.length;
+  selectAll.checked=n>0&&n===visibleIds.length;
+  selectAll.indeterminate=n>0&&n<visibleIds.length;
+  countEl.textContent=n>0?(T.store_selected_count||'{n} selected').replace('{n}',n):'';
+  delBtn.disabled=n===0;
 }
 
 function formatDur(sec){
@@ -2896,6 +2940,52 @@ var _pendingWebVerifyAutoOpen=false;
 // "Slots wählen" im Banner geklickt wird, bevor der Browser-Tab je geladen
 // wurde (Issue #29 / Theme-Auslagerung PR #27).
 var storeFiles=[];
+
+// Multi-select state for the GCode browser (Issue #94).
+var _storeSelectMode=false;
+var _storeSelected={};  // file.id -> true
+
+function storeToggleSelect(id){
+  if(!_storeSelectMode){
+    _storeSelectMode=true;
+    var bar=document.getElementById('store-select-bar');
+    if(bar)bar.style.display='flex';
+  }
+  if(_storeSelected[id])delete _storeSelected[id];
+  else _storeSelected[id]=true;
+  renderStore();
+}
+
+function storeToggleSelectAll(checked){
+  // Only the currently filtered/visible files are affected, so search/filter
+  // never causes "Select All" to silently pick up hidden files too.
+  var visible=_storeFilteredFiles();
+  _storeSelected={};
+  if(checked)visible.forEach(function(f){_storeSelected[f.id]=true;});
+  renderStore();
+}
+
+function storeExitSelectMode(){
+  _storeSelectMode=false;
+  _storeSelected={};
+  var bar=document.getElementById('store-select-bar');
+  if(bar)bar.style.display='none';
+  renderStore();
+}
+
+function storeDeleteSelected(){
+  var ids=Object.keys(_storeSelected);
+  if(!ids.length)return;
+  if(!confirm((T.store_delete_selected_confirm||'Delete {n} selected files?').replace('{n}',ids.length)))return;
+  Promise.all(ids.map(function(id){
+    return fetch(_apiUrl('/kx/files/'+id),{method:'DELETE'}).then(function(r){return{id:id,ok:r.ok};});
+  })).then(function(results){
+    var failed=results.filter(function(r){return !r.ok;});
+    if(failed.length)clog((T.log_delete_failed||'Delete failed')+': '+failed.length,'msg-err');
+    storeExitSelectMode();
+    loadStore();
+  });
+}
 
 var _gcodeFilaments=[];
 
