@@ -108,7 +108,7 @@ main{flex:1;overflow-y:auto;padding:20px}
    GridStack's resize-handle hit area and drag listeners. */
 /* Doc pattern: the card fills its cell; content scrolls if the user resizes
    the cell smaller than the content needs. */
-.grid-stack-item-content>.card{width:100%;height:100%;margin:0;overflow:auto;box-sizing:border-box}
+.grid-stack-item-content>.card{width:100%;height:100%;margin:0;overflow-y:auto;overflow-x:hidden;box-sizing:border-box}
 /* .card:hover{transform:translateY(-1px)} creates a new containing block right
    as the user starts dragging, throwing off GridStack's position math. Kill
    the hover transform for dashboard cards specifically. */
@@ -164,6 +164,11 @@ main{flex:1;overflow-y:auto;padding:20px}
 .cam-toggle:hover{background:rgba(0,0,0,.7)}
 
 /* ── PROGRESS ── */
+/* Same pattern as #card-camera above: without this, shrinking the tile's
+   height just clips the lower content (time-grid/filename/buttons) outside
+   the visible area instead of making it scrollable (Issue #97). */
+.grid-stack-item-content>#card-progress{display:flex;flex-direction:column;min-height:0}
+.grid-stack-item-content>#card-progress>*{flex-shrink:0}
 .hero-info{display:flex;flex-direction:column;gap:12px}
 .pct-big{font-size:52px;font-weight:700;line-height:1;color:var(--txt)}
 .pct-big small{font-size:20px;font-weight:400;color:var(--txt2)}
