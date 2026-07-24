@@ -989,6 +989,7 @@ class KobraXBridge:
         except Exception:
             self._visible_vendors = []
         self._last_state: dict = {}
+        self._last_ams_set_request: dict | None = None
         self._state = {
           "nozzle_temp":        0.0,
           "nozzle_target":      0.0,
@@ -1880,7 +1881,10 @@ class KobraXBridge:
 
     def _on_multicolor_box(self, payload: dict):
         if payload.get("state") == "failed":
-            log.warning(f"multiColorBox/report failed: {payload.get('data')}")
+            req = getattr(self, "_last_ams_set_request", None)
+            log.warning(
+                f"multiColorBox setInfo rejected by printer: request={req}  raw_response={payload.get('data')}"
+            )
             self._state["last_ams_set_error"] = True
             return
         data = payload.get("data") or {}
@@ -4046,6 +4050,10 @@ class KobraXBridge:
         box_id, local_slot = self._global_to_box_slot(index)
         loop = asyncio.get_event_loop()
         self._state["last_ams_set_error"] = False
+        # Remembered so a later state="failed" report (which carries no slot
+        # info of its own, see _on_multicolor_box) can be logged alongside the
+        # request that triggered it - otherwise the failure is unattributable.
+        self._last_ams_set_request = {"global": index, "box": box_id, "local_slot": local_slot, "type": mat, "color": color}
         # setInfo goes via the web/printer topic (like tempature/set). Verified via
         # Workbench-Vue mqtt_setInfo verifiziert — via slicer/printer/ wurden
         # slot changes are ignored by the printer and overwritten with the old

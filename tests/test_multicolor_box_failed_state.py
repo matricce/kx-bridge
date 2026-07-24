@@ -67,3 +67,15 @@ def test_non_dict_data_without_failed_state_does_not_crash():
     even if the printer doesn't set state="failed" for it."""
     b = _bridge()
     b._on_multicolor_box({"state": "success", "data": ["multi_color_box", []]})
+
+
+def test_failed_report_is_logged_with_the_triggering_request(caplog):
+    """The failure payload alone carries no slot/type/color info - the log
+    must correlate it with the setInfo request that triggered it, otherwise
+    the failure reason can't be diagnosed from bridge logs alone."""
+    import logging
+    b = _bridge()
+    b._last_ams_set_request = {"global": 6, "box": 0, "local_slot": 3, "type": "PLA", "color": [33, 39, 33]}
+    with caplog.at_level(logging.WARNING):
+        b._on_multicolor_box(FAILED_PAYLOAD)
+    assert any("global" in r.message and "6" in r.message for r in caplog.records)
