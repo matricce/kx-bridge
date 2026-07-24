@@ -631,7 +631,16 @@ class CameraCache:
         self._fail_count_mjpeg: int = 0
 
     def set_url(self, url: str):
+        # A changed URL means the printer rotated its stream token (typically
+        # after a reboot). Running ffmpeg processes still hold the stale URL
+        # and will never pick it up on their own - they only re-read self._url
+        # at the top of their outer loop, which they never reach while blocked
+        # in a stdout read on the old, now-silent connection. Tear them down;
+        # the next ensure_running() respawns them against the new URL.
+        changed = bool(url and self._url and url != self._url)
         self._url = url
+        if changed:
+            self.reset()
 
     def reset(self):
         """Reset backoff counters and forcefully tear down any running
@@ -679,7 +688,12 @@ class CameraCache:
             self._task_mjpeg = asyncio.create_task(self._run_mjpeg_loop())
 
     def _input_args(self, url: str) -> list[str]:
-        args = ["-fflags", "nobuffer", "-flags", "low_delay"]
+        args = ["-fflags", "nobuffer", "-flags", "low_delay",
+                 # Bail out if the source goes silent. A printer reboot or
+                 # network loss leaves the TCP connection ESTABLISHED with no
+                 # data and no FIN, so a passive stdout read blocks forever
+                 # without this (Issue #99). Value is microseconds.
+                 "-timeout", "10000000"]
         if url.lower().startswith("rtsp://"):
             args += ["-probesize", "32", "-analyzeduration", "0", "-rtsp_transport", "tcp"]
         else:
@@ -4368,6 +4382,16 @@ class KobraXBridge:
         q: asyncio.Queue[bytes] = asyncio.Queue(maxsize=8)
         self.camera_cache.mjpeg_subscribers.add(q)
 
+        # Wait for the first frame BEFORE resp.prepare() - once prepare() sends
+        # the response headers the status is committed to 200, so a stalled
+        # source (Issue #99) must be caught here to actually return a 503
+        # instead of hanging the client forever with no frame ever arriving.
+        try:
+            first_frame = await asyncio.wait_for(q.get(), timeout=5.0)
+        except asyncio.TimeoutError:
+            self.camera_cache.mjpeg_subscribers.discard(q)
+            return web.Response(status=503, text="No frame in cache yet")
+
         boundary = "kobraxframe"
         resp = web.StreamResponse(headers={
             "Content-Type": f"multipart/x-mixed-replace;boundary={boundary}",
@@ -4376,8 +4400,8 @@ class KobraXBridge:
         })
         await resp.prepare(request)
         try:
+            frame = first_frame
             while True:
-                frame = await q.get()
                 header = (
                     f"--{boundary}\r\n"
                     f"Content-Type: image/jpeg\r\n"
@@ -4389,6 +4413,7 @@ class KobraXBridge:
                     break
                 except Exception:
                     break
+                frame = await q.get()
         except Exception as e:
             log.warning(f"Camera stream interrupted: {e}")
         finally:
