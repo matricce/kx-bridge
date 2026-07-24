@@ -1762,6 +1762,14 @@ class KobraXBridge:
         max_idx = max(loaded_map.keys())
         # The printer interprets ams_box_mapping as an ordered list (entry N = TN).
         # Missing slots must be inserted as placeholders, otherwise everything shifts.
+        # A placeholder must NOT reference a physically empty tray: the printer
+        # rejects such an entry even for a tool the GCode never calls (printing
+        # Filament 4 with the slot below it empty fails; all-full works). Point
+        # gap placeholders at a definitely-loaded tray instead of the gap's own
+        # (empty) index.
+        fallback_gidx = max_idx  # highest loaded slot -> loaded + printable
+        fallback_slot = loaded_map[fallback_gidx]
+        fallback_ams = self._slot_to_print_ams_index(fallback_gidx)
         result = []
         for i in range(max_idx + 1):
             if i in loaded_map:
@@ -1776,10 +1784,10 @@ class KobraXBridge:
             else:
                 result.append({
                     "paint_index": i,
-                    "ams_index": self._slot_to_print_ams_index(i),
+                    "ams_index": fallback_ams,
                     "paint_color": [255, 255, 255, 255],
-                    "ams_color": [255, 255, 255, 255],
-                    "material_type": "PLA",
+                    "ams_color": self._slot_color_rgba(fallback_slot),
+                    "material_type": fallback_slot.get("type", "PLA"),
                 })
         return result
 
