@@ -1879,10 +1879,18 @@ class KobraXBridge:
         return activity
 
     def _on_multicolor_box(self, payload: dict):
+        if payload.get("state") == "failed":
+            log.warning(f"multiColorBox/report failed: {payload.get('data')}")
+            self._state["last_ams_set_error"] = True
+            return
         data = payload.get("data") or {}
+        if not isinstance(data, dict):
+            log.warning(f"multiColorBox/report: unexpected data shape: {data!r}")
+            return
         boxes = data.get("multi_color_box") or []
         if not boxes:
             return
+        self._state["last_ams_set_error"] = False
         self._head_tools_model = int(data.get("head_tools_model", self._head_tools_model))
         self._filament_mode = self._detect_filament_mode(boxes, self._head_tools_model)
         self._state["filament_mode"] = self._filament_mode
@@ -4037,6 +4045,7 @@ class KobraXBridge:
             return web.json_response({"error": "color must be [r,g,b]"}, status=400)
         box_id, local_slot = self._global_to_box_slot(index)
         loop = asyncio.get_event_loop()
+        self._state["last_ams_set_error"] = False
         # setInfo goes via the web/printer topic (like tempature/set). Verified via
         # Workbench-Vue mqtt_setInfo verifiziert — via slicer/printer/ wurden
         # slot changes are ignored by the printer and overwritten with the old
