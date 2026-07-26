@@ -2123,6 +2123,51 @@ class KobraXBridge:
                 return fam
         return m
 
+    def _parse_combined_rfid_type(self, raw_type: str) -> tuple[str, str]:
+        """Split a combined ACE-RFID "VENDOR TYPE SERIAL" string (e.g.
+        "GEEETECH PLA Bas", written via third-party RFID tools) into
+        (vendor, material_family).
+
+        Anycubic's ACE RFID system concatenates vendor + material + a
+        truncated serial/variant into one `type` string for custom tags -
+        unlike a normal spool report where `type` is just "PLA"/"PETG"/etc.
+        Returns ("", "") when the first token isn't a known vendor (from the
+        merged system+user filament library), which leaves plain type
+        strings like "PLA" completely unaffected (Issue #101).
+        """
+        tokens = raw_type.split()
+        if len(tokens) < 2:
+            return "", ""
+        first = tokens[0].strip().lower()
+        vendors = {p.get("vendor", "").lower(): p.get("vendor", "") for p in self._load_orca_filaments()}
+        vendor = vendors.get(first)
+        if not vendor:
+            return "", ""
+        family = self._material_family(" ".join(tokens[1:]))
+        if not family:
+            return "", ""
+        return vendor, family
+
+    def _match_profile_by_vendor_family(self, vendor: str, family: str) -> dict:
+        """Find an imported/system filament profile by (vendor, material
+        family) - used to auto-resolve a combined ACE-RFID type string to
+        the user's already-imported OrcaSlicer profile (Issue #101), since
+        the exact profile `name` never appears verbatim in the truncated
+        RFID string."""
+        matches = [
+            p for p in self._load_orca_filaments()
+            if p.get("vendor", "").lower() == vendor.lower()
+            and self._material_family(p.get("type", "")) == family
+        ]
+        if not matches:
+            return {}
+        if len(matches) > 1:
+            log.debug(
+                f"_match_profile_by_vendor_family: {len(matches)} profiles match "
+                f"vendor={vendor!r} family={family!r}, using first: {matches[0].get('name')}"
+            )
+        return matches[0]
+
     def _profile_material(self, profile: dict) -> str:
         """Material type (e.g. "PETG") of a saved slot profile, resolved by
         (vendor, name) from the Orca filament library. Returns "" when the
@@ -2206,6 +2251,21 @@ class KobraXBridge:
             # family still matches the loaded filament (PETG profile + PLA
             # loaded -> dropped).
             user_profile = self._effective_slot_profile(slot_index, material)
+            if not user_profile.get("name"):
+                # Third layer: auto-resolve a combined ACE-RFID "VENDOR TYPE
+                # SERIAL" string (e.g. "GEEETECH PLA Bas", from third-party
+                # RFID tools) against the user's already-imported profile
+                # library, instead of falling through to the neutral Generic
+                # fallback (Issue #101). Not persisted to config.ini - this
+                # re-derives on every _build_lane_data() call, so a
+                # differently-tagged spool loaded later isn't stuck with a
+                # stale match.
+                vendor_guess, family_guess = self._parse_combined_rfid_type(slot.get("type", ""))
+                if vendor_guess:
+                    auto_profile = self._match_profile_by_vendor_family(vendor_guess, family_guess)
+                    if auto_profile.get("name"):
+                        user_profile = auto_profile
+                        material = family_guess
             if user_profile.get("name"):
                 vendor    = user_profile.get("vendor", "")
                 fila_name = user_profile.get("name", "")
