@@ -174,3 +174,20 @@ jobs:
             --data-binary @/tmp/release_body.json \
             "https://gitea.it-drui.de/api/v1/repos/viewit/KX-Bridge-Release/releases"
           rm -f "$BODY_FILE" /tmp/release_body.json
+
+      - name: Reset NIGHTLY_CHANGELOG.md for the next build
+        env:
+          GITEA_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          . /tmp/nightly_version.env
+          # The changelog just consumed above must not carry over into the
+          # next nightly - otherwise every build re-lists all prior entries
+          # since the last manual reset instead of just what's new. Not in
+          # nightly.yml's own push-trigger paths, so this commit does not
+          # re-trigger this workflow.
+          printf '## Changes in this build\n\n' > NIGHTLY_CHANGELOG.md
+          git config user.name "gitea-actions"
+          git config user.email "actions@gitea.it-drui.de"
+          git add NIGHTLY_CHANGELOG.md
+          git commit -m "chore: reset NIGHTLY_CHANGELOG.md after nightly-${VERSION} release" || exit 0
+          git push https://gitea-actions:${GITEA_TOKEN}@gitea.it-drui.de/viewit/KX-Bridge-Release.git HEAD:nightly
