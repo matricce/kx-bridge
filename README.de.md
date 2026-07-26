@@ -29,9 +29,7 @@ Feedback willkommen.</sub>
 
 </div>
 
-> [!CAUTION]
-> **Laufende Wartungsarbeiten** — Wir strukturieren das Repository um (Branch-Modell, CI-Workflows, Beitragsprozess). Es kann zu Änderungen bei Branch-Namen, PR-Templates und der Art der Veröffentlichungen kommen. Wir entschuldigen uns für etwaige Unannehmlichkeiten. Handhabung, Workflow und langfristige Wartbarkeit werden dadurch deutlich verbessert.
->
+
 > 👉 Möchtest du beitragen? Bitte zuerst [CONTRIBUTING.md](CONTRIBUTING.md) lesen.
 
 ---
