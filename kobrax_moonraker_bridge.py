@@ -1394,12 +1394,12 @@ class KobraXBridge:
             self._spoolman_notify_end()
             self._current_job_id = ""
 
-        # Hide the upload banner after the print finishes (Issue #29): the
-        # printer reports "finished" after a successful print - file_ready used to be
-        # cleared only on stoped/canceled, which brought the banner back.
-        if kobra_state == "finished":
-            self._state["file_ready"] = ""
-        if kobra_state in ("stoped", "canceled"):
+        # Terminal states (successful finish AND stop/cancel) must leave the
+        # same clean end state - a "finished" print used to only clear
+        # file_ready (Issue #29), leaving progress/filename/duration/layer
+        # fields stuck at the last job's values until the *next* print
+        # happened to overwrite them (Issue #102).
+        if kobra_state in ("finished", "stoped", "canceled"):
             self._state["progress"] = 0.0
             self._state["filename"] = ""
             self._state["file_ready"] = ""
@@ -1409,9 +1409,20 @@ class KobraXBridge:
             self._state["layer_height"] = 0.0
             self._state["first_layer_height"] = 0.0
             self._state["supplies_usage"] = 0
+            self._state["curr_layer"] = 0
+            self._state["total_layers"] = 0
             self._thumbnail_b64 = ""
-        self._state["filename"]       = d.get("filename", self._state["filename"])
-        if "progress" in d:
+        else:
+            # Only adopt the payload's filename outside terminal states - the
+            # printer often still reports the just-finished job's filename in
+            # the same "finished"/"stoped"/"canceled" message that triggered
+            # the reset above, which would otherwise immediately undo it.
+            self._state["filename"] = d.get("filename", self._state["filename"])
+        # Pre-print phases (leveling/preheating/checking) report their own
+        # "progress" - passing it through would make display_status.progress/
+        # virtual_sdcard.progress jump non-monotonically once real printing
+        # starts and the value resets (Issue #102).
+        if "progress" in d and kobra_state not in ("preheating", "auto_leveling", "checking", "updated", "init"):
             self._state["progress"]   = float(d["progress"]) / 100.0
         if "print_time" in d:
             self._state["print_duration"] = int(d["print_time"]) * 60
@@ -1447,8 +1458,13 @@ class KobraXBridge:
             self._state["kobra_state"] = kobra_state
             # Hide the upload banner after the print ends (Issue #29) - the state also
             # arrives via info/report (project.state) depending on the printer, not only print/report.
+            # Layer fields must reset here too (Issue #102) - info/report is the
+            # only source for curr_layer/total_layers on some printers, and they
+            # otherwise stay stuck at the last job's values indefinitely.
             if kobra_state in ("finished", "stoped", "canceled"):
                 self._state["file_ready"] = ""
+                self._state["curr_layer"] = 0
+                self._state["total_layers"] = 0
             # Camera auto-start here as well (OrcaSlicer often reports the start via info/report).
             # The _camera_autostarted guard prevents a double start with _on_print.
             if kobra_state == "printing":
@@ -1467,7 +1483,8 @@ class KobraXBridge:
         if project:
             if "filename" in project:
                 self._state["filename"] = project["filename"]
-            if "progress" in project:
+            # Same non-monotonic-progress guard as _on_print (Issue #102).
+            if "progress" in project and kobra_state not in ("preheating", "auto_leveling", "checking", "updated", "init"):
                 self._state["progress"] = float(project["progress"]) / 100.0
             if "print_time" in project:
                 self._state["print_duration"] = int(project["print_time"]) * 60
@@ -3405,10 +3422,16 @@ class KobraXBridge:
         `modified` are non-nullable in GCodeFile; `print_start_time` and the
         Slicer-Felder optional."""
         s = self._state
-        layer_h = float(s.get("layer_height") or 0.0)
-        first_h = float(s.get("first_layer_height") or 0.0)
-        total_layers = int(s.get("total_layers") or 0)
-        est_time = int(s.get("slicer_time") or 0)
+        # Live _state values are only relevant for the currently/last tracked
+        # job's own file - using them as a starting point for a DIFFERENT
+        # filename leaked the tracked job's layer count/time into unrelated
+        # metadata queries (Issue #102). For any other filename, rely solely
+        # on that file's own GCodeStore row.
+        is_tracked_file = bool(filename) and filename == s.get("filename")
+        layer_h = float(s.get("layer_height") or 0.0) if is_tracked_file else 0.0
+        first_h = float(s.get("first_layer_height") or 0.0) if is_tracked_file else 0.0
+        total_layers = int(s.get("total_layers") or 0) if is_tracked_file else 0
+        est_time = int(s.get("slicer_time") or 0) if is_tracked_file else 0
         size_bytes = 0
         try:
             gf = self._store.get_file_by_name(filename) or {}
