@@ -54,6 +54,40 @@ DELETEBATCH_FAILED = {
     "data": None,
 }
 
+FILEDETAILS_SUCCESS = {
+    "action": "fileDetails",
+    "code": 200,
+    "state": "done",
+    "data": {
+        "file_details": {
+            "thumbnail": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB",
+            "png_image": "",
+            "svg_image": "",
+            "objects_skip_parts": [],
+        },
+        "filename": "a.gcode",
+        "root": "local",
+    },
+}
+
+FILEDETAILS_NO_THUMBNAIL = {
+    "action": "fileDetails",
+    "code": 200,
+    "state": "done",
+    "data": {
+        "file_details": {"thumbnail": "", "png_image": "", "svg_image": "", "objects_skip_parts": []},
+        "filename": "a.gcode",
+        "root": "local",
+    },
+}
+
+FILEDETAILS_FAILED = {
+    "action": "fileDetails",
+    "code": 10112,
+    "state": "failed",
+    "data": None,
+}
+
 
 def _deliver_async(bridge, payload, delay=0.05):
     """Simulates the MQTT reader thread delivering a file/report a moment
@@ -142,3 +176,58 @@ async def test_printer_file_delete_returns_502_on_printer_rejection(client):
     bridge.client.publish.side_effect = lambda *a, **kw: (_deliver_async(bridge, DELETEBATCH_FAILED), None)[1]
     resp = await c.post("/kx/printer-files/delete", json={"filenames": ["a.gcode"]})
     assert resp.status == 502
+
+
+@pytest.mark.asyncio
+async def test_printer_file_thumbnail_success(client):
+    c, bridge = client
+    bridge.client.publish.side_effect = lambda *a, **kw: (_deliver_async(bridge, FILEDETAILS_SUCCESS), None)[1]
+    resp = await c.get("/kx/printer-files/a.gcode/thumbnail")
+    assert resp.status == 200
+    data = await resp.json()
+    assert data["result"]["thumbnail"] == "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+
+
+@pytest.mark.asyncio
+async def test_printer_file_thumbnail_uses_correct_mqtt_payload(client):
+    c, bridge = client
+    bridge.client.publish.side_effect = lambda *a, **kw: (_deliver_async(bridge, FILEDETAILS_SUCCESS), None)[1]
+    await c.get("/kx/printer-files/a.gcode/thumbnail")
+    args, kwargs = bridge.client.publish.call_args
+    assert args[0] == "file"
+    assert args[1] == "fileDetails"
+    assert args[2] == {"root": "local", "filename": "a.gcode"}
+
+
+@pytest.mark.asyncio
+async def test_printer_file_thumbnail_empty_when_no_thumbnail_embedded(client):
+    c, bridge = client
+    bridge.client.publish.side_effect = lambda *a, **kw: (_deliver_async(bridge, FILEDETAILS_NO_THUMBNAIL), None)[1]
+    resp = await c.get("/kx/printer-files/a.gcode/thumbnail")
+    assert resp.status == 200
+    data = await resp.json()
+    assert data["result"]["thumbnail"] == ""
+
+
+@pytest.mark.asyncio
+async def test_printer_file_thumbnail_returns_502_on_printer_failure(client):
+    c, bridge = client
+    bridge.client.publish.side_effect = lambda *a, **kw: (_deliver_async(bridge, FILEDETAILS_FAILED), None)[1]
+    resp = await c.get("/kx/printer-files/a.gcode/thumbnail")
+    assert resp.status == 502
+
+
+@pytest.mark.asyncio
+async def test_printer_file_thumbnail_is_cached_after_first_fetch(client):
+    """Second request for the same filename must not call publish() again."""
+    c, bridge = client
+    bridge.client.publish.side_effect = lambda *a, **kw: (_deliver_async(bridge, FILEDETAILS_SUCCESS), None)[1]
+    resp1 = await c.get("/kx/printer-files/a.gcode/thumbnail")
+    assert resp1.status == 200
+    call_count_after_first = bridge.client.publish.call_count
+
+    resp2 = await c.get("/kx/printer-files/a.gcode/thumbnail")
+    assert resp2.status == 200
+    data2 = await resp2.json()
+    assert data2["result"]["thumbnail"] == "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+    assert bridge.client.publish.call_count == call_count_after_first  # no new MQTT call

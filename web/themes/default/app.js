@@ -3045,7 +3045,7 @@ function renderPrinterFiles(){
     return;
   }
   empty.style.display='none';
-  grid.innerHTML=printerFiles.map(function(f){
+  grid.innerHTML=printerFiles.map(function(f,idx){
     var name=f.filename.length>28?f.filename.slice(0,25)+'…':f.filename;
     var sizeKb=f.size?(f.size/1024).toFixed(0)+' KB':'–';
     var date=f.timestamp?new Date(f.timestamp).toISOString().replace('T',' ').slice(0,16):'';
@@ -3059,9 +3059,14 @@ function renderPrinterFiles(){
       'style="width:16px;height:16px;margin:0"></span>';
     var cardClick=_printerFilesSelectMode?'onclick="printerFileToggleSelect(\''+f.filename.replace(/'/g,"\\'")+'\')" style="cursor:pointer;position:relative;background:var(--raised);border-radius:8px;'+selectBorder+';display:flex;flex-direction:column"':
       'style="position:relative;background:var(--raised);border-radius:8px;'+selectBorder+';display:flex;flex-direction:column"';
+    var thumbId='pft-'+idx;
+    var cachedThumb=_printerThumbCache[f.filename];
+    var thumbHtml=cachedThumb
+      ? '<img id="'+thumbId+'" src="data:image/png;base64,'+cachedThumb+'" style="width:100%;height:60px;object-fit:contain;border-radius:6px;background:var(--raised);margin-bottom:8px">'
+      : '<div id="'+thumbId+'" data-filename="'+encodeURIComponent(f.filename)+'" style="width:100%;height:60px;background:var(--raised);border-radius:6px;display:flex;align-items:center;justify-content:center;margin-bottom:8px;font-size:28px">🖨</div>';
     return '<div '+cardClick+'>'+
       checkbox+
-      '<div style="width:100%;height:60px;background:var(--raised);border-radius:6px;display:flex;align-items:center;justify-content:center;margin-bottom:8px;font-size:28px">🖨</div>'+
+      thumbHtml+
       '<div title="'+f.filename+'" style="font-size:12px;font-weight:600;margin-bottom:4px;color:var(--txt)">'+name+'</div>'+
       '<div style="font-size:11px;color:var(--txt2);margin-bottom:2px">💾 '+sizeKb+'</div>'+
       '<div style="font-size:11px;color:var(--txt2);margin-bottom:8px">📅 '+date+'</div>'+
@@ -3072,6 +3077,46 @@ function renderPrinterFiles(){
     '</div>';
   }).join('');
   _printerFilesUpdateSelectBar();
+  _loadVisiblePrinterThumbnails();
+}
+
+// Thumbnails are fetched lazily, one at a time, only for cards not already
+// cached - fetching all of them upfront would mean one MQTT roundtrip per
+// file (145+ files is common), overwhelming the single MQTT connection.
+var _printerThumbCache={};  // filename -> base64 PNG string ("" = no thumbnail)
+var _printerThumbQueue=[];
+var _printerThumbLoading=false;
+
+function _loadVisiblePrinterThumbnails(){
+  var placeholders=document.querySelectorAll('#printer-store-grid [data-filename]');
+  _printerThumbQueue=Array.prototype.slice.call(placeholders);
+  _pumpPrinterThumbQueue();
+}
+
+function _pumpPrinterThumbQueue(){
+  if(_printerThumbLoading||!_printerThumbQueue.length)return;
+  var el=_printerThumbQueue.shift();
+  if(!el||!el.isConnected){_pumpPrinterThumbQueue();return;}
+  var encodedName=el.getAttribute('data-filename');
+  _printerThumbLoading=true;
+  fetch(_apiUrl('/kx/printer-files/'+encodedName+'/thumbnail'))
+    .then(function(r){return r.json()})
+    .then(function(d){
+      var thumb=(d.result&&d.result.thumbnail)||'';
+      _printerThumbCache[decodeURIComponent(encodedName)]=thumb;
+      if(thumb&&el.isConnected){
+        var img=document.createElement('img');
+        img.src='data:image/png;base64,'+thumb;
+        img.style.cssText='width:100%;height:60px;object-fit:contain;border-radius:6px;background:var(--raised);margin-bottom:8px';
+        img.id=el.id;
+        el.replaceWith(img);
+      }
+    })
+    .catch(function(){/* keep the placeholder icon on failure */})
+    .finally(function(){
+      _printerThumbLoading=false;
+      _pumpPrinterThumbQueue();
+    });
 }
 
 function _printerFilesUpdateSelectBar(){

@@ -1058,6 +1058,10 @@ class KobraXBridge:
         # as the existing fileDetails fire-and-forget pattern. Format:
         # {action: {"event": threading.Event(), "result": dict|None}}.
         self._file_action_waiters: dict[str, dict] = {}
+        # Thumbnail cache for files on the printer's own storage (filename ->
+        # base64 PNG string, "" if the file has no embedded thumbnail).
+        # In-memory only - not persisted, cleared on restart.
+        self._printer_thumbnail_cache: dict[str, str] = {}
         self._store = store if store is not None else GCodeStore(args.data_dir)
         self._serve_dir_path: str = self._store._gcode_dir
         self._current_job_id: str = ""
@@ -2869,6 +2873,40 @@ class KobraXBridge:
         if not result or result.get("state") != "success":
             return self._json_cors({"error": "delete failed", "detail": result}, status=502)
         return self._json_cors({"result": "ok"})
+
+    async def handle_kx_printer_file_thumbnail(self, request):
+        """GET /kx/printer-files/{filename}/thumbnail - fetches the embedded
+        GCode thumbnail for a file on the printer's own storage, via
+        file/fileDetails. The printer extracts and base64-encodes the
+        "; thumbnail begin"-block from the GCode header on demand and
+        returns it inline in data.file_details.thumbnail - no separate
+        download/presigned-URL step needed (verified live against a real
+        Kobra X). Cached in-memory per filename since a file's thumbnail
+        never changes while it exists on the printer, and re-querying on
+        every render/scroll would mean one MQTT roundtrip per visible card."""
+        filename = request.match_info.get("filename", "")
+        if not filename:
+            return self._json_cors({"error": "no filename given"}, status=400)
+        cached = self._printer_thumbnail_cache.get(filename)
+        if cached is not None:
+            return self._json_cors({"result": {"thumbnail": cached}})
+        loop = asyncio.get_event_loop()
+        def _fetch():
+            return self._wait_for_file_action(
+                "fileDetails",
+                lambda: self.client.publish(
+                    "file", "fileDetails",
+                    {"root": "local", "filename": filename},
+                    timeout=0,
+                ),
+                timeout=8.0,
+            )
+        result = await loop.run_in_executor(None, _fetch)
+        if not result or result.get("code") != 200:
+            return self._json_cors({"error": "printer unreachable or query failed"}, status=502)
+        thumb = ((result.get("data") or {}).get("file_details") or {}).get("thumbnail") or ""
+        self._printer_thumbnail_cache[filename] = thumb
+        return self._json_cors({"result": {"thumbnail": thumb}})
 
     async def handle_kx_file_download(self, request):
         file_id = request.match_info["file_id"]
@@ -5829,6 +5867,7 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_post("/kx/files/{file_id}/verify", bridge.handle_kx_file_verify)
     r.add_get("/kx/printer-files",         bridge.handle_kx_printer_files)
     r.add_post("/kx/printer-files/delete", bridge.handle_kx_printer_file_delete)
+    r.add_get("/kx/printer-files/{filename}/thumbnail", bridge.handle_kx_printer_file_thumbnail)
     r.add_get("/kx/filament/slots",        bridge.handle_kx_filament_slots)
     r.add_get("/kx/filament/profiles",     bridge.handle_kx_filament_profiles)
     r.add_post("/kx/filament/slots/{idx}/profile", bridge.handle_kx_filament_slot_profile)
