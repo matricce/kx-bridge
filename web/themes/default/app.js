@@ -357,6 +357,11 @@ function applyLang(){
   setText('store-lbl-select-all',T.store_select_all||'Select All');
   setText('store-lbl-delete-selected',T.store_delete_selected||'Delete Selected');
   setText('store-lbl-exit-select',T.store_exit_select||'Cancel');
+  setText('btab-lbl-uploaded',T.browser_tab_uploaded||'Uploaded');
+  setText('btab-lbl-printer',T.browser_tab_printer||'On Printer');
+  setText('printer-store-lbl-select-all',T.store_select_all||'Select All');
+  setText('printer-store-lbl-delete-selected',T.store_delete_selected||'Delete Selected');
+  setText('printer-store-lbl-exit-select',T.store_exit_select||'Cancel');
   // Dashboard card titles
   setText('d-card-progress',T.card_progress);
   setText('d-card-temps',T.card_temps);
@@ -592,6 +597,17 @@ function showSettingsCat(name){
   document.querySelectorAll('.set-cat').forEach(b=>b.classList.remove('active'));
   var g=document.getElementById('setgrp-'+name);if(g)g.classList.add('active');
   var c=document.getElementById('setcat-'+name);if(c)c.classList.add('active');
+}
+
+// Browser-Sub-Tab umschalten: hochgeladene Dateien (Bridge-Store) vs. Dateien
+// auf dem Drucker selbst (interner Speicher, via listLocal MQTT).
+var _printerFilesLoaded=false;
+function showBrowserTab(name){
+  document.querySelectorAll('.browser-group').forEach(g=>g.classList.remove('active'));
+  document.querySelectorAll('.browser-tab').forEach(b=>b.classList.remove('active'));
+  var g=document.getElementById('browser-group-'+name);if(g)g.classList.add('active');
+  var t=document.getElementById('btab-'+name);if(t)t.classList.add('active');
+  if(name==='printer'&&!_printerFilesLoaded)loadPrinterFiles();
 }
 
 // ── Console log ──
@@ -2984,6 +3000,143 @@ function storeDeleteSelected(){
     if(failed.length)clog((T.log_delete_failed||'Delete failed')+': '+failed.length,'msg-err');
     storeExitSelectMode();
     loadStore();
+  });
+}
+
+// ── Files on the printer's own internal storage (Issue: 2nd Browser tab) ──
+// Uses filename as the identity key (the printer has no numeric file id like
+// the bridge's own GCodeStore) and a single batch-delete call, since the
+// printer's file/deleteBatch MQTT action natively accepts a filename list.
+var printerFiles=[];
+var _printerFilesSelectMode=false;
+var _printerFilesSelected={};  // filename -> true
+
+function loadPrinterFiles(){
+  var errEl=document.getElementById('printer-store-error');
+  if(errEl)errEl.style.display='none';
+  fetch(_apiUrl('/kx/printer-files')).then(function(r){return r.json()}).then(function(d){
+    _printerFilesLoaded=true;
+    if(d.error){
+      printerFiles=[];
+      if(errEl){errEl.textContent=T.printer_store_unreachable||d.error;errEl.style.display='block';}
+      renderPrinterFiles();
+      return;
+    }
+    printerFiles=d.result||[];
+    _printerFilesSelected={};
+    _printerFilesSelectMode=false;
+    var bar=document.getElementById('printer-store-select-bar');
+    if(bar)bar.style.display='none';
+    renderPrinterFiles();
+  }).catch(function(e){
+    _printerFilesLoaded=true;
+    if(errEl){errEl.textContent=T.printer_store_unreachable||String(e);errEl.style.display='block';}
+  });
+}
+
+function renderPrinterFiles(){
+  var grid=document.getElementById('printer-store-grid');
+  var empty=document.getElementById('printer-store-empty');
+  if(!grid||!empty)return;
+  if(!printerFiles.length){
+    empty.textContent=T.printer_store_empty||'No files on the printer.';
+    grid.innerHTML='';
+    empty.style.display='block';
+    return;
+  }
+  empty.style.display='none';
+  grid.innerHTML=printerFiles.map(function(f){
+    var name=f.filename.length>28?f.filename.slice(0,25)+'…':f.filename;
+    var sizeKb=f.size?(f.size/1024).toFixed(0)+' KB':'–';
+    var date=f.timestamp?new Date(f.timestamp).toISOString().replace('T',' ').slice(0,16):'';
+    var isSelected=!!_printerFilesSelected[f.filename];
+    var selectBorder=isSelected?'border:2px solid var(--accent);padding:9px':'border:1px solid var(--border);padding:10px';
+    var checkbox='<span style="position:absolute;top:6px;left:6px;width:22px;height:22px;'+
+      'border-radius:50%;background:rgba(255,255,255,.85);z-index:2;display:flex;'+
+      'align-items:center;justify-content:center">'+
+      '<input type="checkbox" class="store-card-cb" '+(isSelected?'checked':'')+
+      ' onclick="event.stopPropagation();printerFileToggleSelect(\''+f.filename.replace(/'/g,"\\'")+'\')" '+
+      'style="width:16px;height:16px;margin:0"></span>';
+    var cardClick=_printerFilesSelectMode?'onclick="printerFileToggleSelect(\''+f.filename.replace(/'/g,"\\'")+'\')" style="cursor:pointer;position:relative;background:var(--raised);border-radius:8px;'+selectBorder+';display:flex;flex-direction:column"':
+      'style="position:relative;background:var(--raised);border-radius:8px;'+selectBorder+';display:flex;flex-direction:column"';
+    return '<div '+cardClick+'>'+
+      checkbox+
+      '<div style="width:100%;height:60px;background:var(--raised);border-radius:6px;display:flex;align-items:center;justify-content:center;margin-bottom:8px;font-size:28px">🖨</div>'+
+      '<div title="'+f.filename+'" style="font-size:12px;font-weight:600;margin-bottom:4px;color:var(--txt)">'+name+'</div>'+
+      '<div style="font-size:11px;color:var(--txt2);margin-bottom:2px">💾 '+sizeKb+'</div>'+
+      '<div style="font-size:11px;color:var(--txt2);margin-bottom:8px">📅 '+date+'</div>'+
+      '<div style="display:flex;gap:6px;margin-top:auto">'+
+        '<button onclick="event.stopPropagation();printerFileDelete(\''+f.filename.replace(/'/g,"\\'")+'\')" '+
+          'style="flex:1;font-size:12px;padding:5px 8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt2);cursor:pointer">🗑</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+  _printerFilesUpdateSelectBar();
+}
+
+function _printerFilesUpdateSelectBar(){
+  var selectAll=document.getElementById('printer-store-select-all');
+  var countEl=document.getElementById('printer-store-selected-count');
+  var delBtn=document.getElementById('printer-store-delete-selected-btn');
+  if(!selectAll||!countEl||!delBtn)return;
+  var allNames=printerFiles.map(function(f){return f.filename;});
+  var selected=allNames.filter(function(n){return _printerFilesSelected[n];});
+  var n=selected.length;
+  selectAll.checked=n>0&&n===allNames.length;
+  selectAll.indeterminate=n>0&&n<allNames.length;
+  countEl.textContent=n>0?(T.store_selected_count||'{n} selected').replace('{n}',n):'';
+  delBtn.disabled=n===0;
+}
+
+function printerFileToggleSelect(filename){
+  if(!_printerFilesSelectMode){
+    _printerFilesSelectMode=true;
+    var bar=document.getElementById('printer-store-select-bar');
+    if(bar)bar.style.display='flex';
+  }
+  if(_printerFilesSelected[filename])delete _printerFilesSelected[filename];
+  else _printerFilesSelected[filename]=true;
+  renderPrinterFiles();
+}
+
+function printerFileToggleSelectAll(checked){
+  _printerFilesSelected={};
+  if(checked)printerFiles.forEach(function(f){_printerFilesSelected[f.filename]=true;});
+  renderPrinterFiles();
+}
+
+function printerFileExitSelectMode(){
+  _printerFilesSelectMode=false;
+  _printerFilesSelected={};
+  var bar=document.getElementById('printer-store-select-bar');
+  if(bar)bar.style.display='none';
+  renderPrinterFiles();
+}
+
+function _printerFilesDeleteRequest(filenames){
+  return fetch(_apiUrl('/kx/printer-files/delete'),{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({filenames:filenames}),
+  }).then(function(r){return r.json().then(function(d){return{ok:r.ok,body:d};});});
+}
+
+function printerFileDelete(filename){
+  if(!confirm(T.printer_store_delete_confirm||'Delete file?'))return;
+  _printerFilesDeleteRequest([filename]).then(function(res){
+    if(!res.ok){clog((T.log_delete_failed||'Delete failed')+': '+(res.body.error||''),'msg-err');return;}
+    loadPrinterFiles();
+  });
+}
+
+function printerFileDeleteSelected(){
+  var names=Object.keys(_printerFilesSelected);
+  if(!names.length)return;
+  if(!confirm((T.printer_store_delete_selected_confirm||'Delete {n} selected files?').replace('{n}',names.length)))return;
+  _printerFilesDeleteRequest(names).then(function(res){
+    if(!res.ok){clog((T.log_delete_failed||'Delete failed')+': '+(res.body.error||''),'msg-err');return;}
+    printerFileExitSelectMode();
+    loadPrinterFiles();
   });
 }
 

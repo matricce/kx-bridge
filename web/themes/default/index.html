@@ -388,49 +388,81 @@
           <span id="store-panel-title">🗂 Datei-Browser</span>
           <button id="store-refresh-btn" onclick="loadStore()" style="font-size:12px;padding:4px 12px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt2);cursor:pointer">↻ Aktualisieren</button>
         </div>
-        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-          <input id="store-search" type="text" placeholder="🔍 Suche…" oninput="renderStore()"
-            style="flex:1;min-width:140px;padding:6px 10px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);font-size:13px">
-          <select id="store-filter" onchange="renderStore()"
-            style="padding:6px 8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);font-size:13px">
-            <option value="all" id="sf-all">Alle</option>
-            <option value="completed" id="sf-ok">✓ Erfolgreich</option>
-            <option value="failed" id="sf-err">✗ Fehler</option>
-            <option value="never" id="sf-new">Neu</option>
-          </select>
-          <select id="store-sort" onchange="renderStore()"
-            style="padding:6px 8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);font-size:13px">
-            <option value="date_desc" id="ss-date">↓ Datum</option>
-            <option value="name_asc" id="ss-name">A–Z Name</option>
-            <option value="duration_asc" id="ss-dur">⏱ Druckzeit</option>
-          </select>
+        <div class="browser-subtabs" style="display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--border)">
+          <button class="browser-tab active" id="btab-uploaded" onclick="showBrowserTab('uploaded')"
+            style="padding:8px 14px;background:none;border:none;border-bottom:2px solid transparent;color:var(--txt2);cursor:pointer;font-size:13px">
+            <span id="btab-lbl-uploaded">Hochgeladen</span></button>
+          <button class="browser-tab" id="btab-printer" onclick="showBrowserTab('printer')"
+            style="padding:8px 14px;background:none;border:none;border-bottom:2px solid transparent;color:var(--txt2);cursor:pointer;font-size:13px">
+            <span id="btab-lbl-printer">Auf dem Drucker</span></button>
         </div>
-        <div id="store-upload-zone" onclick="document.getElementById('store-upload-input').click()"
-          ondragover="event.preventDefault();this.classList.add('drag-over')"
-          ondragleave="this.classList.remove('drag-over')"
-          ondrop="event.preventDefault();this.classList.remove('drag-over');uploadGcode(event.dataTransfer.files[0])">
-          <input type="file" id="store-upload-input" accept=".gcode,.bgcode"
-            style="display:none" onchange="uploadGcode(this.files[0]);this.value=''">
-          <span id="store-upload-icon">⬆</span>
-          <span id="store-upload-label"><span id="store-upload-label-prefix">GCode hierher ziehen oder </span><u id="store-upload-label-browse">durchsuchen</u></span>
-          <span id="store-upload-status" style="display:none"></span>
+
+        <div id="browser-group-uploaded" class="browser-group active">
+          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+            <input id="store-search" type="text" placeholder="🔍 Suche…" oninput="renderStore()"
+              style="flex:1;min-width:140px;padding:6px 10px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);font-size:13px">
+            <select id="store-filter" onchange="renderStore()"
+              style="padding:6px 8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);font-size:13px">
+              <option value="all" id="sf-all">Alle</option>
+              <option value="completed" id="sf-ok">✓ Erfolgreich</option>
+              <option value="failed" id="sf-err">✗ Fehler</option>
+              <option value="never" id="sf-new">Neu</option>
+            </select>
+            <select id="store-sort" onchange="renderStore()"
+              style="padding:6px 8px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt);font-size:13px">
+              <option value="date_desc" id="ss-date">↓ Datum</option>
+              <option value="name_asc" id="ss-name">A–Z Name</option>
+              <option value="duration_asc" id="ss-dur">⏱ Druckzeit</option>
+            </select>
+          </div>
+          <div id="store-upload-zone" onclick="document.getElementById('store-upload-input').click()"
+            ondragover="event.preventDefault();this.classList.add('drag-over')"
+            ondragleave="this.classList.remove('drag-over')"
+            ondrop="event.preventDefault();this.classList.remove('drag-over');uploadGcode(event.dataTransfer.files[0])">
+            <input type="file" id="store-upload-input" accept=".gcode,.bgcode"
+              style="display:none" onchange="uploadGcode(this.files[0]);this.value=''">
+            <span id="store-upload-icon">⬆</span>
+            <span id="store-upload-label"><span id="store-upload-label-prefix">GCode hierher ziehen oder </span><u id="store-upload-label-browse">durchsuchen</u></span>
+            <span id="store-upload-status" style="display:none"></span>
+          </div>
+          <div id="store-empty" style="display:none;color:var(--txt2);text-align:center;padding:40px 0;font-size:14px">
+          </div>
+          <div id="store-select-bar" style="display:none;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+              <input type="checkbox" id="store-select-all" onchange="storeToggleSelectAll(this.checked)">
+              <span id="store-lbl-select-all">Alle auswählen</span>
+            </label>
+            <span id="store-selected-count" style="color:var(--txt2);font-size:13px"></span>
+            <button id="store-delete-selected-btn" disabled onclick="storeDeleteSelected()"
+              style="font-size:12px;padding:4px 12px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--err);cursor:pointer">
+              🗑 <span id="store-lbl-delete-selected">Auswahl löschen</span></button>
+            <button onclick="storeExitSelectMode()"
+              style="font-size:12px;padding:4px 12px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt2);cursor:pointer">
+              <span id="store-lbl-exit-select">Abbrechen</span></button>
+          </div>
+          <div id="store-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px"></div>
         </div>
-        <div id="store-empty" style="display:none;color:var(--txt2);text-align:center;padding:40px 0;font-size:14px">
+
+        <div id="browser-group-printer" class="browser-group">
+          <div id="printer-store-empty" style="display:none;color:var(--txt2);text-align:center;padding:40px 0;font-size:14px">
+          </div>
+          <div id="printer-store-error" style="display:none;color:var(--err);text-align:center;padding:20px 0;font-size:13px">
+          </div>
+          <div id="printer-store-select-bar" style="display:none;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+              <input type="checkbox" id="printer-store-select-all" onchange="printerFileToggleSelectAll(this.checked)">
+              <span id="printer-store-lbl-select-all">Alle auswählen</span>
+            </label>
+            <span id="printer-store-selected-count" style="color:var(--txt2);font-size:13px"></span>
+            <button id="printer-store-delete-selected-btn" disabled onclick="printerFileDeleteSelected()"
+              style="font-size:12px;padding:4px 12px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--err);cursor:pointer">
+              🗑 <span id="printer-store-lbl-delete-selected">Auswahl löschen</span></button>
+            <button onclick="printerFileExitSelectMode()"
+              style="font-size:12px;padding:4px 12px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt2);cursor:pointer">
+              <span id="printer-store-lbl-exit-select">Abbrechen</span></button>
+          </div>
+          <div id="printer-store-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px"></div>
         </div>
-        <div id="store-select-bar" style="display:none;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
-            <input type="checkbox" id="store-select-all" onchange="storeToggleSelectAll(this.checked)">
-            <span id="store-lbl-select-all">Alle auswählen</span>
-          </label>
-          <span id="store-selected-count" style="color:var(--txt2);font-size:13px"></span>
-          <button id="store-delete-selected-btn" disabled onclick="storeDeleteSelected()"
-            style="font-size:12px;padding:4px 12px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--err);cursor:pointer">
-            🗑 <span id="store-lbl-delete-selected">Auswahl löschen</span></button>
-          <button onclick="storeExitSelectMode()"
-            style="font-size:12px;padding:4px 12px;background:var(--raised);border:1px solid var(--border);border-radius:6px;color:var(--txt2);cursor:pointer">
-            <span id="store-lbl-exit-select">Abbrechen</span></button>
-        </div>
-        <div id="store-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px"></div>
       </div>
     </div>
 

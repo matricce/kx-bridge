@@ -322,6 +322,12 @@ canvas.tchart{width:100%;height:60px;display:block;border-radius:6px;background:
   .set-cat .nav-text{display:inline}
 }
 
+/* ── BROWSER SUB-TABS (uploaded vs. on-printer files) ── */
+.browser-tab.active{color:var(--accent);border-bottom-color:var(--accent)!important}
+.browser-tab:hover{color:var(--txt)}
+.browser-group{display:none}
+.browser-group.active{display:block}
+
 /* ── FILE BROWSER UPLOAD ZONE ── */
 #store-upload-zone{
   display:flex;flex-direction:column;align-items:center;justify-content:center;

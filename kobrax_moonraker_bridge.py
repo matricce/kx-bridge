@@ -1051,6 +1051,13 @@ class KobraXBridge:
         self._head_tools_model: int = -1
         self._filament_mode: str = "toolhead"
         self._last_uploaded_file: str = ""
+        # Pending waiters for a specific file/report `action` (e.g. "listLocal",
+        # "deleteBatch"). publish()'s own return value for these actions is just
+        # a generic immediate ACK skeleton (code=0, all fields empty) - the real
+        # answer arrives later via the file/report callback (_on_file), same
+        # as the existing fileDetails fire-and-forget pattern. Format:
+        # {action: {"event": threading.Event(), "result": dict|None}}.
+        self._file_action_waiters: dict[str, dict] = {}
         self._store = store if store is not None else GCodeStore(args.data_dir)
         self._serve_dir_path: str = self._store._gcode_dir
         self._current_job_id: str = ""
@@ -1559,7 +1566,41 @@ class KobraXBridge:
         if payload.get("state") == "done" or payload.get("code") == 200:
             log.info(f"Skip response: state={payload.get('state')} code={payload.get('code')} skipped={skipped}")
 
+    def _wait_for_file_action(self, action: str, send_fn, timeout: float = 8.0) -> dict | None:
+        """Sends a file/* MQTT request (via send_fn, which must call
+        self.client.publish(..., timeout=0) fire-and-forget) and blocks the
+        calling thread until a matching file/report with this `action`
+        arrives via _on_file, or the timeout elapses.
+
+        Needed because the printer's publish() return value for actions like
+        listLocal/deleteBatch is just a generic immediate ACK skeleton
+        (code=0, empty fields) - the real response is a separate, later
+        file/report message, same as the existing fileDetails pattern.
+        Must be called from a worker thread (e.g. via run_in_executor), not
+        the asyncio event loop, since it blocks on a threading.Event.
+        """
+        event = threading.Event()
+        waiter = {"event": event, "result": None}
+        self._file_action_waiters[action] = waiter
+        try:
+            send_fn()
+            event.wait(timeout)
+            return waiter["result"]
+        finally:
+            if self._file_action_waiters.get(action) is waiter:
+                del self._file_action_waiters[action]
+
     def _on_file(self, payload: dict):
+        # Deliver to any pending listLocal/deleteBatch waiter first (see
+        # _wait_for_file_action) - these actions carry no file_details/
+        # thumbnail payload of their own, so this doesn't interfere with the
+        # handling below.
+        action = payload.get("action") or ""
+        waiter = self._file_action_waiters.get(action)
+        if waiter is not None:
+            waiter["result"] = payload
+            waiter["event"].set()
+
         d = payload.get("data") or {}
         details = d.get("file_details") or {}
         thumb = details.get("thumbnail") or details.get("png_image") or ""
@@ -2775,6 +2816,59 @@ class KobraXBridge:
         if self._store.delete_file(file_id):
             return self._json_cors({"result": "ok"})
         return self._json_cors({"error": "not found"}, status=404)
+
+    async def handle_kx_printer_files(self, request):
+        """GET /kx/printer-files - lists files on the printer's OWN internal
+        storage (file/listLocal MQTT action), as opposed to /kx/files which
+        lists what the bridge itself has stored. Needed because prints
+        started directly from Anycubic Slicer Next (bypassing the bridge)
+        leave files on the printer that were previously only visible/
+        deletable from the printer's own display (Issue #102 context)."""
+        loop = asyncio.get_event_loop()
+        def _fetch():
+            return self._wait_for_file_action(
+                "listLocal",
+                lambda: self.client.publish(
+                    "file", "listLocal",
+                    {"page_num": 1, "page_size": 200, "path": "/"},
+                    timeout=0,
+                ),
+                timeout=8.0,
+            )
+        result = await loop.run_in_executor(None, _fetch)
+        if not result or result.get("code") != 200:
+            return self._json_cors({"error": "printer unreachable or query failed"}, status=502)
+        records = (result.get("data") or {}).get("records") or []
+        files = [r for r in records if not r.get("is_dir")]
+        return self._json_cors({"result": files})
+
+    async def handle_kx_printer_file_delete(self, request):
+        """POST /kx/printer-files/delete - body: {"filenames": ["a.gcode", ...]}.
+        Single endpoint for both single and multi-select delete - the
+        printer's file/deleteBatch MQTT action natively accepts a list."""
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        filenames = body.get("filenames") or []
+        if not filenames:
+            return self._json_cors({"error": "no filenames given"}, status=400)
+        files = [{"path": "/", "filename": fn} for fn in filenames if fn]
+        loop = asyncio.get_event_loop()
+        def _delete():
+            return self._wait_for_file_action(
+                "deleteBatch",
+                lambda: self.client.publish(
+                    "file", "deleteBatch",
+                    {"root": "local", "files": files},
+                    timeout=0,
+                ),
+                timeout=8.0,
+            )
+        result = await loop.run_in_executor(None, _delete)
+        if not result or result.get("state") != "success":
+            return self._json_cors({"error": "delete failed", "detail": result}, status=502)
+        return self._json_cors({"result": "ok"})
 
     async def handle_kx_file_download(self, request):
         file_id = request.match_info["file_id"]
@@ -5733,6 +5827,8 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_delete("/kx/files/{file_id}",    bridge.handle_kx_file_delete)
     r.add_get("/kx/files/{file_id}/download", bridge.handle_kx_file_download)
     r.add_post("/kx/files/{file_id}/verify", bridge.handle_kx_file_verify)
+    r.add_get("/kx/printer-files",         bridge.handle_kx_printer_files)
+    r.add_post("/kx/printer-files/delete", bridge.handle_kx_printer_file_delete)
     r.add_get("/kx/filament/slots",        bridge.handle_kx_filament_slots)
     r.add_get("/kx/filament/profiles",     bridge.handle_kx_filament_profiles)
     r.add_post("/kx/filament/slots/{idx}/profile", bridge.handle_kx_filament_slot_profile)
