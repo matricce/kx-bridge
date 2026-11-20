@@ -800,19 +800,59 @@ function syncActiveJobThumbnail(filename){
     });
 }
 
-function _applyActiveThumb(thumb){
+// The slicer thumbnail is a transparent 230x110 PNG where the parts fill only
+// a fraction of the canvas. Crop to the alpha bounding box so the model can be
+// shown at a size comparable to the slicer's own plate view.
+var _thumbCropCache = {};
+function _cropThumbnail(src, cb){
+  if(_thumbCropCache[src]){ cb(_thumbCropCache[src]); return; }
+  var img = new Image();
+  img.onload = function(){
+    try{
+      var w = img.naturalWidth, h = img.naturalHeight;
+      var c = document.createElement('canvas'); c.width = w; c.height = h;
+      var ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0);
+      var d = ctx.getImageData(0, 0, w, h).data;
+      var x0 = w, y0 = h, x1 = -1, y1 = -1;
+      for(var y = 0; y < h; y++){
+        for(var x = 0; x < w; x++){
+          if(d[(y * w + x) * 4 + 3] > 8){
+            if(x < x0) x0 = x; if(x > x1) x1 = x;
+            if(y < y0) y0 = y; if(y > y1) y1 = y;
+          }
+        }
+      }
+      if(x1 < x0 || y1 < y0){ _thumbCropCache[src] = src; cb(src); return; }
+      var pad = 2; x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad);
+      x1 = Math.min(w - 1, x1 + pad); y1 = Math.min(h - 1, y1 + pad);
+      var o = document.createElement('canvas');
+      o.width = x1 - x0 + 1; o.height = y1 - y0 + 1;
+      o.getContext('2d').drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height);
+      _thumbCropCache[src] = o.toDataURL('image/png');
+    }catch(e){ _thumbCropCache[src] = src; }
+    cb(_thumbCropCache[src]);
+  };
+  img.onerror = function(){ cb(src); };
+  img.src = src;
+}
+
+function _setBedThumb(src){
   var bedThumb = document.getElementById('bed-model-thumbnail');
   var bedEmpty = document.getElementById('bed-empty-state');
   var modelPip = document.getElementById('model-pip-thumb');
-  if(thumb){
-    var src = 'data:image/png;base64,' + thumb;
-    if(bedThumb){
-      bedThumb.src = src;
-      bedThumb.style.display = 'block';
-    }
-    if(bedEmpty) bedEmpty.style.display = 'none';
-    if(modelPip) modelPip.src = src;
-  }
+  if(bedEmpty) bedEmpty.style.display = 'none';
+  if(modelPip && modelPip.dataset.raw !== src){ modelPip.dataset.raw = src; modelPip.src = src; }
+  if(!bedThumb || bedThumb.dataset.raw === src) return;
+  bedThumb.dataset.raw = src;
+  _cropThumbnail(src, function(cropped){
+    if(bedThumb.dataset.raw !== src) return;
+    bedThumb.src = cropped;
+    bedThumb.style.display = 'block';
+  });
+}
+
+function _applyActiveThumb(thumb){
+  if(thumb) _setBedThumb('data:image/png;base64,' + thumb);
 }
 
 // ── Apply state to DOM ──
@@ -1002,18 +1042,13 @@ function applyState(s){
   var effectiveThumb = _activeJobThumb || (s.thumbnail && (!currentPrintFile || !s.filename || s.filename === _activeJobFilename) ? s.thumbnail : '');
 
   if(effectiveThumb){
-    var thumbSrc = 'data:image/png;base64,' + effectiveThumb;
-    if(bedThumb && bedThumb.src !== thumbSrc){
-      bedThumb.src = thumbSrc;
-      bedThumb.style.display = 'block';
-    }
-    if(bedEmpty) bedEmpty.style.display = 'none';
-    if(modelPip && modelPip.src !== thumbSrc) modelPip.src = thumbSrc;
+    _setBedThumb('data:image/png;base64,' + effectiveThumb);
     if(modelPipLayer) modelPipLayer.textContent = 'Layer ' + currL + ' / ' + totL;
   } else {
     if(bedThumb && !_activeJobThumb){
       bedThumb.style.display = 'none';
       bedThumb.src = '';
+      delete bedThumb.dataset.raw;
     }
     if(bedEmpty && !_activeJobThumb) bedEmpty.style.display = 'flex';
     if(modelPip && !_activeJobThumb) modelPip.src = '';

@@ -1217,18 +1217,23 @@ header.orca-top-bar {
 /* ── 3D Model Projection ── */
 .orca-model-projection {
   position: absolute;
-  inset: 20px;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
+  transform-style: preserve-3d;
 }
+/* The slicer thumbnail is already a perspective render, so it stands upright
+   facing the viewer (undoing the bed's rotation) instead of lying on the plate. */
 .bed-model-img {
-  max-width: 80%;
-  max-height: 80%;
+  width: 135%;
+  max-width: none;
+  height: auto;
   object-fit: contain;
-  filter: drop-shadow(0 15px 25px rgba(0, 0, 0, 0.85)) drop-shadow(0 0 10px rgba(0, 210, 173, 0.3));
-  transform: translateZ(25px);
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.8));
+  transform: translateZ(10px) rotateZ(30deg) rotateX(-55deg);
+  transform-origin: 50% 85%;
   z-index: 3;
 }
 .bed-model-shadow {
