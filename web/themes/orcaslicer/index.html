@@ -25,29 +25,32 @@
 </div>
 
 <header class="orca-top-bar">
-  <!-- Left: Window controls / Brand -->
+  <!-- Left: Window controls / Brand & Quick Machine Actions -->
   <div class="orca-top-left">
     <div class="logo">
       <span class="logo-mark">⬡</span>
       <span class="logo-title">OrcaSlicer</span>
       <span class="logo-version">v2.5</span>
     </div>
-    <div class="orca-quick-actions">
-      <span class="orca-qa-item" title="File">File</span>
-      <span class="orca-qa-item" title="Save">Save</span>
-      <span class="orca-qa-item" title="Undo">Undo</span>
-      <span class="orca-qa-item" title="Redo">Redo</span>
-      <span class="orca-qa-divider"></span>
-      <span class="orca-qa-item" title="Calibration">Calibration</span>
+    <div class="orca-machine-actions">
+      <button class="orca-ma-btn" onclick="homeAll()" title="Home All Axes (X, Y, Z)">
+        <span class="ma-icon">🏠</span> Home All
+      </button>
+      <button class="orca-ma-btn" id="top-btn-led" onclick="toggleLed()" title="Toggle Chamber LED">
+        <span class="ma-icon">💡</span> LED
+      </button>
+      <button class="orca-ma-btn" onclick="disableMotors()" title="Turn Off Stepper Motors">
+        <span class="ma-icon">⚡</span> Motors Off
+      </button>
+      <button class="orca-ma-btn btn-danger-soft" onclick="emergencyStop()" title="Emergency Stop / Cancel Active Job">
+        <span class="ma-icon">🛑</span> Stop
+      </button>
     </div>
   </div>
 
-  <!-- Center: Main OrcaSlicer Tabs -->
+  <!-- Center: Main OrcaSlicer Tabs (Functional only) -->
   <div class="orca-center-tabs">
-    <button class="orca-tab" onclick="showPanel('dashboard')">Prepare</button>
-    <button class="orca-tab" onclick="showPanel('dashboard')">Preview</button>
     <button class="orca-tab active" id="otab-dashboard" onclick="showPanel('dashboard')">Device</button>
-    <button class="orca-tab" onclick="showPanel('store');loadStore()">Project</button>
     <button class="orca-tab" id="otab-store" onclick="showPanel('store');loadStore()">Files</button>
     <button class="orca-tab" id="otab-console" onclick="showPanel('console');clearLogBadge()">
       Console<span id="log-badge" class="orca-badge-counter" style="display:none"></span>
@@ -306,32 +309,89 @@
 
         <!-- ═══ RIGHT MAIN WORKSPACE (VIEWPORT + DUAL TECH CARDS) ═══ -->
         <main class="orca-main-col">
-          <!-- 1. 3D VIEWPORT & WEBCAM PIP -->
+          <!-- 1. 3D VIEWPORT & WEBCAM (DUAL-MODE B / A) -->
           <div class="orca-viewport-container" id="orca-viewport">
-            <div class="orca-viewport-grid-bg"></div>
-            <!-- Viewport HUD Overlay Tags -->
-            <div class="orca-hud-tag-topleft">FPS: 30  ·  3D: Active  ·  Camera: On</div>
-            <div class="orca-hud-axes">
-              <span class="axis-x">X</span>
-              <span class="axis-y">Y</span>
+            <!-- Viewport Top Toolbar -->
+            <div class="orca-vp-toolbar">
+              <div class="orca-view-switcher">
+                <button class="orca-view-btn active" id="btn-view-3d" onclick="setViewMode('3d')">
+                  <span class="view-btn-icon">⬡</span> 3D Bed View
+                </button>
+                <button class="orca-view-btn" id="btn-view-cam" onclick="setViewMode('camera')">
+                  <span class="view-btn-icon">📷</span> Live Camera
+                </button>
+              </div>
+              <div class="orca-vp-metrics" id="vp-3d-tools">
+                <span class="orca-vp-metric-item">Layer: <strong id="vp-curr-layer">–</strong> / <span id="vp-total-layer">–</span></span>
+                <span class="orca-vp-metric-sep">·</span>
+                <span class="orca-vp-metric-item">Height: <strong id="vp-z-height">0.00 mm</strong></span>
+                <button class="orca-vp-action-btn" onclick="reset3dView()" title="Center Bed">⟲ Center</button>
+              </div>
+              <div class="orca-vp-cam-tools" id="vp-cam-tools" style="display:none">
+                <button class="orca-vp-action-btn" onclick="snapshotCamera()" title="Save Snapshot Image">📸 Snapshot</button>
+                <button class="orca-vp-action-btn" onclick="toggleCamFullscreen()" title="Fullscreen">⛶ Fullscreen</button>
+                <button class="orca-vp-action-btn" onclick="resetCamera()" title="Reconnect Camera Stream">↺ Reconnect</button>
+              </div>
             </div>
-            <div class="orca-hud-plate-num">01</div>
 
-            <!-- Floating Webcam PiP Card -->
+            <!-- 3D Perspective Bed Canvas -->
+            <div class="orca-3d-scene" id="orca-3d-scene">
+              <div class="orca-viewport-grid-bg"></div>
+
+              <!-- 3D Realistic Build Plate (260x260mm Textured PEI) -->
+              <div class="orca-bed-assembly">
+                <div class="orca-bed-plate" id="orca-bed-plate">
+                  <div class="orca-bed-surface">
+                    <div class="orca-bed-grid-lines"></div>
+                    <div class="orca-bed-origin-axis">
+                      <span class="bed-axis-x">X</span>
+                      <span class="bed-axis-y">Y</span>
+                    </div>
+                    <div class="orca-bed-logo">ANYCUBIC PEI · 260×260</div>
+
+                    <!-- 3D Model Layer Projection on Bed -->
+                    <div class="orca-model-projection" id="orca-model-projection">
+                      <img id="bed-model-thumbnail" class="bed-model-img" alt="3D Model Preview" style="display:none">
+                      <div class="bed-model-shadow" id="bed-model-shadow"></div>
+                      <div class="bed-model-empty" id="bed-empty-state">
+                        <div class="empty-plate-grid"></div>
+                        <span class="empty-plate-text">Plate 01 · Ready</span>
+                      </div>
+                    </div>
+
+                    <!-- Toolhead Position Cursor Indicator -->
+                    <div class="orca-toolhead-cursor" id="bed-toolhead-indicator" style="left:50%;top:50%">
+                      <div class="toolhead-crosshair"></div>
+                      <div class="toolhead-laser-dot"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Viewport Overlay Corners -->
+              <div class="orca-hud-axes">
+                <span class="axis-x">X: <strong id="vp-hud-x">130</strong></span>
+                <span class="axis-y">Y: <strong id="vp-hud-y">130</strong></span>
+              </div>
+              <div class="orca-hud-plate-num">01</div>
+            </div>
+
+            <!-- Floating Webcam PiP Card (expands in Camera mode) -->
             <div class="orca-webcam-pip-card" id="card-camera">
               <div class="orca-pip-header">
                 <div class="orca-pip-live-status">
                   <span class="orca-live-dot"></span>
-                  <span class="orca-live-label">Live Webcam (1080p · 30 FPS)</span>
+                  <span class="orca-live-label" id="cam-status-label">Live Webcam (1080p)</span>
                 </div>
                 <div class="orca-pip-controls">
-                  <span class="orca-light-icon">💡</span>
+                  <span class="orca-light-icon" title="Chamber LED">💡</span>
                   <label class="toggle orca-toggle-scale">
                     <input type="checkbox" id="d-light-toggle" onchange="setLight()">
                     <span class="toggle-track"></span>
                     <span class="toggle-thumb"></span>
                   </label>
-                  <button class="orca-pip-btn" onclick="toggleCam()" id="cam-toggle-btn">▶</button>
+                  <button class="orca-pip-btn" onclick="toggleCam()" id="cam-toggle-btn" title="Start/Stop Feed">▶</button>
+                  <button class="orca-pip-btn" onclick="toggleViewPip()" id="cam-expand-btn" title="Switch Full/PiP View">⤢</button>
                   <button class="orca-pip-btn" onclick="resetCamera()" id="cam-reset-btn" style="display:none" title="Reconnect">↺</button>
                 </div>
               </div>
@@ -340,6 +400,15 @@
                 <div class="cam-spinner" id="cam-spinner"></div>
                 <img id="cam-img" draggable="false" style="display:none;width:100%;height:100%;object-fit:cover" alt="Camera">
                 <div class="orca-pip-layer-pill">Current: Layer <span id="cam-layer-val">112</span></div>
+              </div>
+            </div>
+
+            <!-- Reverse PiP: Model Thumbnail when Camera is Fullscreen -->
+            <div class="orca-model-pip-card" id="model-pip-card" onclick="setViewMode('3d')" title="Click to open 3D Bed View" style="display:none">
+              <img id="model-pip-thumb" class="model-pip-img" alt="Model Preview">
+              <div class="model-pip-info">
+                <span class="model-pip-badge">⬡ 3D Bed</span>
+                <span class="model-pip-layer" id="model-pip-layer">Layer –</span>
               </div>
             </div>
           </div>

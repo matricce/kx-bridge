@@ -573,6 +573,7 @@ function ensureAceDryCards(){
   window.addEventListener('DOMContentLoaded',function(){
     setLanguage(currentLang).catch(function(){});
     _loadSpoolmanStatus();
+    if(typeof setViewMode==='function') setViewMode(currentViewMode);
     // Kein Drucker konfiguriert? → direkt in den Drucker-Tab (zeigt "+ Drucker hinzufügen")
     fetch('/kx/printers').then(function(r){return r.json()}).then(function(d){
       if(!d.result||!d.result.length){showPanel('printers');loadPrinterTab();}
@@ -916,6 +917,56 @@ function applyState(s){
 
   var camLayer = document.getElementById('cam-layer-val');
   if(camLayer) camLayer.textContent = s.current_layer || s.curr_layer || '–';
+
+  // Top Bar Quick Actions: LED sync
+  var topLed = document.getElementById('top-btn-led');
+  if(topLed) topLed.classList.toggle('active', !!s.light_on);
+
+  // 3D Viewport HUD & Layer metrics
+  var currL = s.curr_layer || s.current_layer || '–';
+  var totL = s.total_layers || '–';
+  var vpCurr = document.getElementById('vp-curr-layer'); if(vpCurr) vpCurr.textContent = currL;
+  var vpTot = document.getElementById('vp-total-layer'); if(vpTot) vpTot.textContent = totL;
+  var vpZ = document.getElementById('vp-z-height');
+  if(vpZ) vpZ.textContent = (s.z_mm != null && s.z_mm > 0) ? s.z_mm.toFixed(2) + ' mm' : '0.00 mm';
+
+  // 3D Bed Model Thumbnail Projection & Reverse PiP
+  var bedThumb = document.getElementById('bed-model-thumbnail');
+  var bedEmpty = document.getElementById('bed-empty-state');
+  var modelPip = document.getElementById('model-pip-thumb');
+  var modelPipLayer = document.getElementById('model-pip-layer');
+
+  if(s.thumbnail){
+    var thumbSrc = 'data:image/png;base64,' + s.thumbnail;
+    if(bedThumb){
+      bedThumb.src = thumbSrc;
+      bedThumb.style.display = 'block';
+    }
+    if(bedEmpty) bedEmpty.style.display = 'none';
+    if(modelPip) modelPip.src = thumbSrc;
+    if(modelPipLayer) modelPipLayer.textContent = 'Layer ' + currL + ' / ' + totL;
+  } else {
+    if(bedThumb){
+      bedThumb.style.display = 'none';
+      bedThumb.src = '';
+    }
+    if(bedEmpty) bedEmpty.style.display = 'flex';
+    if(modelPip) modelPip.src = '';
+    if(modelPipLayer) modelPipLayer.textContent = 'Layer ' + currL;
+  }
+
+  // Toolhead indicator on bed (normalized to 260x260 mm build area)
+  var toolhead = document.getElementById('bed-toolhead-indicator');
+  if(toolhead){
+    var xPos = (s.x_mm != null) ? s.x_mm : 130;
+    var yPos = (s.y_mm != null) ? s.y_mm : 130;
+    var vpHudX = document.getElementById('vp-hud-x'); if(vpHudX) vpHudX.textContent = Math.round(xPos);
+    var vpHudY = document.getElementById('vp-hud-y'); if(vpHudY) vpHudY.textContent = Math.round(yPos);
+    var xPct = Math.min(95, Math.max(5, (xPos / 260) * 100));
+    var yPct = Math.min(95, Math.max(5, (1 - (yPos / 260)) * 100));
+    toolhead.style.left = xPct + '%';
+    toolhead.style.top = yPct + '%';
+  }
 
   var amsTitle=document.getElementById('d-card-ams');
   if(amsTitle){
@@ -2606,13 +2657,111 @@ function openAddSlotHint(){
   openSlotEdit(0);
 }
 
-// ── Light ──
+// ── Light & Quick Controls ──
 function setLight(){
   var on=document.getElementById('d-light-toggle').checked;
   post('/api/light',{on:on,brightness:80})
-    .then(function(){clog('Licht '+(on?'an, 80%':'aus'),'msg-ok')})
-
+    .then(function(){
+      if(S) S.light_on=on;
+      var topLed=document.getElementById('top-btn-led');
+      if(topLed) topLed.classList.toggle('active',on);
+      clog('LED '+(on?'on':'off'),'msg-ok');
+    })
     .catch(function(e){clog('Licht-Fehler: '+e,'msg-err')});
+}
+
+function toggleLed(){
+  var cur=(S&&S.light_on)||false;
+  var next=!cur;
+  post('/api/light',{on:next,brightness:80})
+    .then(function(){
+      if(S) S.light_on=next;
+      var topLed=document.getElementById('top-btn-led');
+      if(topLed) topLed.classList.toggle('active',next);
+      var tog=document.getElementById('d-light-toggle');
+      if(tog) tog.checked=next;
+      clog('LED '+(next?'ON':'OFF'),'msg-ok');
+    })
+    .catch(function(e){clog('LED error: '+e,'msg-err');});
+}
+
+function emergencyStop(){
+  if(!confirm('EMERGENCY STOP: Halt printer motors and cancel current job immediately?')) return;
+  post('/printer/emergency_stop',{})
+    .catch(function(){ return post('/api/cancel',{}); })
+    .then(function(){
+      disableMotors();
+      clog('EMERGENCY STOP EXECUTED','msg-err');
+      poll();
+    })
+    .catch(function(e){clog('Emergency stop error: '+e,'msg-err');});
+}
+
+// ── Viewport 3D / Camera Switcher ──
+var currentViewMode='3d';
+try{ currentViewMode=localStorage.getItem('orca_view_mode')||'3d'; }catch(e){}
+
+function setViewMode(mode){
+  currentViewMode=mode;
+  try{ localStorage.setItem('orca_view_mode',mode); }catch(e){}
+  var btn3d=document.getElementById('btn-view-3d');
+  var btnCam=document.getElementById('btn-view-cam');
+  var container=document.getElementById('orca-viewport');
+  var tools3d=document.getElementById('vp-3d-tools');
+  var toolsCam=document.getElementById('vp-cam-tools');
+
+  if(mode==='camera'){
+    if(btn3d) btn3d.classList.remove('active');
+    if(btnCam) btnCam.classList.add('active');
+    if(container) container.classList.add('mode-camera');
+    if(tools3d) tools3d.style.display='none';
+    if(toolsCam) toolsCam.style.display='flex';
+    if(!camOn) camStart();
+  } else {
+    if(btnCam) btnCam.classList.remove('active');
+    if(btn3d) btn3d.classList.add('active');
+    if(container) container.classList.remove('mode-camera');
+    if(toolsCam) toolsCam.style.display='none';
+    if(tools3d) tools3d.style.display='flex';
+  }
+}
+
+function toggleViewPip(){
+  setViewMode(currentViewMode==='3d'?'camera':'3d');
+}
+
+function reset3dView(){
+  var ass=document.querySelector('.orca-bed-assembly');
+  if(ass){
+    ass.style.transform='rotateX(55deg) rotateZ(-30deg) translateZ(-10px)';
+  }
+}
+
+function snapshotCamera(){
+  var img=document.getElementById('cam-img');
+  if(!img||!img.src||img.style.display==='none'){
+    clog('No active camera feed for snapshot','msg-err');
+    return;
+  }
+  var a=document.createElement('a');
+  a.href=img.src;
+  a.target='_blank';
+  a.download='printer_snapshot_'+Date.now()+'.jpg';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  clog('Snapshot captured','msg-ok');
+}
+
+function toggleCamFullscreen(){
+  var elem=document.getElementById('orca-viewport');
+  if(!elem)return;
+  if(!document.fullscreenElement){
+    if(elem.requestFullscreen) elem.requestFullscreen();
+    else if(elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+  } else {
+    if(document.exitFullscreen) document.exitFullscreen();
+  }
 }
 
 // ── Print Speed ──
