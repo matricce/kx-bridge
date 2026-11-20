@@ -24,22 +24,47 @@
     style="padding:5px 16px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.5);border-radius:6px;font-weight:700;cursor:pointer;font-size:13px"></button>
 </div>
 
-<header>
-  <div class="logo">⬡ KX-Bridge</div>
-  <div style="flex:1"></div>
-  <div id="printer-dropdown-wrap" style="display:none;position:relative">
-    <button id="printer-dropdown-btn" onclick="togglePrinterDropdown()" style="background:var(--raised);border:1px solid var(--border);border-radius:6px;padding:4px 10px;color:var(--txt);cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px">
-      <span id="h-pname">Anycubic Kobra X</span><span style="opacity:.5">▾</span>
-    </button>
-    <div id="printer-dropdown-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--card);border:1px solid var(--border);border-radius:8px;min-width:200px;z-index:200;box-shadow:0 4px 16px #0006;overflow:hidden">
+<header class="orca-top-bar">
+  <!-- Left: Window controls / Brand -->
+  <div class="orca-top-left">
+    <div class="logo">
+      <span class="logo-mark">⬡</span>
+      <span class="logo-title">OrcaSlicer</span>
+      <span class="logo-version">v2.5</span>
+    </div>
+    <div class="orca-quick-actions">
+      <span class="orca-qa-item" title="File">File</span>
+      <span class="orca-qa-item" title="Save">Save</span>
+      <span class="orca-qa-item" title="Undo">Undo</span>
+      <span class="orca-qa-item" title="Redo">Redo</span>
+      <span class="orca-qa-divider"></span>
+      <span class="orca-qa-item" title="Calibration">Calibration</span>
     </div>
   </div>
-  <div id="h-pname-single" class="hname">Anycubic Kobra X</div>
-  <span id="h-version" style="font-size:11px;opacity:.5;margin-left:6px"></span>
-  <div class="hbadge" id="h-badge"><span class="dot"></span><span id="h-state">Standby</span></div>
-  <button class="theme-btn" onclick="toggleTheme()" title="Switch Theme">☀ / ☾</button>
-  <button class="theme-btn" onclick="showPanel('settings')" id="settings-btn" title="Settings">⚙</button>
-  <button class="conn-btn disconnected" id="conn-btn" onclick="toggleConnection()">⚡ Connect</button>
+
+  <!-- Center: Main OrcaSlicer Tabs -->
+  <div class="orca-center-tabs">
+    <button class="orca-tab" onclick="showPanel('dashboard')">Prepare</button>
+    <button class="orca-tab" onclick="showPanel('dashboard')">Preview</button>
+    <button class="orca-tab active" id="otab-dashboard" onclick="showPanel('dashboard')">Device</button>
+    <button class="orca-tab" onclick="showPanel('store');loadStore()">Project</button>
+    <button class="orca-tab" id="otab-store" onclick="showPanel('store');loadStore()">Files</button>
+    <button class="orca-tab" id="otab-console" onclick="showPanel('console');clearLogBadge()">
+      Console<span id="log-badge" class="orca-badge-counter" style="display:none"></span>
+    </button>
+    <button class="orca-tab" id="otab-printers" onclick="showPanel('printers');loadPrinterTab()">Printers</button>
+    <button class="orca-tab" id="otab-settings" onclick="showPanel('settings')">Settings</button>
+  </div>
+
+  <!-- Right: Actions & Status -->
+  <div class="orca-top-right">
+    <div class="orca-slice-btn-group">
+      <button class="orca-btn-slice" onclick="openPrintWithSlots()">Slice plate ▾</button>
+      <button class="orca-btn-print" onclick="openPrintWithSlots()">Print</button>
+    </div>
+    <button class="conn-btn disconnected" id="conn-btn" onclick="toggleConnection()">⚡ Connect</button>
+    <button class="theme-btn" onclick="toggleTheme()" title="Switch Theme">☀ / ☾</button>
+  </div>
 </header>
 
 <!-- ═══ AMS SLOT EDIT DIALOG ═══ -->
@@ -189,232 +214,257 @@
   </nav>
 
   <main>
-    <!-- ═══ DASHBOARD ═══ -->
+    <!-- ═══ DASHBOARD (ORCASLICER v2.5 AUTHENTIC WORKSPACE) ═══ -->
     <div class="panel active" id="panel-dashboard">
-      <div id="dash-toolbar" style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:10px">
-        <select id="dash-preset" onchange="applyDashPreset(this.value)" style="display:none;padding:4px 8px;font-size:12px;background:var(--raised);color:var(--txt);border:1px solid var(--border);border-radius:6px">
-          <option value="standard" id="dash-preset-standard">Standard</option>
-          <option value="wide89" id="dash-preset-wide89">Wide Desktop</option>
-        </select>
-        <button id="dash-preset-delete-btn" onclick="deleteCurrentDashPreset()" style="display:none;padding:4px 10px;font-size:12px;background:var(--raised);color:var(--err);border:1px solid var(--border);border-radius:6px;cursor:pointer">🗑</button>
-        <button id="dash-preset-save-btn" onclick="saveCurrentAsDashPreset()" style="display:none;padding:4px 10px;font-size:12px;background:var(--raised);color:var(--txt2);border:1px solid var(--border);border-radius:6px;cursor:pointer">💾 <span id="dash-lbl-save-preset">Save Preset</span></button>
-        <button id="dash-reset-btn" onclick="resetDashLayout()" style="display:none;padding:4px 10px;font-size:12px;background:var(--raised);color:var(--txt2);border:1px solid var(--border);border-radius:6px;cursor:pointer">↺ <span id="dash-lbl-reset">Reset Layout</span></button>
-        <button id="dash-edit-btn" onclick="toggleDashEdit()" style="padding:4px 10px;font-size:12px;background:var(--raised);color:var(--txt2);border:1px solid var(--border);border-radius:6px;cursor:pointer">🖉 <span id="dash-lbl-edit">Customize Dashboard</span></button>
+      <div class="orca-workspace">
+        <!-- ═══ LEFT SLICER SIDEBAR (390px) ═══ -->
+        <aside class="orca-sidebar-col">
+          <!-- 1. PRINTER CARD -->
+          <div class="orca-panel-card orca-card-printer">
+            <div class="orca-card-header">
+              <span class="orca-card-title">🖨  Printer</span>
+              <div class="orca-card-tools">
+                <span class="orca-wifi-icon" title="Connected">📶</span>
+                <span class="orca-tool-icon" onclick="showPanel('settings')" title="Settings">⚙</span>
+              </div>
+            </div>
+            <!-- Printer Selector Box -->
+            <div class="orca-printer-box" onclick="togglePrinterDropdown()">
+              <div class="orca-printer-box-left">
+                <span class="orca-printer-icon">🖶</span>
+                <span class="orca-printer-title" id="h-pname">Anycubic Kobra 4 (0.4 nozzle)</span>
+              </div>
+              <span class="orca-dropdown-arrow">▼</span>
+              <!-- Printer Dropdown Menu -->
+              <div id="printer-dropdown-menu" class="orca-dropdown-menu" style="display:none"></div>
+            </div>
+            <!-- Printer Status Meta -->
+            <div class="orca-printer-meta-row">
+              <div class="orca-status-pill" id="h-badge">
+                <span class="dot"></span>
+                <span id="h-state">Status: Ready</span>
+              </div>
+              <span class="orca-bed-type">Bed: Textured PEI Plate</span>
+            </div>
+          </div>
+
+          <!-- 2. FILAMENT (ANYCUBIC ACE DIRECT) -->
+          <div class="orca-panel-card orca-card-filament">
+            <div class="orca-card-header">
+              <span class="orca-card-title">🧵  Filament (Anycubic ACE Direct)</span>
+              <button class="orca-pill-btn" onclick="openPrintWithSlots()">Flushing volumes</button>
+            </div>
+            <!-- Dynamic Slots container (Rendered by app.js with Penpot horizontal cards) -->
+            <div class="orca-slots-stack" id="ams-slots">
+              <div id="ams-no-data" style="text-align:center;color:var(--txt-muted);padding:20px 0">Loading AMS slots...</div>
+            </div>
+          </div>
+
+          <!-- 3. ACTIVE PRINT JOB -->
+          <div class="orca-panel-card orca-card-job">
+            <div class="orca-card-header">
+              <span class="orca-card-title">⚙  Active Print Job</span>
+              <!-- Control Buttons -->
+              <div class="orca-job-actions" id="d-ctrl-btns" style="display:none">
+                <button class="orca-mini-btn" id="d-btn-pause" onclick="togglePauseResume()" title="Pause/Resume">⏸</button>
+                <button class="orca-mini-btn" id="d-btn-skip" onclick="openSkipDialog()" style="display:none" title="Skip Objects">✂</button>
+                <button class="orca-mini-btn btn-danger" id="d-btn-cancel" onclick="confirmCancel()" title="Stop">✕</button>
+              </div>
+              <div class="orca-job-actions" id="d-idle-btns" style="display:flex">
+                <button class="orca-mini-btn btn-teal" id="d-idle-print" onclick="startIdleFile()">▶ Print</button>
+                <button class="orca-mini-btn" id="d-idle-slots" onclick="startIdleFileWithSlots()">⚙</button>
+                <button class="orca-mini-btn" id="d-idle-clear" onclick="clearIdleFile()">✕</button>
+              </div>
+            </div>
+            <div class="orca-job-content">
+              <div class="orca-job-name" id="d-fname" title="No print active">3dbenchy_pla_0.2mm.gcode</div>
+              <div class="orca-job-subline">
+                <span>Layer <span id="d-layers">112 / 234</span></span>
+                <span class="orca-dot-sep">·</span>
+                <span>ETA: <span id="d-remain">24 mins remaining</span></span>
+              </div>
+              <div class="orca-progress-row">
+                <div class="orca-progress-bar-bg">
+                  <div class="orca-progress-bar-fill" id="d-pbar" style="width:48%"></div>
+                </div>
+                <div class="orca-progress-text"><span id="d-pct">48</span>%</div>
+              </div>
+              <!-- Job Metric Grid -->
+              <div class="orca-metrics-grid">
+                <div class="orca-metric-cell">
+                  <div class="orca-metric-label">Print Speed</div>
+                  <div class="orca-metric-value" id="d-spd-val-display">150 mm/s (100%)</div>
+                </div>
+                <div class="orca-metric-cell">
+                  <div class="orca-metric-label">Part Fan Speed</div>
+                  <div class="orca-metric-value" id="d-fan-val-display">100% (255 PWM)</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <!-- ═══ RIGHT MAIN WORKSPACE (VIEWPORT + DUAL TECH CARDS) ═══ -->
+        <main class="orca-main-col">
+          <!-- 1. 3D VIEWPORT & WEBCAM PIP -->
+          <div class="orca-viewport-container" id="orca-viewport">
+            <div class="orca-viewport-grid-bg"></div>
+            <!-- Viewport HUD Overlay Tags -->
+            <div class="orca-hud-tag-topleft">FPS: 30  ·  3D: Active  ·  Camera: On</div>
+            <div class="orca-hud-axes">
+              <span class="axis-x">X</span>
+              <span class="axis-y">Y</span>
+            </div>
+            <div class="orca-hud-plate-num">01</div>
+
+            <!-- Floating Webcam PiP Card -->
+            <div class="orca-webcam-pip-card" id="card-camera">
+              <div class="orca-pip-header">
+                <div class="orca-pip-live-status">
+                  <span class="orca-live-dot"></span>
+                  <span class="orca-live-label">Live Webcam (1080p · 30 FPS)</span>
+                </div>
+                <div class="orca-pip-controls">
+                  <span class="orca-light-icon">💡</span>
+                  <label class="toggle orca-toggle-scale">
+                    <input type="checkbox" id="d-light-toggle" onchange="setLight()">
+                    <span class="toggle-track"></span>
+                    <span class="toggle-thumb"></span>
+                  </label>
+                  <button class="orca-pip-btn" onclick="toggleCam()" id="cam-toggle-btn">▶</button>
+                  <button class="orca-pip-btn" onclick="resetCamera()" id="cam-reset-btn" style="display:none" title="Reconnect">↺</button>
+                </div>
+              </div>
+              <div class="orca-pip-viewport" id="cam-wrap">
+                <div class="cam-placeholder" id="cam-placeholder"><span>📷 Camera not running</span></div>
+                <div class="cam-spinner" id="cam-spinner"></div>
+                <img id="cam-img" draggable="false" style="display:none;width:100%;height:100%;object-fit:cover" alt="Camera">
+                <div class="orca-pip-layer-pill">Current: Layer <span id="cam-layer-val">112</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. TECHNICAL DUAL CARDS (TEMPS + DRYER) -->
+          <div class="orca-tech-grid">
+            <!-- Left: Temperatures & Extruder (480px) -->
+            <div class="orca-panel-card orca-card-temps">
+              <div class="orca-card-header">
+                <span class="orca-card-title">🌡  Temperatures & Extruder</span>
+              </div>
+              <!-- Nozzle -->
+              <div class="orca-temp-control-row">
+                <div class="orca-temp-info-block">
+                  <div class="orca-temp-title">Extruder Nozzle</div>
+                  <div class="orca-temp-value-line">
+                    <span class="orca-temp-current" id="d-nt">215.2 °C</span>
+                    <span class="orca-temp-target">/ Target: <span id="d-nt-t">215</span> °C</span>
+                  </div>
+                  <div class="orca-temp-progress-bg">
+                    <div class="orca-temp-progress-fill fill-nozzle" id="d-ntbar" style="width:71%"></div>
+                  </div>
+                </div>
+                <div class="orca-temp-actions-col">
+                  <input type="number" id="p-nozzle-inp" placeholder="215" class="orca-temp-num-input">
+                  <div class="orca-temp-btns-row">
+                    <button onclick="setNozzle()" class="orca-btn-set">Set</button>
+                    <button onclick="turnOffNozzle()" class="orca-btn-off">Off</button>
+                  </div>
+                </div>
+              </div>
+              <!-- Bed -->
+              <div class="orca-temp-control-row">
+                <div class="orca-temp-info-block">
+                  <div class="orca-temp-title">Heated Bed</div>
+                  <div class="orca-temp-value-line">
+                    <span class="orca-temp-current" id="d-bt">60.0 °C</span>
+                    <span class="orca-temp-target">/ Target: <span id="d-bt-t">60</span> °C</span>
+                  </div>
+                  <div class="orca-temp-progress-bg">
+                    <div class="orca-temp-progress-fill fill-bed" id="d-btbar" style="width:50%"></div>
+                  </div>
+                </div>
+                <div class="orca-temp-actions-col">
+                  <input type="number" id="p-bed-inp" placeholder="60" class="orca-temp-num-input">
+                  <div class="orca-temp-btns-row">
+                    <button onclick="setBed()" class="orca-btn-set">Set</button>
+                    <button onclick="turnOffBed()" class="orca-btn-off">Off</button>
+                  </div>
+                </div>
+              </div>
+              <!-- Preheat Presets 2x2 -->
+              <div class="orca-presets-group">
+                <div class="orca-presets-caption">Preheat Presets:</div>
+                <div class="orca-presets-2x2">
+                  <button class="orca-preset-button" onclick="setPreheat(215,60)">PLA (215/60)</button>
+                  <button class="orca-preset-button" onclick="setPreheat(240,75)">PETG (240/75)</button>
+                  <button class="orca-preset-button" onclick="setPreheat(255,100)">ABS (255/100)</button>
+                  <button class="orca-preset-button" onclick="setPreheat(0,0)">Cooldown (0/0)</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: ACE 1 - Filament Dryer System -->
+            <div class="orca-panel-card orca-card-dryer">
+              <div class="orca-card-header">
+                <span class="orca-card-title">♨  ACE 1 - Filament Dryer System</span>
+              </div>
+              <div class="orca-dryer-box">
+                <div class="orca-dryer-status-badge" id="dryer-status-badge">Drying Status: Active (PLA Preset)</div>
+                <div class="orca-dryer-readout">Current Chamber Temp: <span id="d-ace-dry-current-temp-0">45.4</span> °C  (Target: <span id="d-ace-dry-target-0">45</span> °C)</div>
+                <div class="orca-dryer-time">Time Remaining: <span id="d-ace-dry-time-0">03h 42m 15s</span>  (Total: 4h)</div>
+                <div class="orca-dryer-progress-bg">
+                  <div class="orca-dryer-progress-fill" id="d-ace-dry-pbar" style="width:92%"></div>
+                </div>
+              </div>
+              <!-- Dryer Presets (6 pills) -->
+              <div class="orca-presets-group">
+                <div class="orca-presets-caption">Dryer Presets:</div>
+                <div class="orca-dryer-pills-row">
+                  <button class="orca-dryer-pill active" onclick="setDryerPreset(45,240,this)">PLA · 45°C</button>
+                  <button class="orca-dryer-pill" onclick="setDryerPreset(50,240,this)">PLA+ · 50°C</button>
+                  <button class="orca-dryer-pill" onclick="setDryerPreset(55,240,this)">PETG · 55°C</button>
+                  <button class="orca-dryer-pill" onclick="setDryerPreset(50,360,this)">TPU · 50°C</button>
+                  <button class="orca-dryer-pill" onclick="setDryerPreset(65,360,this)">ABS · 65°C</button>
+                  <button class="orca-dryer-pill" onclick="setDryerPreset(70,360,this)">PA/PC · 70°C</button>
+                </div>
+              </div>
+              <!-- Dryer Actions -->
+              <div class="orca-dryer-actions">
+                <button class="orca-btn-dryer-sec" onclick="openAceDryDialog(0)">Dryer Settings...</button>
+                <button class="orca-btn-dryer-pri" onclick="restartDryingCycle(0)">Restart Drying Cycle</button>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
-      <div class="grid-stack" id="dash-grid">
-        <!-- Kamera -->
-        <div class="card" id="card-camera" data-card="camera" gs-w="12" gs-h="7">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <div class="card-title" style="margin-bottom:0"><span>📷</span> <span id="d-card-cam">Camera</span></div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <span id="d-lbl-light" style="font-size:12px;color:var(--txt2)">💡 Light</span>
-              <label class="toggle">
-                <input type="checkbox" id="d-light-toggle" onchange="setLight()">
-                <span class="toggle-track"></span>
-                <span class="toggle-thumb"></span>
-              </label>
-            </div>
-          </div>
-          <div class="cam-wrap" id="cam-wrap">
-            <div class="cam-placeholder" id="cam-placeholder"><span id="cam-placeholder-txt">📷 Camera not running</span></div>
-            <div class="cam-spinner" id="cam-spinner"></div>
-            <img id="cam-img" draggable="false" style="display:none;width:100%;height:auto" alt="Camera">
-            <div class="cam-overlay" id="cam-overlay" style="display:none">
-              <div style="font-size:12px;color:#fff" id="cam-fname"></div>
-            </div>
-            <button class="cam-toggle" onclick="toggleCam()" id="cam-toggle-btn">▶ Camera</button>
-            <button class="cam-toggle" onclick="resetCamera()" id="cam-reset-btn" style="display:none;margin-left:4px" title="Reconnect camera stream">↺</button>
-          </div>
-        </div>
 
-        <!-- Fortschritt -->
-        <div class="card" id="card-progress" data-card="progress" gs-w="12" gs-h="6">
-          <div class="card-title"><span>◉</span> <span id="d-card-progress">Progress</span></div>
-          <img id="d-thumbnail" src="" alt="" style="display:none;width:100%;max-height:160px;object-fit:contain;border-radius:8px;background:#111;margin-bottom:10px">
-          <div class="pct-big"><span id="d-pct">0</span><small>%</small></div>
-          <div style="display:flex;align-items:center;gap:10px;margin:8px 0">
-            <div class="progress-bar" style="flex:1;margin:0"><div class="progress-fill" id="d-pbar" style="width:0%"></div></div>
-            <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
-              <div class="time-block" style="padding:6px 10px;min-width:72px;text-align:center">
-                <div class="time-label" id="d-lbl-layers">Layers</div>
-                <div class="time-val" style="font-size:16px" id="d-layers">–</div>
-              </div>
-              <div class="time-block" style="padding:4px 10px;min-width:72px;text-align:center">
-                <div class="time-label" id="d-lbl-zpos">Z</div>
-                <div class="time-val" style="font-size:13px" id="d-zpos">–</div>
-              </div>
-            </div>
-          </div>
-          <div class="time-grid">
-            <div class="time-block">
-              <div class="time-label" id="d-lbl-elapsed">Elapsed</div>
-              <div class="time-val" id="d-elapsed">–</div>
-            </div>
-            <div class="time-block" id="d-slicer-row" style="display:none">
-              <div class="time-label" id="d-slicer-label">Estimated</div>
-              <div class="time-val" id="d-slicer-time">–</div>
-            </div>
-            <div class="time-block" style="color:var(--acc)">
-              <div class="time-label" id="d-lbl-remain">Remaining</div>
-              <div class="time-val" id="d-remain" style="color:var(--acc)">–</div>
-            </div>
-          </div>
-          <div class="fname" id="d-fname" title="" style="margin-top:6px">–</div>
-          <div class="ctrl-btns" id="d-ctrl-btns" style="margin-top:12px;display:none">
-            <button class="btn btn-pause btn-sm" id="d-btn-pause" onclick="togglePauseResume()">⏸ Pause</button>
-            <button class="btn btn-skip btn-sm" id="d-btn-skip" onclick="openSkipDialog()" style="display:none">✂ <span id="d-btn-skip-label">Objects</span></button>
-            <button class="btn btn-cancel btn-sm" id="d-btn-cancel" onclick="confirmCancel()">✕ Stop</button>
-          </div>
-          <!-- Aktionen für geladene Datei -->
-          <div class="ctrl-btns" id="d-idle-btns" style="margin-top:12px;display:none">
-            <button class="btn btn-accent btn-sm" id="d-idle-print" onclick="startIdleFile()">▶ <span id="d-idle-print-lbl">Print</span></button>
-            <button class="btn btn-sm" id="d-idle-slots" onclick="startIdleFileWithSlots()" style="background:var(--raised);color:var(--txt)">⚙ <span id="d-idle-slots-lbl">Assign Slots</span></button>
-            <button class="btn btn-cancel btn-sm" id="d-idle-clear" onclick="clearIdleFile()">✕ <span id="d-idle-clear-lbl">Clear</span></button>
-          </div>
-        </div>
-
-        <!-- Temperatursteuerung + Verlauf -->
-        <div class="card" id="card-temps" data-card="temps" gs-w="6" gs-h="7">
-          <div class="card-title"><span>⊙</span> <span id="d-card-temps">Temperatures</span></div>
-          <div class="temp-card-inner">
-            <div class="temp-block">
-              <div class="temp-label" id="d-lbl-nozzle">Nozzle</div>
-              <div class="temp-row">
-                <div class="temp-val" id="d-nt">–</div>
-                <div class="temp-unit">°C</div>
-              </div>
-              <div class="temp-target">→ <span id="d-nt-t">0</span>°C</div>
-              <div class="progress-bar" style="margin:8px 0 0">
-                <div class="progress-fill" id="d-ntbar" style="width:0%;background:linear-gradient(90deg,var(--accent2),#ffb020)"></div>
-              </div>
-              <div class="temp-edit" style="margin-top:10px">
-                <input type="number" class="temp-input" id="p-nozzle-inp" placeholder="Target" min="0" max="300" style="flex:1">
-                <button class="btn btn-sm btn-accent" onclick="setNozzle()"><span class="lbl-set">Set</span></button>
-                <button class="btn btn-sm" style="background:var(--raised);color:var(--txt)" onclick="document.getElementById('p-nozzle-inp').value=0;setNozzle()"><span class="lbl-off">Off</span></button>
-              </div>
-            </div>
-            <div class="temp-block">
-              <div class="temp-label" id="d-lbl-bed">Bed</div>
-              <div class="temp-row">
-                <div class="temp-val" id="d-bt">–</div>
-                <div class="temp-unit">°C</div>
-              </div>
-              <div class="temp-target">→ <span id="d-bt-t">0</span>°C</div>
-              <div class="progress-bar" style="margin:8px 0 0">
-                <div class="progress-fill" id="d-btbar" style="width:0%;background:linear-gradient(90deg,#ff6b35,var(--warn))"></div>
-              </div>
-              <div class="temp-edit" style="margin-top:10px">
-                <input type="number" class="temp-input" id="p-bed-inp" placeholder="Target" min="0" max="120" style="flex:1">
-                <button class="btn btn-sm btn-accent" onclick="setBed()"><span class="lbl-set">Set</span></button>
-                <button class="btn btn-sm" style="background:var(--raised);color:var(--txt)" onclick="document.getElementById('p-bed-inp').value=0;setBed()"><span class="lbl-off">Off</span></button>
-              </div>
-            </div>
-          </div>
-          <div style="margin-top:14px">
-            <div style="font-size:10px;color:var(--txt2);margin-bottom:4px" id="d-chart-label">History (last 60 samples)</div>
-            <canvas id="d-chart" width="800" height="120" style="width:100%;height:120px;background:var(--raised);border-radius:8px"></canvas>
-          </div>
-        </div>
-
-        <!-- Achsensteuerung -->
-        <div class="card" id="card-motion" data-card="motion" gs-w="6" gs-h="7">
-          <div class="card-title"><span>✛</span> <span id="ptitle-motion-xy">Motion Control</span></div>
-          <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
-            <!-- XY -->
-            <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
-              <div class="joypad">
-                <div></div>
-                <button class="joy" onclick="move(1,1,getStep())" title="Y+">▲</button>
-                <div></div>
-                <button class="joy" onclick="move(0,-1,getStep())" title="X−">◀</button>
-                <div></div>
-                <button class="joy" onclick="move(0,1,getStep())" title="X+">▶</button>
-                <div></div>
-                <button class="joy" onclick="move(1,-1,getStep())" title="Y−">▼</button>
-                <div></div>
-              </div>
-              <button class="btn btn-sm" style="background:var(--raised);color:var(--txt);width:100%" onclick="homeXY()"><span class="lbl-home-xy">Home XY</span></button>
-            </div>
-            <!-- Z -->
-            <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
-              <div class="joypad" style="grid-template-columns:52px;grid-template-rows:repeat(2,52px)">
-                <button class="joy" onclick="move(2,1,getStep())" title="Z+">▲</button>
-                <button class="joy" onclick="move(2,-1,getStep())" title="Z−">▼</button>
-              </div>
-              <button class="btn btn-sm" style="background:var(--raised);color:var(--txt);width:100%" onclick="homeZ()"><span class="lbl-home-z">Home Z</span></button>
-            </div>
-          </div>
-          <!-- Einheitliche Step-Size -->
-          <div style="display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap">
-            <div class="step-btns" style="margin-top:0">
-              <button class="step-btn" onclick="setStep(this,0.1)">0.1</button>
-              <button class="step-btn active" onclick="setStep(this,1)">1</button>
-              <button class="step-btn" onclick="setStep(this,5)">5</button>
-              <button class="step-btn" onclick="setStep(this,10)">10</button>
-            </div>
-            <input id="step-custom" type="number" min="0.1" max="260" step="0.1"
-              placeholder="mm"
-              style="width:60px;padding:4px 6px;font-size:12px;border-radius:6px;border:1px solid var(--border);background:var(--raised);color:var(--txt);text-align:center"
-              oninput="setStepCustom(this)">
-          </div>
-          <!-- Globale Befehle zentriert -->
-          <div style="display:flex;justify-content:center;gap:8px;margin-top:10px">
-            <button class="btn btn-sm btn-accent" onclick="homeAll()"><span class="lbl-home-all">Home All</span></button>
-            <button class="btn btn-sm" style="background:var(--raised);color:var(--txt)" onclick="disableMotors()"><span class="lbl-disable-motors">Motors Off</span></button>
-          </div>
-        </div>
-
-        <!-- Print Speed -->
-        <div class="card" id="card-speed" data-card="speed" gs-w="6" gs-h="3">
-          <div class="card-title"><span>🏎</span> <span id="d-card-speed">Print Speed</span></div>
-          <div style="display:flex;gap:8px;margin-top:4px">
-            <button class="spd-btn" id="d-spd-1" onclick="setSpeed(1)">
-              <span class="spd-icon">🐢</span>
-              <span id="d-spd-lbl-1">Silent</span>
-            </button>
-            <button class="spd-btn spd-active" id="d-spd-2" onclick="setSpeed(2)">
-              <span class="spd-icon">⚡</span>
-              <span id="d-spd-lbl-2">Normal</span>
-            </button>
-            <button class="spd-btn" id="d-spd-3" onclick="setSpeed(3)">
-              <span class="spd-icon">🚀</span>
-              <span id="d-spd-lbl-3">Sport</span>
-            </button>
-          </div>
-          <div class="spd-bar" style="margin-top:12px">
-            <div class="spd-bar-fill" id="d-spd-bar" style="width:50%"></div>
-          </div>
-        </div>
-
-        <!-- Lüfter -->
-        <div class="card" id="card-fan" data-card="fan" gs-w="6" gs-h="3">
-          <div class="card-title"><span>🌀</span> <span id="d-card-lightfan">Fan</span></div>
-          <div class="slider-row">
-            <input type="range" class="slider" min="0" max="100" value="0" id="d-fan" oninput="document.getElementById('d-fan-val').textContent=this.value" onchange="setFan()">
-            <span class="slider-val" id="d-fan-val">0</span>
-          </div>
-          <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-sm" style="background:var(--raised);color:var(--txt)" onclick="quickFan(0)">Off</button>
-            <button class="btn btn-sm" style="background:var(--raised);color:var(--txt)" onclick="quickFan(25)">25%</button>
-            <button class="btn btn-sm" style="background:var(--raised);color:var(--txt)" onclick="quickFan(50)">50%</button>
-            <button class="btn btn-sm" style="background:var(--raised);color:var(--txt)" onclick="quickFan(75)">75%</button>
-            <button class="btn btn-sm btn-accent" onclick="quickFan(100)">100%</button>
-          </div>
-        </div>
-
-        <!-- AMS -->
-        <div class="card" id="d-ams-card" data-card="ams" gs-w="12" gs-h="4">
-          <div class="card-title"><span>◫</span> <span id="d-card-ams">Filament / AMS</span></div>
-          <div class="ams-slots" id="ams-slots">
-            <div style="grid-column:1/-1;text-align:center;color:var(--txt2);padding:20px" id="ams-no-data">No AMS data received</div>
-          </div>
-        </div>
+      <!-- Hidden compatibility DOM nodes to satisfy all legacy app.js queries safely -->
+      <div style="display:none!important">
+        <span id="h-version"></span>
+        <div id="h-pname-single"></div>
+        <span id="d-card-ams"></span>
+        <div id="d-ace-dry-wrap"><div id="d-ace-dry-grid"></div></div>
+        <div id="d-spd-bar"></div>
+        <button id="d-spd-1" onclick="setSpeed(1)"></button>
+        <button id="d-spd-2" onclick="setSpeed(2)"></button>
+        <button id="d-spd-3" onclick="setSpeed(3)"></button>
+        <input type="range" id="d-fan" value="0">
+        <span id="d-fan-val">0</span>
+        <div id="d-elapsed"></div>
+        <div id="d-zpos"></div>
+        <div id="d-slicer-row"><div id="d-slicer-time"></div></div>
+        <img id="d-thumbnail" src="" alt="">
+        <div id="cam-overlay"><div id="cam-fname"></div></div>
+        <select id="ams-slot-sel"><option value="0">0</option></select>
+        <div id="dash-hidden-bar"></div>
+        <select id="dash-preset"><option value="standard">standard</option><option value="wide89">wide</option></select>
+        <span id="dash-lbl-edit"></span>
+        <button id="dash-preset-delete-btn"></button>
+        <button id="dash-preset-save-btn"></button>
+        <button id="dash-reset-btn"></button>
+        <div id="dash-grid"></div>
+        <canvas id="d-chart"></canvas>
       </div>
-      <!-- ACE-Trocknung: außerhalb des GridStack-Grids, per Drucker-State eingeblendet -->
-      <div id="d-ace-dry-wrap" class="grid" style="display:none;margin-top:16px">
-        <div id="d-ace-dry-grid" style="display:contents"></div>
-      </div>
-      <div id="dash-hidden-bar"></div>
     </div>
 
     <!-- ═══ PRINTERS ═══ -->

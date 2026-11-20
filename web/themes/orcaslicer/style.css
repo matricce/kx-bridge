@@ -485,3 +485,955 @@ nav.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
   .modal-box::before{content:"";display:block;width:40px;height:5px;background:var(--border-card);border-radius:3px;margin:-8px auto 14px auto}
   .poll-btns{gap:6px}
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+   ORCASLICER v2.5 AUTHENTIC WORKSPACE & DESIGN SYSTEM (PENPOT REPLICA)
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* ── Top Window Bar (50px, #1F2025) ── */
+header.orca-top-bar {
+  background: var(--bg-window);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 0 rgba(119,175,149,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  height: 50px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  gap: 12px;
+}
+.orca-top-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.logo-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--txt);
+  letter-spacing: -0.01em;
+}
+.logo-mark {
+  color: var(--accent);
+  font-size: 18px;
+}
+.logo-version {
+  font-size: 10px;
+  color: var(--accent);
+  background: rgba(0,210,173,0.15);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 700;
+  margin-left: 2px;
+}
+.orca-quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--txt2);
+}
+.orca-qa-item {
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.orca-qa-item:hover {
+  color: var(--txt);
+}
+.orca-qa-divider {
+  width: 1px;
+  height: 14px;
+  background: var(--border);
+}
+
+/* ── Center Tabs ── */
+.orca-center-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.orca-center-tabs::-webkit-scrollbar { display: none; }
+.orca-tab {
+  background: none;
+  border: none;
+  color: var(--txt2);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.orca-tab:hover {
+  color: var(--txt);
+  background: rgba(255,255,255,0.04);
+}
+.orca-tab.active {
+  background: var(--teal-tab);
+  color: #ffffff;
+  font-weight: 600;
+}
+.orca-badge-counter {
+  background: var(--err);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 8px;
+}
+
+/* ── Top Right Actions ── */
+.orca-top-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.orca-slice-btn-group {
+  display: flex;
+  align-items: center;
+}
+.orca-btn-slice {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--txt);
+  padding: 6px 12px;
+  border-radius: 6px 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.orca-btn-slice:hover {
+  background: var(--raised-hover);
+}
+.orca-btn-print {
+  background: var(--teal-btn);
+  border: 1px solid var(--teal-btn);
+  color: #ffffff;
+  padding: 6px 16px;
+  border-radius: 0 6px 6px 0;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.orca-btn-print:hover {
+  background: #009d88;
+}
+
+/* ── OrcaSlicer Workspace Layout ── */
+.orca-workspace {
+  display: flex;
+  gap: 14px;
+  max-width: 1800px;
+  margin: 0 auto;
+  width: 100%;
+}
+.orca-sidebar-col {
+  width: 390px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.orca-main-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── Panels / Cards ── */
+.orca-panel-card {
+  background: var(--card);
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  padding: 14px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+}
+.orca-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.orca-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: -0.01em;
+}
+.orca-card-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.orca-wifi-icon {
+  font-size: 13px;
+  color: var(--wifi-blue);
+}
+.orca-tool-icon {
+  font-size: 13px;
+  color: var(--txt-muted);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.orca-tool-icon:hover {
+  color: var(--txt);
+}
+
+/* ── Printer Card ── */
+.orca-printer-box {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.15s;
+}
+.orca-printer-box:hover {
+  border-color: var(--accent);
+}
+.orca-printer-box-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.orca-printer-icon {
+  font-size: 15px;
+  color: var(--txt2);
+}
+.orca-printer-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--txt);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.orca-dropdown-arrow {
+  font-size: 10px;
+  color: var(--txt-muted);
+}
+.orca-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  z-index: 200;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  overflow: hidden;
+}
+.orca-printer-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 11px;
+}
+.orca-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--input-bg);
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+  color: var(--txt2);
+}
+.orca-status-pill .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+.orca-bed-type {
+  color: var(--txt-muted);
+  font-weight: 500;
+}
+
+/* ── Filament ACE Direct Card ── */
+.orca-pill-btn {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  color: var(--txt2);
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.orca-pill-btn:hover {
+  border-color: var(--accent);
+  color: var(--txt);
+}
+.orca-slots-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.orca-slot-card {
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.orca-slot-card:hover {
+  border-color: var(--accent);
+  background: var(--raised-hover);
+}
+.orca-slot-card.active {
+  background: rgba(0,210,173,0.08);
+  border-color: var(--accent);
+}
+.orca-slot-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.orca-slot-num-badge {
+  width: 22px;
+  height: 22px;
+  background: var(--input-bg);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--txt);
+}
+.orca-slot-color-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.25);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.orca-slot-info {
+  flex: 1;
+  min-width: 0;
+}
+.orca-slot-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.orca-slot-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--txt);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.orca-slot-card.active .orca-slot-name {
+  color: var(--accent-light);
+}
+.orca-slot-feeding-badge {
+  background: var(--teal-btn);
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 3px;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+.orca-slot-sub-row {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--accent-light);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.orca-slot-spoolman.empty {
+  color: var(--txt-muted);
+}
+.orca-slot-more-btn {
+  color: var(--txt-muted);
+  font-size: 16px;
+  padding: 2px 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.orca-slot-more-btn:hover {
+  color: var(--txt);
+}
+.orca-add-slot-btn {
+  width: 100%;
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--txt2);
+  padding: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: all 0.15s;
+}
+.orca-add-slot-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Active Print Job Card ── */
+.orca-job-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.orca-mini-btn {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  color: var(--txt);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.orca-mini-btn:hover {
+  border-color: var(--accent);
+}
+.orca-mini-btn.btn-danger {
+  color: var(--err);
+  border-color: rgba(239,68,68,0.3);
+}
+.orca-mini-btn.btn-teal {
+  background: var(--teal-btn);
+  color: #ffffff;
+  border-color: var(--teal-btn);
+  font-weight: 600;
+}
+.orca-job-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--txt);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+.orca-job-subline {
+  font-size: 11px;
+  color: var(--txt2);
+  margin-bottom: 8px;
+}
+.orca-dot-sep {
+  margin: 0 4px;
+  color: var(--txt-muted);
+}
+.orca-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.orca-progress-bar-bg {
+  flex: 1;
+  height: 8px;
+  background: var(--input-bg);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.orca-progress-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+.orca-progress-text {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 32px;
+  text-align: right;
+}
+.orca-metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.orca-metric-cell {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.orca-metric-label {
+  font-size: 10px;
+  color: var(--txt-muted);
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.orca-metric-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--txt);
+}
+
+/* ── 3D Viewport Box ── */
+.orca-viewport-container {
+  height: 580px;
+  background: #2C2E36;
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+}
+.orca-viewport-grid-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(68, 70, 82, 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(68, 70, 82, 0.3) 1px, transparent 1px),
+    radial-gradient(ellipse at 50% 50%, #2e303a 0%, #1c1d22 100%);
+  background-size: 32px 32px, 32px 32px, 100% 100%;
+}
+.orca-hud-tag-topleft {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  font-family: var(--mono), monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(31,32,37,0.7);
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(0,210,173,0.3);
+  z-index: 2;
+}
+.orca-hud-axes {
+  position: absolute;
+  bottom: 14px;
+  left: 16px;
+  font-family: var(--mono), monospace;
+  font-size: 14px;
+  font-weight: 700;
+  z-index: 2;
+}
+.orca-hud-axes .axis-x {
+  color: #EF4444;
+}
+.orca-hud-axes .axis-y {
+  color: #10B981;
+  margin-left: 6px;
+}
+.orca-hud-plate-num {
+  position: absolute;
+  bottom: 14px;
+  right: 20px;
+  font-size: 56px;
+  font-weight: 900;
+  color: var(--accent2);
+  opacity: 0.85;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ── Floating Webcam PiP ── */
+.orca-webcam-pip-card {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 340px;
+  height: 220px;
+  background: var(--bg-window);
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+.orca-pip-header {
+  height: 36px;
+  background: var(--input-bg);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+}
+.orca-pip-live-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.orca-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  animation: pulse 1.4s infinite;
+}
+.orca-live-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ok);
+}
+.orca-pip-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.orca-light-icon {
+  font-size: 11px;
+  color: var(--txt2);
+}
+.orca-toggle-scale {
+  transform: scale(0.75);
+  margin: 0;
+}
+.orca-pip-btn {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--txt);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  cursor: pointer;
+}
+.orca-pip-viewport {
+  flex: 1;
+  position: relative;
+  background: #111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.orca-pip-layer-pill {
+  position: absolute;
+  bottom: 6px;
+  left: 8px;
+  background: rgba(0,0,0,0.7);
+  color: var(--txt);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  z-index: 5;
+}
+
+/* ── Technical Dual Cards Grid ── */
+.orca-tech-grid {
+  display: grid;
+  grid-template-columns: 480px 1fr;
+  gap: 14px;
+}
+.orca-card-temps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.orca-temp-control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--input-bg);
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.orca-temp-info-block {
+  flex: 1;
+  min-width: 0;
+}
+.orca-temp-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--txt2);
+  margin-bottom: 2px;
+}
+.orca-temp-value-line {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--txt);
+  margin-bottom: 6px;
+}
+.orca-temp-target {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--txt-muted);
+  margin-left: 6px;
+}
+.orca-temp-progress-bg {
+  height: 6px;
+  background: var(--card);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.orca-temp-progress-fill.fill-nozzle {
+  height: 100%;
+  background: linear-gradient(90deg, #FF6F3C, #FFB020);
+}
+.orca-temp-progress-fill.fill-bed {
+  height: 100%;
+  background: linear-gradient(90deg, #FF6B35, #F59E0B);
+}
+.orca-temp-actions-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 96px;
+}
+.orca-temp-num-input {
+  width: 100%;
+  padding: 4px 6px;
+  font-size: 11px;
+  text-align: center;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--txt);
+}
+.orca-temp-btns-row {
+  display: flex;
+  gap: 4px;
+}
+.orca-btn-set {
+  flex: 1;
+  padding: 4px 0;
+  background: var(--teal-btn);
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.orca-btn-off {
+  flex: 1;
+  padding: 4px 0;
+  background: var(--raised);
+  color: var(--txt);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.orca-presets-group {
+  margin-top: 4px;
+}
+.orca-presets-caption {
+  font-size: 11px;
+  color: var(--txt-muted);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.orca-presets-2x2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.orca-preset-button {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  color: var(--txt);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+}
+.orca-preset-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── ACE 1 - Filament Dryer System Card ── */
+.orca-card-dryer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.orca-dryer-box {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+}
+.orca-dryer-status-badge {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.orca-dryer-readout {
+  font-size: 12px;
+  color: var(--txt);
+  margin-bottom: 2px;
+}
+.orca-dryer-time {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-light);
+  margin-bottom: 8px;
+}
+.orca-dryer-progress-bg {
+  height: 6px;
+  background: var(--card);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.orca-dryer-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+.orca-dryer-pills-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.orca-dryer-pill {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  color: var(--txt2);
+  padding: 5px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.orca-dryer-pill:hover {
+  border-color: var(--accent);
+  color: var(--txt);
+}
+.orca-dryer-pill.active {
+  background: var(--teal-tab);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+.orca-dryer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+}
+.orca-btn-dryer-sec {
+  flex: 1;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  color: var(--txt);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.orca-btn-dryer-sec:hover {
+  border-color: var(--accent);
+}
+.orca-btn-dryer-pri {
+  flex: 1;
+  background: var(--teal-btn);
+  border: none;
+  color: #ffffff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.orca-btn-dryer-pri:hover {
+  background: #009d88;
+}
+
+/* ── Responsive Adaptations for Workspace ── */
+@media(max-width: 1200px) {
+  .orca-tech-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media(max-width: 1024px) {
+  .orca-workspace {
+    flex-direction: column;
+  }
+  .orca-sidebar-col {
+    width: 100%;
+  }
+  .orca-viewport-container {
+    height: 420px;
+  }
+  .orca-webcam-pip-card {
+    width: 280px;
+    height: 180px;
+  }
+}
+@media(max-width: 768px) {
+  .orca-quick-actions {
+    display: none;
+  }
+  .orca-slice-btn-group {
+    display: none;
+  }
+  .orca-center-tabs {
+    display: none;
+  }
+  .orca-viewport-container {
+    height: 320px;
+  }
+  .orca-webcam-pip-card {
+    position: relative;
+    top: auto;
+    right: auto;
+    width: 100%;
+    height: 200px;
+    margin-top: 10px;
+  }
+  .orca-top-bar {
+    padding: 0 12px;
+    height: 46px;
+  }
+}
+

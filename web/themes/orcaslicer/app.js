@@ -583,10 +583,11 @@ function ensureAceDryCards(){
 // ── Panel nav ──
 function showPanel(id){
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-  document.getElementById('panel-'+id).classList.add('active');
-  document.querySelectorAll('.nav-btn,.bnav-btn').forEach(b=>b.classList.remove('active'));
+  var p=document.getElementById('panel-'+id);if(p)p.classList.add('active');
+  document.querySelectorAll('.nav-btn,.bnav-btn,.orca-tab').forEach(b=>b.classList.remove('active'));
   var nb=document.getElementById('nb-'+id);if(nb)nb.classList.add('active');
   var bnb=document.getElementById('bnb-'+id);if(bnb)bnb.classList.add('active');
+  var otab=document.getElementById('otab-'+id);if(otab)otab.classList.add('active');
   currentPanel=id;
   if(id==='settings')openSettings();
 }
@@ -759,8 +760,8 @@ function post(url,body){return fetch(_apiUrl(url),{method:'POST',headers:{'Conte
 function clamp(v,lo,hi){return Math.min(hi,Math.max(lo,v))}
 
 // ── Apply state to DOM ──
-function applyState(){
-  var s=S;
+function applyState(s){
+  s = s || S;
   _syncAceDryPresetsFromServer(s.ace_dry_presets);
   // connection error banner – nur wenn überhaupt ein Drucker konfiguriert ist
   var banner=document.getElementById('conn-error-banner');
@@ -902,6 +903,20 @@ function applyState(){
   var spdBar=document.getElementById('d-spd-bar');
   if(spdBar) spdBar.style.width=(spdWidths[s.print_speed_mode]||55)+'%';
 
+  // Active Print Job metrics for OrcaSlicer theme
+  var spdText = (s.print_speed_mode === 1) ? 'Silent (50%)' :
+                (s.print_speed_mode === 2) ? 'Normal (100%)' :
+                (s.print_speed_mode === 3) ? 'Sport (125%)' :
+                (s.speed_scale != null ? s.speed_scale + '%' : '100%');
+  var spdDisp = document.getElementById('d-spd-val-display');
+  if(spdDisp) spdDisp.textContent = spdText;
+
+  var fanDisp = document.getElementById('d-fan-val-display');
+  if(fanDisp) fanDisp.textContent = (s.fan_speed || 0) + '% (' + Math.round((s.fan_speed || 0) * 2.55) + ' PWM)';
+
+  var camLayer = document.getElementById('cam-layer-val');
+  if(camLayer) camLayer.textContent = s.current_layer || s.curr_layer || '–';
+
   var amsTitle=document.getElementById('d-card-ams');
   if(amsTitle){
     var baseTitle=tr('card_ams');
@@ -962,88 +977,109 @@ function applyState(){
     if(dryTimeEl)dryTimeEl.textContent=fmtHmsFromSec(useSec);
   }
 
+  // ACE 1 - Filament Dryer System metrics for OrcaSlicer theme
+  var ud0 = unitMap[0] || dry;
+  var prof0 = _aceDryProfileGet(0);
+  var isDryActive = Number(ud0.status || 0) > 0;
+  var targetTemp0 = (isDryActive && Number(ud0.target_temp) > 0) ? Number(ud0.target_temp) : (prof0.temp || 45);
+  var ct0 = (ud0.current_temp === null || ud0.current_temp === undefined || ud0.current_temp === '') ? null : Number(ud0.current_temp);
+  if (Number.isNaN(ct0)) ct0 = null;
+
+  var curTempEl0 = document.getElementById('d-ace-dry-current-temp-0');
+  if (curTempEl0) curTempEl0.textContent = (ct0 != null) ? ct0.toFixed(1) : '–';
+
+  var tgtTempEl0 = document.getElementById('d-ace-dry-target-0');
+  if (tgtTempEl0) tgtTempEl0.textContent = targetTemp0;
+
+  var timeEl0 = document.getElementById('d-ace-dry-time-0');
+  var pbarEl0 = document.getElementById('d-ace-dry-pbar');
+  var badgeEl = document.getElementById('dryer-status-badge');
+
+  if (isDryActive) {
+    var remainMin0 = Number(ud0.remain_time || 0);
+    var totalMin0 = Number(ud0.duration || 0);
+    if (!totalMin0) totalMin0 = Math.round((prof0.duration_sec || 14400) / 60);
+    if (timeEl0) timeEl0.textContent = fmtHmsFromSec(remainMin0 * 60);
+    if (pbarEl0) {
+      var pct0 = 0;
+      if (totalMin0 > 0) {
+        var elapsed0 = Math.max(0, totalMin0 - remainMin0);
+        pct0 = clamp(Math.round((elapsed0 / totalMin0) * 100), 0, 100);
+      }
+      pbarEl0.style.width = pct0 + '%';
+    }
+    if (badgeEl) badgeEl.textContent = 'Drying Status: Active (' + targetTemp0 + '°C)';
+  } else {
+    if (timeEl0) timeEl0.textContent = 'Idle';
+    if (pbarEl0) pbarEl0.style.width = '0%';
+    if (badgeEl) badgeEl.textContent = 'Drying Status: Standby';
+  }
+
   // AMS
   if(s.ams_slots&&s.ams_slots.length){
     window._amsSlots=s.ams_slots;
-    // Group by box_id (-1=Toolhead, 0=ACE 1, 1=ACE 2, ...)
-    var boxMap={};
-    s.ams_slots.forEach(function(slot,i){
-      var bid=slot.box_id!=null?slot.box_id:-1;
-      if(!boxMap[bid])boxMap[bid]=[];
-      boxMap[bid].push({slot:slot,arrIdx:i});
-    });
-    var boxIds=Object.keys(boxMap).map(Number).sort(function(a,b){return a-b});
-    var acePresent=boxIds.some(function(b){return b>=0;});
     var html='';
-    boxIds.forEach(function(bid){
-      var entries=boxMap[bid];
-      var label=bid===-1
-        ?(acePresent?'Toolhead (Slots 1–3)':'Toolhead')
-        :('ACE '+(bid+1));
-      html+='<div class="ams-box-group">'
-        +'<div class="ams-box-label">'+label+'</div>'
-        +'<div class="ams-box-slots">';
-      entries.forEach(function(e){
-        var slot=e.slot;var i=e.arrIdx;
-        var empty=slot.status!==5;
-        var rgb=empty?[80,80,80]:(Array.isArray(slot.color)?slot.color:[128,128,128]);
-        var col='rgb('+rgb[0]+','+rgb[1]+','+rgb[2]+')';
-        var globalIdx=slot.global_index!=null?slot.global_index:i;
-        var active=slot.status===1||slot.active;
-        var loaded=(s.ams_loaded_slot!=null&&s.ams_loaded_slot>=0&&globalIdx===s.ams_loaded_slot);
-        var activity=(slot.activity||'');
-        var pct=empty?T.ams_empty:(slot.consumables_percent!=null?slot.consumables_percent+'%':'–');
-        var slotLabel=T.label_slot+' '+(globalIdx+1);
-        // Gemapptes Profil nur für belegte Slots verwenden — sonst zeigt ein
-        // verwaistes Mapping (Slot wurde geleert) ein „Geister"-Profil (Issue #57).
-        var profile=empty?null:(window._slotProfileMap||{})[globalIdx];
-        var genericType=(slot.type||slot.material_type||'–');
-        // Material-Label: bei belegtem Slot mit Mapping den konkreten Profilnamen
-        // (z.B. „eSUN PLA+") statt nur des generischen Typs zeigen (Issue #57 Punkt 4).
-        var materialLabel=empty?'–':((profile&&profile.name)?profile.name:genericType);
-        var vendorBadge='';
-        if(!empty && profile && profile.vendor){
-          var tt=(profile.name||'')+(profile.id?' ('+profile.id+')':'');
-          vendorBadge='<div class="slot-label" style="font-size:9px;color:var(--accent);font-weight:600;margin-top:1px" title="'+tt+'">'+profile.vendor+'</div>';
+    s.ams_slots.forEach(function(slot,i){
+      var empty=slot.status!==5;
+      var rgb=empty?[80,80,80]:(Array.isArray(slot.color)?slot.color:[128,128,128]);
+      var col='rgb('+rgb[0]+','+rgb[1]+','+rgb[2]+')';
+      var globalIdx=slot.global_index!=null?slot.global_index:i;
+      var active=slot.status===1||slot.active;
+      var loaded=(s.ams_loaded_slot!=null&&s.ams_loaded_slot>=0&&globalIdx===s.ams_loaded_slot);
+      var isSlotActive=active||loaded;
+
+      var profile=empty?null:(window._slotProfileMap||{})[globalIdx];
+      var genericType=(slot.type||slot.material_type||'–');
+      var materialLabel=empty?'–':((profile&&profile.name)?profile.name:genericType);
+
+      var curSpoolId=_slotSpoolMap[String(globalIdx)]||'';
+      var curSpoolObj=null;
+      if(curSpoolId&&_spoolmanSpools&&_spoolmanSpools.length){
+        for(var j=0;j<_spoolmanSpools.length;j++){
+          if(String(_spoolmanSpools[j].id)===String(curSpoolId)){
+            curSpoolObj=_spoolmanSpools[j];
+            break;
+          }
         }
-        var spoolSel='';
-        if(_spoolmanStatus.configured&&!empty&&_spoolmanSpools.length){
-          var curSpool=_slotSpoolMap[String(globalIdx)]||'';
-          var spoolOpts='<option value="">–</option>'+_spoolmanSpools.map(function(sp){
-            var vendor=sp.filament&&sp.filament.vendor?sp.filament.vendor.name+' ':'';
-            var name=sp.filament?sp.filament.name:'#'+sp.id;
-            var rem=sp.remaining_weight!=null?' '+sp.remaining_weight.toFixed(0)+'g':'';
-            return '<option value="'+sp.id+'"'+(String(sp.id)==String(curSpool)?' selected':'')+'>'+
-                   escHtml(vendor+name+rem)+'</option>';
-          }).join('');
-          spoolSel='<div onclick="event.stopPropagation()" style="margin-top:6px;border-top:1px solid rgba(255,255,255,.07);padding-top:5px">'
-            +'<div style="font-size:8px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">🧵 Spoolman</div>'
-            +'<select data-spool-slot="'+globalIdx+'" onchange="onAmsSpoolChange(this)" '
-            +'style="width:100%;padding:3px 5px;font-size:10px;border-radius:5px;border:1px solid var(--border);background:var(--card);color:var(--txt);cursor:pointer">'+spoolOpts+'</select>'
-            +'</div>';
-        }
-        html+='<div class="ams-slot'+(active?' active':'')+(loaded?' loaded':'')+(activity?' '+activity:'')+(empty?' empty':'')
-          +'" style="--slot-color:'+col+';opacity:'+(empty?0.4:1)+';cursor:pointer" onclick="openSlotEdit('+i+')">'
-          +'<div class="slot-circle" style="background:'+col+'"></div>'
-          +'<div class="slot-material" title="'+(empty?'':genericType)+'">'+materialLabel+'</div>'
-          +vendorBadge
-          +'<div class="slot-label">'+slotLabel+'</div>'
-          +'<div class="slot-label" style="font-size:10px;color:var(--txt2)">'+pct+'</div>'
-          +spoolSel
-          +'<div style="font-size:9px;color:var(--txt2);margin-top:2px">✏</div>'
-          +'</div>';
-      });
-      if(bid===-1&&acePresent){
-        html+='<div class="ams-slot ams-slot-bridge" aria-label="'+T.label_slot+' 4">'
-          +'<div class="bridge-chip">ACE</div>'
-          +'</div>';
       }
-      html+='</div></div>';
+
+      var subText='–';
+      if(curSpoolObj){
+        var remW=curSpoolObj.remaining_weight!=null?' ('+Math.round(curSpoolObj.remaining_weight)+'g remaining)':'';
+        subText='🧵 Spool #'+curSpoolObj.id+remW;
+      } else if(!empty&&slot.consumables_percent!=null){
+        subText=slot.consumables_percent+'% remaining';
+      }
+
+      var cardCls='orca-slot-card'+(isSlotActive?' active':'')+(empty?' empty':'');
+
+      html+='<div class="'+cardCls+'" onclick="openSlotEdit('+i+')">'
+        +'<div class="orca-slot-badges">'
+          +'<div class="orca-slot-num-badge">'+(globalIdx+1)+'</div>'
+          +'<div class="orca-slot-color-badge" style="background:'+col+'"></div>'
+        +'</div>'
+        +'<div class="orca-slot-info">'
+          +'<div class="orca-slot-name-row">'
+            +'<span class="orca-slot-name" title="'+escHtml(genericType)+'">'+escHtml(materialLabel)+'</span>'
+            +(isSlotActive?'<span class="orca-slot-feeding-badge">FEEDING</span>':'')
+          +'</div>'
+          +'<div class="orca-slot-sub-row">'
+            +'<span class="orca-slot-spoolman'+(curSpoolObj?'':' empty')+'">'+escHtml(subText)+'</span>'
+          +'</div>'
+        +'</div>'
+        +'<div class="orca-slot-more-btn" title="Edit Slot" onclick="event.stopPropagation();openSlotEdit('+i+')">⋯</div>'
+        +'</div>';
     });
-  // Nicht rendern wenn ein Spool-Dropdown gerade offen ist (verhindert Schließen beim Poll)
-  var activeEl=document.activeElement;
-  var spoolOpen=activeEl&&activeEl.tagName==='SELECT'&&activeEl.dataset.spoolSlot!=null;
-  if(!spoolOpen) document.getElementById('ams-slots').innerHTML=html;
+
+    html+='<button class="orca-add-slot-btn" onclick="openAddSlotHint()">+ Add Mixed Filament Slot</button>';
+
+    // Nicht rendern wenn ein Spool-Dropdown gerade offen ist (verhindert Schließen beim Poll)
+    var activeEl=document.activeElement;
+    var spoolOpen=activeEl&&activeEl.tagName==='SELECT'&&activeEl.dataset.spoolSlot!=null;
+    if(!spoolOpen){
+      var amsEl=document.getElementById('ams-slots');
+      if(amsEl) amsEl.innerHTML=html;
+    }
   }
 
   // camera overlay
@@ -2532,6 +2568,42 @@ function setBed(){
   post('/api/temperature',{nozzle:S.nozzle_target,bed:v})
     .then(function(){clog(T.label_bed+' → '+v+'°C','msg-ok')})
     .catch(function(e){clog('Temp-Fehler: '+e,'msg-err')});
+}
+
+function setPreheat(nozzle, bed){
+  post('/printer/temp/nozzle',{temp:nozzle}).catch(function(){});
+  post('/printer/temp/bed',{temp:bed}).catch(function(){});
+  clog('Preheat set: Nozzle '+nozzle+'°C, Bed '+bed+'°C','msg-ok');
+}
+function turnOffNozzle(){
+  post('/printer/temp/nozzle',{temp:0}).catch(function(){});
+  clog('Nozzle heating turned off','msg-info');
+}
+function turnOffBed(){
+  post('/printer/temp/bed',{temp:0}).catch(function(){});
+  clog('Bed heating turned off','msg-info');
+}
+function setDryerPreset(temp, durationMinutes, btnEl){
+  _aceDryProfileSet(0, temp, durationMinutes*60);
+  post('/api/ams/dry',{box_id:0, target_temp:temp, duration:durationMinutes, status:1})
+    .then(function(){
+      clog('Dryer started: '+temp+'°C, '+(durationMinutes/60).toFixed(1)+'h','msg-ok');
+      poll();
+    }).catch(function(e){
+      clog('Dryer error: '+e,'msg-err');
+    });
+  if(btnEl){
+    document.querySelectorAll('.orca-dryer-pill').forEach(b=>b.classList.remove('active'));
+    btnEl.classList.add('active');
+  }
+}
+function restartDryingCycle(boxId){
+  var prof=_aceDryProfileGet(boxId||0);
+  var mins=Math.round((prof.duration_sec||14400)/60);
+  setDryerPreset(prof.temp||45, mins);
+}
+function openAddSlotHint(){
+  openSlotEdit(0);
 }
 
 // ── Light ──
