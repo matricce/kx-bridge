@@ -3970,7 +3970,11 @@ class KobraXBridge:
             log.warning("Print start: no response from printer")
 
     def _theme_index_path(self) -> str:
-        return os.path.join(_WEB_BASE, "web", "themes", self._ui_theme, "index.html")
+        p = os.path.join(_WEB_BASE, "web", "themes", self._ui_theme, "index.html")
+        if not os.path.exists(p) and self._ui_theme != "default":
+            log.warning("UI theme %r index.html not found, falling back to 'default'", self._ui_theme)
+            return os.path.join(_WEB_BASE, "web", "themes", "default", "index.html")
+        return p
 
     def _load_index_template_cached(self) -> str:
         path = self._theme_index_path()
@@ -4115,12 +4119,16 @@ class KobraXBridge:
 
         if ctype is not None:
             path = os.path.join(_WEB_BASE, "web", "themes", self._ui_theme, name)
+            if not os.path.exists(path) and self._ui_theme != "default":
+                path = os.path.join(_WEB_BASE, "web", "themes", "default", name)
         elif name.startswith("lib/"):
             ext = os.path.splitext(name)[1].lower()
             ctype = _KX_UI_LIB_TYPES.get(ext)
             if not ctype:
                 raise web.HTTPNotFound()
             path = os.path.join(_WEB_BASE, "web", "themes", self._ui_theme, name)
+            if not os.path.exists(path) and self._ui_theme != "default":
+                path = os.path.join(_WEB_BASE, "web", "themes", "default", name)
         else:
             m = _KX_UI_TRANSLATION_RE.match(name)
             if not m:
@@ -6081,9 +6089,9 @@ def main():
                         help="Persistence directory for the GCode store and DB")
     parser.add_argument(
         "--ui-theme",
-        default=os.environ.get("KX_UI_THEME", "default"),
+        default=os.environ.get("KX_UI_THEME", "orcaslicer"),
         metavar="NAME",
-        help="Web-UI-Theme (Ordner web/themes/NAME/, Standard: default). "
+        help="Web-UI-Theme (Ordner web/themes/NAME/, Standard: orcaslicer). "
         "Alternativ: Umgebungsvariable KX_UI_THEME.",
     )
     args = parser.parse_args()
