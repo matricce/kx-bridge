@@ -1070,6 +1070,7 @@ class KobraXBridge:
         self.camera_cache: CameraCache = CameraCache()
 
         self._thumbnail_b64: str = ""
+        self._thumbnail_filename: str = ""
         self._ace_dry_presets: dict[str, dict] = self._load_ace_dry_presets_config()
 
         # Part skip: most recent skip list reported by the printer (v0.9.10)
@@ -1423,12 +1424,17 @@ class KobraXBridge:
             self._state["curr_layer"] = 0
             self._state["total_layers"] = 0
             self._thumbnail_b64 = ""
+            self._thumbnail_filename = ""
         else:
             # Only adopt the payload's filename outside terminal states - the
             # printer often still reports the just-finished job's filename in
             # the same "finished"/"stoped"/"canceled" message that triggered
             # the reset above, which would otherwise immediately undo it.
-            self._state["filename"] = d.get("filename", self._state["filename"])
+            new_fname = d.get("filename", self._state["filename"])
+            if new_fname != self._state["filename"]:
+                self._state["filename"] = new_fname
+                self._thumbnail_b64 = ""
+                self._thumbnail_filename = ""
         # Pre-print phases (leveling/preheating/checking) report their own
         # "progress" - passing it through would make display_status.progress/
         # virtual_sdcard.progress jump non-monotonically once real printing
@@ -1615,7 +1621,8 @@ class KobraXBridge:
         # progress preview.
         if thumb and (not active_print or (file_name and file_name == current_print_file)):
             self._thumbnail_b64 = thumb
-            log.info(f"Thumbnail received: {len(thumb)} base64 chars")
+            self._thumbnail_filename = file_name or ""
+            log.info(f"Thumbnail received: {len(thumb)} base64 chars for {file_name}")
         # Part-Skip: Objekt-Liste + optionales SVG (v0.9.10)
         objs = details.get("objects_skip_parts") or []
         svg  = details.get("svg_image") or ""
@@ -4695,8 +4702,12 @@ class KobraXBridge:
         # through the UI upload) they are missing -> restore from the GCode store via the
         # laufenden Dateinamens nachladen.
         slicer_time = s["slicer_time"]
-        thumbnail = self._thumbnail_b64
         fname = s.get("filename", "")
+        # Invalidate thumbnail if it was set for a different file
+        if self._thumbnail_filename and fname and self._thumbnail_filename != fname:
+            thumbnail = ""
+        else:
+            thumbnail = self._thumbnail_b64
         if fname and (not slicer_time or not thumbnail):
             try:
                 gf = self._store.get_file_by_name(fname)
@@ -4705,6 +4716,8 @@ class KobraXBridge:
                         slicer_time = int(gf["est_print_time_sec"])
                     if not thumbnail and gf.get("thumbnail_b64"):
                         thumbnail = gf["thumbnail_b64"]
+                        self._thumbnail_b64 = thumbnail
+                        self._thumbnail_filename = fname
             except Exception:
                 pass
         return web.json_response({

@@ -760,6 +760,61 @@ function fmtHmsFromSec(total){
 function post(url,body){return fetch(_apiUrl(url),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}
 function clamp(v,lo,hi){return Math.min(hi,Math.max(lo,v))}
 
+// Active print job thumbnail tracking
+var _activeJobFilename = '';
+var _activeJobThumb = '';
+var _activeJobFetching = false;
+
+function syncActiveJobThumbnail(filename){
+  if(!filename){
+    _activeJobFilename = '';
+    _activeJobThumb = '';
+    return;
+  }
+  if(_activeJobFilename === filename && _activeJobThumb){
+    return;
+  }
+  _activeJobFilename = filename;
+  if(typeof _printerThumbCache !== 'undefined' && _printerThumbCache[filename]){
+    _activeJobThumb = _printerThumbCache[filename];
+    _applyActiveThumb(_activeJobThumb);
+    return;
+  }
+  if(_activeJobFetching) return;
+  _activeJobFetching = true;
+  fetch(_apiUrl('/kx/printer-files/' + encodeURIComponent(filename) + '/thumbnail'))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      _activeJobFetching = false;
+      var thumb = (d.result && d.result.thumbnail) || '';
+      if(thumb){
+        if(typeof _printerThumbCache !== 'undefined') _printerThumbCache[filename] = thumb;
+        if(_activeJobFilename === filename){
+          _activeJobThumb = thumb;
+          _applyActiveThumb(thumb);
+        }
+      }
+    })
+    .catch(function(){
+      _activeJobFetching = false;
+    });
+}
+
+function _applyActiveThumb(thumb){
+  var bedThumb = document.getElementById('bed-model-thumbnail');
+  var bedEmpty = document.getElementById('bed-empty-state');
+  var modelPip = document.getElementById('model-pip-thumb');
+  if(thumb){
+    var src = 'data:image/png;base64,' + thumb;
+    if(bedThumb){
+      bedThumb.src = src;
+      bedThumb.style.display = 'block';
+    }
+    if(bedEmpty) bedEmpty.style.display = 'none';
+    if(modelPip) modelPip.src = src;
+  }
+}
+
 // ── Apply state to DOM ──
 function applyState(s){
   s = s || S;
@@ -936,22 +991,32 @@ function applyState(s){
   var modelPip = document.getElementById('model-pip-thumb');
   var modelPipLayer = document.getElementById('model-pip-layer');
 
-  if(s.thumbnail){
-    var thumbSrc = 'data:image/png;base64,' + s.thumbnail;
-    if(bedThumb){
+  var currentPrintFile = s.filename || '';
+  if(currentPrintFile){
+    syncActiveJobThumbnail(currentPrintFile);
+  } else {
+    _activeJobFilename = '';
+    _activeJobThumb = '';
+  }
+
+  var effectiveThumb = _activeJobThumb || (s.thumbnail && (!currentPrintFile || !s.filename || s.filename === _activeJobFilename) ? s.thumbnail : '');
+
+  if(effectiveThumb){
+    var thumbSrc = 'data:image/png;base64,' + effectiveThumb;
+    if(bedThumb && bedThumb.src !== thumbSrc){
       bedThumb.src = thumbSrc;
       bedThumb.style.display = 'block';
     }
     if(bedEmpty) bedEmpty.style.display = 'none';
-    if(modelPip) modelPip.src = thumbSrc;
+    if(modelPip && modelPip.src !== thumbSrc) modelPip.src = thumbSrc;
     if(modelPipLayer) modelPipLayer.textContent = 'Layer ' + currL + ' / ' + totL;
   } else {
-    if(bedThumb){
+    if(bedThumb && !_activeJobThumb){
       bedThumb.style.display = 'none';
       bedThumb.src = '';
     }
-    if(bedEmpty) bedEmpty.style.display = 'flex';
-    if(modelPip) modelPip.src = '';
+    if(bedEmpty && !_activeJobThumb) bedEmpty.style.display = 'flex';
+    if(modelPip && !_activeJobThumb) modelPip.src = '';
     if(modelPipLayer) modelPipLayer.textContent = 'Layer ' + currL;
   }
 
@@ -2698,8 +2763,8 @@ function emergencyStop(){
 }
 
 // ── Viewport 3D / Camera Switcher ──
-var currentViewMode='3d';
-try{ currentViewMode=localStorage.getItem('orca_view_mode')||'3d'; }catch(e){}
+var currentViewMode='camera';
+try{ currentViewMode=localStorage.getItem('orca_view_mode')||'camera'; }catch(e){}
 
 function setViewMode(mode){
   currentViewMode=mode;

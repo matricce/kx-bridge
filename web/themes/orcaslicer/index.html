@@ -310,24 +310,24 @@
         <!-- ═══ RIGHT MAIN WORKSPACE (VIEWPORT + DUAL TECH CARDS) ═══ -->
         <main class="orca-main-col">
           <!-- 1. 3D VIEWPORT & WEBCAM (DUAL-MODE B / A) -->
-          <div class="orca-viewport-container" id="orca-viewport">
+          <div class="orca-viewport-container mode-camera" id="orca-viewport">
             <!-- Viewport Top Toolbar -->
             <div class="orca-vp-toolbar">
               <div class="orca-view-switcher">
-                <button class="orca-view-btn active" id="btn-view-3d" onclick="setViewMode('3d')">
-                  <span class="view-btn-icon">⬡</span> 3D Bed View
-                </button>
-                <button class="orca-view-btn" id="btn-view-cam" onclick="setViewMode('camera')">
+                <button class="orca-view-btn active" id="btn-view-cam" onclick="setViewMode('camera')">
                   <span class="view-btn-icon">📷</span> Live Camera
                 </button>
+                <button class="orca-view-btn" id="btn-view-3d" onclick="setViewMode('3d')">
+                  <span class="view-btn-icon">⬡</span> 3D Bed View
+                </button>
               </div>
-              <div class="orca-vp-metrics" id="vp-3d-tools">
+              <div class="orca-vp-metrics" id="vp-3d-tools" style="display:none">
                 <span class="orca-vp-metric-item">Layer: <strong id="vp-curr-layer">–</strong> / <span id="vp-total-layer">–</span></span>
                 <span class="orca-vp-metric-sep">·</span>
                 <span class="orca-vp-metric-item">Height: <strong id="vp-z-height">0.00 mm</strong></span>
                 <button class="orca-vp-action-btn" onclick="reset3dView()" title="Center Bed">⟲ Center</button>
               </div>
-              <div class="orca-vp-cam-tools" id="vp-cam-tools" style="display:none">
+              <div class="orca-vp-cam-tools" id="vp-cam-tools">
                 <button class="orca-vp-action-btn" onclick="snapshotCamera()" title="Save Snapshot Image">📸 Snapshot</button>
                 <button class="orca-vp-action-btn" onclick="toggleCamFullscreen()" title="Fullscreen">⛶ Fullscreen</button>
                 <button class="orca-vp-action-btn" onclick="resetCamera()" title="Reconnect Camera Stream">↺ Reconnect</button>
