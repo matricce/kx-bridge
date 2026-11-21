@@ -1222,18 +1222,17 @@ header.orca-top-bar {
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  transform-style: preserve-3d;
 }
-/* The slicer thumbnail is already a perspective render, so it stands upright
-   facing the viewer (undoing the bed's rotation) instead of lying on the plate. */
+/* The cropped slicer thumbnail lies flat on the textured PEI build plate,
+   filling the printable area with authentic scale matching the slicer. */
 .bed-model-img {
-  width: 135%;
-  max-width: none;
-  height: auto;
+  width: 82%;
+  height: 82%;
+  max-width: 82%;
+  max-height: 82%;
   object-fit: contain;
-  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.8));
-  transform: translateZ(10px) rotateZ(30deg) rotateX(-55deg);
-  transform-origin: 50% 85%;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.75));
+  transform: translateZ(3px);
   z-index: 3;
 }
 .bed-model-shadow {
@@ -1734,6 +1733,17 @@ header.orca-top-bar {
   }
 }
 @media(max-width: 768px) {
+  .orca-workspace {
+    flex-direction: column;
+  }
+  .orca-main-col {
+    order: 1;
+    width: 100%;
+  }
+  .orca-sidebar-col {
+    order: 2;
+    width: 100%;
+  }
   .orca-quick-actions {
     display: none;
   }
@@ -1744,15 +1754,22 @@ header.orca-top-bar {
     display: none;
   }
   .orca-viewport-container {
-    height: 320px;
+    height: 300px;
+    overflow: hidden;
   }
-  .orca-webcam-pip-card {
-    position: relative;
-    top: auto;
-    right: auto;
-    width: 100%;
-    height: 200px;
-    margin-top: 10px;
+  .orca-3d-scene {
+    overflow: hidden;
+  }
+  .orca-bed-assembly {
+    width: 320px;
+    height: 320px;
+    transform: scale(0.65) rotateX(55deg) rotateZ(-30deg) translateZ(-10px);
+  }
+  .orca-viewport-container:not(.mode-camera) .orca-webcam-pip-card {
+    display: none;
+  }
+  .orca-viewport-container.mode-camera .orca-model-pip-card {
+    display: none !important;
   }
   .orca-top-bar {
     padding: 0 12px;

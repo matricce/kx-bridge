@@ -2833,7 +2833,8 @@ function toggleViewPip(){
 function reset3dView(){
   var ass=document.querySelector('.orca-bed-assembly');
   if(ass){
-    ass.style.transform='rotateX(55deg) rotateZ(-30deg) translateZ(-10px)';
+    var isMobile = window.innerWidth <= 768;
+    ass.style.transform = (isMobile ? 'scale(0.65) ' : '') + 'rotateX(55deg) rotateZ(-30deg) translateZ(-10px)';
   }
 }
 
