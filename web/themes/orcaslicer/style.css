@@ -947,6 +947,10 @@ header.orca-top-bar {
   color: var(--accent);
   font-weight: 600;
 }
+#slot-spoolman-menu {
+  z-index: 10060;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+}
 .orca-slot-more-btn {
   color: var(--txt-muted);
   font-size: 16px;

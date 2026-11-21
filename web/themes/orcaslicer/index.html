@@ -79,7 +79,7 @@
     </div>
 
     <!-- Spoolman Integration & Hardware EEPROM Sync -->
-    <div id="slot-spoolman-box" style="margin-bottom:16px;padding:12px;background:var(--raised);border:1px solid var(--border);border-radius:8px">
+    <div id="slot-spoolman-box" style="margin-bottom:16px;padding:12px;background:var(--raised);border:1px solid var(--border);border-radius:8px;position:relative;z-index:10050">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <span style="font-size:12px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:6px">
           <span id="slot-spoolman-icon">🧵</span> Spoolman Spool
@@ -96,7 +96,7 @@
           </div>
           <span style="font-size:10px;color:var(--txt2);margin-left:6px;flex-shrink:0">▼</span>
         </button>
-        <div id="slot-spoolman-menu" class="orca-dropdown-menu" style="display:none;max-height:220px;overflow-y:auto;z-index:250">
+        <div id="slot-spoolman-menu" class="orca-dropdown-menu" style="display:none;max-height:220px;overflow-y:auto;z-index:10060">
         </div>
         <!-- Hidden Native Select keeping exact same ID and onchange handler for compatibility -->
         <select id="slot-edit-spoolman" onchange="onSlotEditSpoolmanChange(this)" style="display:none">
