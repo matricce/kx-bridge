@@ -3578,6 +3578,47 @@ class KobraXBridge:
             })
         return web.json_response({"result": files})
 
+    async def handle_files_roots(self, request):
+        return web.json_response({
+            "result": [
+                {"name": "gcodes", "permissions": "rw"},
+                {"name": "config", "permissions": "rw"}
+            ]
+        })
+
+    async def handle_files_directory(self, request):
+        path = request.rel_url.query.get("path", "gcodes")
+        try:
+            import shutil
+            total, used, free = shutil.disk_usage(self._data_dir)
+        except Exception:
+            total, used, free = 100 * 1024**3, 10 * 1024**3, 90 * 1024**3
+
+        files = []
+        try:
+            for f in (self._store.list_files() or []):
+                files.append({
+                    "path": f.get("filename", ""),
+                    "modified": f.get("uploaded_at") or time.time(),
+                    "size": f.get("size", 0),
+                    "permissions": "rw",
+                })
+        except Exception:
+            pass
+
+        return web.json_response({
+            "result": {
+                "dirs": [],
+                "files": files,
+                "disk_usage": {
+                    "total": total,
+                    "used": used,
+                    "free": free,
+                },
+                "root": path,
+            }
+        })
+
     def _build_file_metadata(self, filename: str) -> dict:
         """Builds the Moonraker file metadata for a file. Shared source
         for HTTP /server/files/metadata AND the WS RPC server.files.metadata
@@ -5642,6 +5683,38 @@ class KobraXBridge:
                 result = {"system_info": {"cpu_info": {"cpu_desc": "Kobra X Bridge"}}}
             elif method == "server.files.list":
                 result = []
+            elif method in ("server.files.roots",):
+                result = [
+                    {"name": "gcodes", "permissions": "rw"},
+                    {"name": "config", "permissions": "rw"}
+                ]
+            elif method in ("server.files.directory", "server.files.get_directory"):
+                try:
+                    import shutil
+                    total, used, free = shutil.disk_usage(self._data_dir)
+                except Exception:
+                    total, used, free = 100 * 1024**3, 10 * 1024**3, 90 * 1024**3
+                files = []
+                try:
+                    for f in (self._store.list_files() or []):
+                        files.append({
+                            "path": f.get("filename", ""),
+                            "modified": f.get("uploaded_at") or time.time(),
+                            "size": f.get("size", 0),
+                            "permissions": "rw",
+                        })
+                except Exception:
+                    pass
+                result = {
+                    "dirs": [],
+                    "files": files,
+                    "disk_usage": {
+                        "total": total,
+                        "used": used,
+                        "free": free,
+                    },
+                    "root": (params or {}).get("path", "gcodes") if isinstance(params, dict) else "gcodes",
+                }
             # ── moonraker-obico passthru-Targets ──
             elif method == "printer.gcode.script":
                 script = (params.get("script") or "").strip().upper() if isinstance(params, dict) else ""
@@ -5851,6 +5924,8 @@ def build_app(bridge: KobraXBridge) -> web.Application:
     r.add_get("/printer/objects/query",      bridge.handle_objects_query)
     r.add_get("/printer/objects/subscribe",  bridge.handle_objects_subscribe)
     r.add_post("/printer/objects/subscribe", bridge.handle_objects_subscribe)
+    r.add_get("/server/files/roots",          bridge.handle_files_roots)
+    r.add_get("/server/files/directory",      bridge.handle_files_directory)
     r.add_get("/server/files/list",          bridge.handle_files_list)
     r.add_get("/server/files/metadata",      bridge.handle_files_metadata)
     r.add_post("/server/files/upload",       bridge.handle_file_upload)

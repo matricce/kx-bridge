@@ -75,3 +75,28 @@ async def test_files_list(client):
     assert resp.status == 200
     data = await resp.json()
     assert isinstance(data["result"], list)
+
+
+@pytest.mark.asyncio
+async def test_files_roots(client):
+    c, _ = client
+    resp = await c.get("/server/files/roots")
+    assert resp.status == 200
+    data = await resp.json()
+    assert isinstance(data["result"], list)
+    assert any(r.get("name") == "gcodes" for r in data["result"])
+
+
+@pytest.mark.asyncio
+async def test_files_directory(client):
+    c, _ = client
+    resp = await c.get("/server/files/directory?path=gcodes")
+    assert resp.status == 200
+    data = await resp.json()
+    assert "result" in data
+    res = data["result"]
+    assert "disk_usage" in res
+    assert "free" in res["disk_usage"]
+    assert res["disk_usage"]["free"] > 0
+    assert "files" in res
+    assert "dirs" in res
