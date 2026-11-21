@@ -49,6 +49,13 @@ var _spoolmanStatus={configured:false,reachable:false,server:'',sync_rate:0,slot
 var _spoolmanSpools=[];
 var _slotSpoolMap={};  // {String(global_index): spoolman_spool_id} — last committed assignment
 
+function _normalizeHex(hex){
+  if(!hex) return '';
+  hex=String(hex).trim();
+  if(!hex) return '';
+  return hex.charAt(0)==='#' ? hex : '#'+hex;
+}
+
 function _loadSpoolmanStatus(){
   fetch(_apiUrl('/kx/spoolman/status')).then(function(r){return r.json();}).then(function(d){
     _spoolmanStatus=d;
@@ -59,6 +66,7 @@ function _loadSpoolmanStatus(){
     if(d.configured){
       fetch(_apiUrl('/kx/spoolman/spools')).then(function(r){return r.json();}).then(function(sd){
         _spoolmanSpools=sd.spools||[];
+        if(typeof applyState==='function'&&window.S) applyState(window.S);
       });
     }
   }).catch(function(){});
@@ -312,6 +320,11 @@ document.addEventListener('click',function(e){
   if(wrap&&!wrap.contains(e.target)){
     var menu=document.getElementById('printer-dropdown-menu');
     if(menu)menu.style.display='none';
+  }
+  var spoolWrap=document.getElementById('slot-spoolman-dropdown-wrap');
+  if(spoolWrap&&!spoolWrap.contains(e.target)){
+    var spoolMenu=document.getElementById('slot-spoolman-menu');
+    if(spoolMenu)spoolMenu.style.display='none';
   }
 });
 function applyLang(){
@@ -737,7 +750,7 @@ function clearLogBadge(){
   logBadgeCount=0;
   ['log-badge','log-badge-bot'].forEach(function(id){var b=document.getElementById(id);if(b)b.style.display='none';});
 }
-function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function escHtml(s){if(s==null)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 // SSE server-log stream
 (function(){
   function connect(){
@@ -1194,12 +1207,17 @@ function applyState(s){
         }
       }
 
-      var subText='–';
+      var subHtml='–';
       if(curSpoolObj){
         var remW=curSpoolObj.remaining_weight!=null?' ('+Math.round(curSpoolObj.remaining_weight)+'g remaining)':'';
-        subText='🧵 Spool #'+curSpoolObj.id+remW;
+        var fil=curSpoolObj.filament;
+        var spoolHex=(fil&&fil.color_hex)?_normalizeHex(fil.color_hex):'';
+        var dotHtml=spoolHex
+          ?'<span class="orca-spool-dot" style="background:'+spoolHex+'"></span>'
+          :'<span style="margin-right:4px">🧵</span>';
+        subHtml=dotHtml+'Spool #'+escHtml(curSpoolObj.id)+escHtml(remW);
       } else if(!empty&&slot.consumables_percent!=null){
-        subText=slot.consumables_percent+'% remaining';
+        subHtml=escHtml(slot.consumables_percent+'% remaining');
       }
 
       var cardCls='orca-slot-card'+(isSlotActive?' active':'')+(empty?' empty':'');
@@ -1215,7 +1233,7 @@ function applyState(s){
             +(isSlotActive?'<span class="orca-slot-feeding-badge">FEEDING</span>':'')
           +'</div>'
           +'<div class="orca-slot-sub-row">'
-            +'<span class="orca-slot-spoolman'+(curSpoolObj?'':' empty')+'">'+escHtml(subText)+'</span>'
+            +'<span class="orca-slot-spoolman'+(curSpoolObj?'':' empty')+'">'+subHtml+'</span>'
           +'</div>'
         +'</div>'
         +'<div class="orca-slot-more-btn" title="Edit Slot" onclick="event.stopPropagation();openSlotEdit('+i+')">⋯</div>'
@@ -1900,6 +1918,72 @@ function openSlotEdit(i){
   updateSlotEditFeedButton();
   document.getElementById('slot-edit-modal').classList.add('open');
 }
+function toggleSlotSpoolmanDropdown(){
+  var menu=document.getElementById('slot-spoolman-menu');
+  if(menu){
+    menu.style.display = menu.style.display==='none' ? 'block' : 'none';
+  }
+}
+
+function selectSlotSpoolman(spoolId){
+  var sel=document.getElementById('slot-edit-spoolman');
+  if(sel){
+    sel.value=spoolId;
+    onSlotEditSpoolmanChange(sel);
+  }
+  var menu=document.getElementById('slot-spoolman-menu');
+  if(menu) menu.style.display='none';
+}
+
+function _updateSlotSpoolmanTrigger(spoolId){
+  var triggerDot=document.getElementById('slot-spoolman-trigger-dot');
+  var triggerText=document.getElementById('slot-spoolman-trigger-text');
+  var headerIcon=document.getElementById('slot-spoolman-icon');
+
+  var noneText=tr('slot_spoolman_none')||'– No Spoolman spool linked –';
+
+  if(!spoolId){
+    if(triggerDot) triggerDot.style.display='none';
+    if(triggerText) triggerText.textContent=noneText;
+    if(headerIcon) headerIcon.innerHTML='🧵';
+    return;
+  }
+
+  var spool=(_spoolmanSpools||[]).find(function(sp){ return String(sp.id)===String(spoolId); });
+  if(!spool){
+    if(triggerDot) triggerDot.style.display='none';
+    if(triggerText) triggerText.textContent='Spool #'+spoolId;
+    if(headerIcon) headerIcon.innerHTML='🧵';
+    return;
+  }
+
+  var rem=spool.remaining_weight!=null?' ('+spool.remaining_weight.toFixed(0)+'g)':'';
+  var vendor=spool.filament&&spool.filament.vendor?spool.filament.vendor.name+' ':'';
+  var name=spool.filament&&spool.filament.name?spool.filament.name:'Spool #'+spool.id;
+  var mat=spool.filament&&spool.filament.material?' ['+spool.filament.material+']':'';
+  var label='#'+spool.id+' '+vendor+name+mat+rem;
+
+  var colorHex=(spool.filament&&spool.filament.color_hex)?_normalizeHex(spool.filament.color_hex):'';
+
+  if(triggerDot){
+    if(colorHex){
+      triggerDot.style.display='inline-block';
+      triggerDot.style.background=colorHex;
+    } else {
+      triggerDot.style.display='none';
+    }
+  }
+  if(triggerText) triggerText.textContent=label;
+
+  if(headerIcon){
+    if(colorHex){
+      headerIcon.innerHTML='<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:'+colorHex+';border:1px solid rgba(255,255,255,0.4);box-shadow:0 1px 2px rgba(0,0,0,0.3);vertical-align:middle"></span>';
+    } else {
+      headerIcon.innerHTML='🧵';
+    }
+  }
+}
+
 function _populateSlotSpoolmanDropdown(slotIdx){
   var box=document.getElementById('slot-spoolman-box');
   var sel=document.getElementById('slot-edit-spoolman');
@@ -1919,7 +2003,10 @@ function _populateSlotSpoolmanDropdown(slotIdx){
       badge.style.color=currentSpool?'var(--accent)':'var(--txt2)';
       badge.style.background=currentSpool?'rgba(0,133,115,0.15)':'var(--card)';
     }
+
     var noneText=tr('slot_spoolman_none')||'– No Spoolman spool linked –';
+
+    // 1. Native hidden select options
     var html='<option value="">'+noneText+'</option>';
     html+=(_spoolmanSpools||[]).map(function(sp){
       var rem=sp.remaining_weight!=null?' ('+sp.remaining_weight.toFixed(0)+'g)':'';
@@ -1931,6 +2018,40 @@ function _populateSlotSpoolmanDropdown(slotIdx){
         +escHtml('#'+sp.id+' '+vendor+name+mat+rem)+'</option>';
     }).join('');
     sel.innerHTML=html;
+
+    // 2. Custom dropdown menu with color previews
+    var menu=document.getElementById('slot-spoolman-menu');
+    if(menu){
+      var itemsHtml='<div class="spoolman-dropdown-item" onclick="selectSlotSpoolman(\'\')">'
+        +'<span style="display:inline-block;width:12px;height:12px;border-radius:50%;border:1px dashed var(--txt2);flex-shrink:0"></span>'
+        +'<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt2)">'+escHtml(noneText)+'</span>'
+        +'</div>';
+
+      itemsHtml+=(_spoolmanSpools||[]).map(function(sp){
+        var rem=sp.remaining_weight!=null?' ('+sp.remaining_weight.toFixed(0)+'g)':'';
+        var vendor=sp.filament&&sp.filament.vendor?sp.filament.vendor.name+' ':'';
+        var name=sp.filament&&sp.filament.name?sp.filament.name:'Spool #'+sp.id;
+        var mat=sp.filament&&sp.filament.material?' ['+sp.filament.material+']':'';
+        var label='#'+sp.id+' '+vendor+name+mat+rem;
+
+        var colorHex=(sp.filament&&sp.filament.color_hex)?_normalizeHex(sp.filament.color_hex):'';
+        var isSel=String(sp.id)===String(currentSpool);
+
+        var dotStyle=colorHex
+          ?'background:'+colorHex+';border:1px solid rgba(255,255,255,0.4);box-shadow:0 1px 2px rgba(0,0,0,0.3)'
+          :'background:#888;border:1px dashed rgba(255,255,255,0.3)';
+
+        return '<div class="spoolman-dropdown-item'+(isSel?' active':'')+'" onclick="selectSlotSpoolman(\''+sp.id+'\')">'
+          +'<span style="display:inline-block;width:12px;height:12px;border-radius:50%;flex-shrink:0;'+dotStyle+'"></span>'
+          +'<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(label)+'</span>'
+          +(isSel?'<span style="font-size:12px;color:var(--accent)">✓</span>':'')
+          +'</div>';
+      }).join('');
+      menu.innerHTML=itemsHtml;
+    }
+
+    // 3. Update trigger button and header icon
+    _updateSlotSpoolmanTrigger(currentSpool);
   }
 
   if(!_spoolmanSpools||!_spoolmanSpools.length){
@@ -1953,6 +2074,34 @@ function onSlotEditSpoolmanChange(sel){
     badge.style.color=spoolId?'var(--accent)':'var(--txt2)';
     badge.style.background=spoolId?'rgba(0,133,115,0.15)':'var(--card)';
   }
+  _updateSlotSpoolmanTrigger(spoolId);
+
+  // Update active class in menu items
+  var menu=document.getElementById('slot-spoolman-menu');
+  if(menu){
+    var items=menu.querySelectorAll('.spoolman-dropdown-item');
+    items.forEach(function(item){
+      var onclickStr=item.getAttribute('onclick')||'';
+      var m=onclickStr.match(/selectSlotSpoolman\('([^']*)'\)/);
+      var itemVal=m?m[1]:'';
+      var isAct=(itemVal===String(spoolId));
+      if(isAct){
+        item.classList.add('active');
+        if(!item.querySelector('.spoolman-check')){
+          var chk=document.createElement('span');
+          chk.className='spoolman-check';
+          chk.style.cssText='font-size:12px;color:var(--accent)';
+          chk.textContent='✓';
+          item.appendChild(chk);
+        }
+      } else {
+        item.classList.remove('active');
+        var chk=item.querySelector('.spoolman-check');
+        if(chk) chk.remove();
+      }
+    });
+  }
+
   if(!spoolId) return;
 
   var spool=(_spoolmanSpools||[]).find(function(sp){ return String(sp.id)===String(spoolId); });
@@ -1961,8 +2110,7 @@ function onSlotEditSpoolmanChange(sel){
   var fil=spool.filament;
   // Auto-fill color if available
   if(fil.color_hex){
-    var hex=String(fil.color_hex).trim();
-    if(hex.charAt(0)!=='#') hex='#'+hex;
+    var hex=_normalizeHex(fil.color_hex);
     var ci=document.getElementById('slot-edit-color');
     if(ci) ci.value=hex;
     var prev=document.getElementById('slot-edit-preview');
@@ -1986,6 +2134,8 @@ function onSlotEditSpoolmanChange(sel){
 }
 function closeSlotEdit(){
   _slotEditIndex=-1;
+  var menu=document.getElementById('slot-spoolman-menu');
+  if(menu) menu.style.display='none';
   document.getElementById('slot-edit-modal').classList.remove('open');
 }
 function slotEditFeed(){

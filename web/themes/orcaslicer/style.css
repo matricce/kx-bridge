@@ -905,8 +905,47 @@ header.orca-top-bar {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.orca-slot-spoolman {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
 .orca-slot-spoolman.empty {
   color: var(--txt-muted);
+}
+.orca-spool-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.4);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  flex-shrink: 0;
+  vertical-align: middle;
+  margin-right: 5px;
+}
+.spoolman-dropdown-item {
+  padding: 8px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--txt);
+  transition: background 0.12s;
+  user-select: none;
+}
+.spoolman-dropdown-item:last-child {
+  border-bottom: none;
+}
+.spoolman-dropdown-item:hover {
+  background: var(--raised-hover);
+}
+.spoolman-dropdown-item.active {
+  background: rgba(0, 133, 115, 0.15);
+  color: var(--accent);
+  font-weight: 600;
 }
 .orca-slot-more-btn {
   color: var(--txt-muted);
