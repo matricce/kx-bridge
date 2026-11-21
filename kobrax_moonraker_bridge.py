@@ -1065,6 +1065,7 @@ class KobraXBridge:
         self._store = store if store is not None else GCodeStore(args.data_dir)
         self._serve_dir_path: str = self._store._gcode_dir
         self._current_job_id: str = ""
+        self._is_printing_active: bool = False
         self._camera_autostarted: bool = False
         self._camera_user_stopped: bool = False  # user manually stopped the camera during a print
         self.camera_cache: CameraCache = CameraCache()
@@ -1166,21 +1167,37 @@ class KobraXBridge:
         self._spoolman_slot_usage[loaded] = self._spoolman_slot_usage.get(loaded, 0.0) + delta
 
     def _spoolman_unreported(self) -> dict[int, float]:
-        """Return {slot_idx: mm} of usage not yet reported to Spoolman.
-
-        Falls back to equal split of total supplies_usage when per-slot
-        attribution data is absent (e.g. single-extruder with no AMS)."""
-        total_used = self._state.get("supplies_usage", 0)
+        """Return {slot_idx: mm} of usage not yet reported to Spoolman."""
         if self._spoolman_slot_usage:
             return {
-                slot: self._spoolman_slot_usage.get(slot, 0.0)
-                       - self._spoolman_slot_reported.get(slot, 0.0)
+                slot: max(0.0, self._spoolman_slot_usage.get(slot, 0.0)
+                               - self._spoolman_slot_reported.get(slot, 0.0))
                 for slot in self._spoolman_slot_spools
             }
-        n = len(self._spoolman_slot_spools)
+        # Fallback when per-slot tracking has not recorded anything:
+        total_used = float(self._state.get("supplies_usage", 0) or 0.0)
         already = sum(self._spoolman_slot_reported.values())
-        per = (total_used - already) / n if n else 0.0
-        return {slot: per for slot in self._spoolman_slot_spools}
+        delta_unreported = max(0.0, total_used - already)
+        if delta_unreported <= 0:
+            return {}
+
+        # If only one spool is mapped, attribute to that spool
+        if len(self._spoolman_slot_spools) == 1:
+            slot = next(iter(self._spoolman_slot_spools))
+            return {slot: delta_unreported}
+
+        # If multiple spools are mapped, attribute ONLY to the loaded slot if known
+        loaded = self._ams_loaded_slot
+        if loaded >= 0 and loaded in self._spoolman_slot_spools:
+            return {loaded: delta_unreported}
+
+        # If multiple spools are mapped and loaded slot is unknown, do NOT guess
+        # and do NOT divide across all spools (which destroys all spool balances).
+        log.warning(
+            f"Spoolman: {delta_unreported:.1f} mm unassigned; loaded slot unknown ({loaded}), "
+            f"refusing to split across {len(self._spoolman_slot_spools)} spools."
+        )
+        return {}
 
     def _spoolman_report(self, unreported: dict[int, float], min_mm: float = 0.1) -> None:
         """Fire-and-forget report of unreported mm to each mapped spool."""
@@ -1261,7 +1278,7 @@ class KobraXBridge:
             log.warning("Spoolman: failed to save slot map: %s", _e)
         self._spoolman_slot_usage = {}
         self._spoolman_slot_reported = {}
-        self._spoolman_last_usage = 0.0
+        self._spoolman_last_usage = float(self._state.get("supplies_usage") or 0.0)
         return self._json_cors({"slot_spools": {str(k): v for k, v in self._spoolman_slot_spools.items()}})
 
     def _default_ace_dry_presets(self) -> dict[str, dict]:
@@ -1379,9 +1396,10 @@ class KobraXBridge:
             self._state["pause_msg"] = ""
 
         # Job-History: Druckstart erkennen
-        if kobra_state == "printing" and not self._current_job_id:
+        if kobra_state == "printing" and not self._is_printing_active:
+            self._is_printing_active = True
             filename = d.get("filename", self._state.get("filename", ""))
-            if filename:
+            if filename and not self._current_job_id:
                 gf = self._store.get_file_by_name(filename)
                 if gf:
                     self._current_job_id = self._store.start_job(
@@ -1389,22 +1407,32 @@ class KobraXBridge:
                         printer_id=self._printer_id,
                     )
                     log.info(f"Job started: {self._current_job_id} for {filename}")
+                else:
+                    self._current_job_id = f"external-{int(time.time())}"
+                    log.info(f"Job started (untracked file): {filename}")
+            elif not self._current_job_id:
+                self._current_job_id = f"external-{int(time.time())}"
+
             self._spoolman_slot_usage = {}
             self._spoolman_slot_reported = {}
-            self._spoolman_last_usage = 0.0
-            self._spoolman_last_sync = 0.0
+            # Baseline to current supplies_usage so ongoing prints or restarts don't create false deltas
+            curr_supplies = float(d.get("supplies_usage") or self._state.get("supplies_usage") or 0.0)
+            self._spoolman_last_usage = curr_supplies
+            self._spoolman_last_sync = time.time()
 
         # Job-History: Druckende erkennen
-        if kobra_state in ("finished",) and self._current_job_id:
-            self._store.finish_job(self._current_job_id, status="completed")
-            log.info(f"Job abgeschlossen: {self._current_job_id}")
+        if kobra_state in ("finished", "stoped", "canceled") and self._is_printing_active:
+            self._is_printing_active = False
+            status = "completed" if kobra_state == "finished" else "cancelled"
+            if self._current_job_id:
+                if not self._current_job_id.startswith("external-"):
+                    try:
+                        self._store.finish_job(self._current_job_id, status=status)
+                        log.info(f"Job {status}: {self._current_job_id}")
+                    except Exception as e:
+                        log.warning(f"Error finishing job {self._current_job_id}: {e}")
+                self._current_job_id = ""
             self._spoolman_notify_end()
-            self._current_job_id = ""
-        elif kobra_state in ("stoped", "canceled") and self._current_job_id:
-            self._store.finish_job(self._current_job_id, status="cancelled")
-            log.info(f"Job abgebrochen: {self._current_job_id}")
-            self._spoolman_notify_end()
-            self._current_job_id = ""
 
         # Terminal states (successful finish AND stop/cancel) must leave the
         # same clean end state - a "finished" print used to only clear
